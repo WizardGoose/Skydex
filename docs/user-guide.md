@@ -1,12 +1,12 @@
 # Skydex user guide
 
-Skydex is a Hypixel SkyBlock multi-tool built for ironman players. Everything
-runs in your own browser: the greenhouse solver, the planner, the fusion
-calculator. Nothing you type or import is sent to any server this project owns,
-because there isn't one.
+Skydex is a Hypixel SkyBlock multi-tool built for ironman players. The
+greenhouse solver, planner, fusion calculator and imported mod data all run in
+your own browser. On the live site, authenticated profile reads pass through a
+narrow Skydex API route so the private Hypixel credential never reaches a visitor.
 
 This guide walks through the site in the order you will probably meet it:
-what each page does, how to connect your Hypixel API key, how the companion
+what each page does, how to connect your Hypixel profile, how the companion
 mod feeds the Island page, and what the planner's numbers actually mean.
 
 ## The pages, one by one
@@ -82,10 +82,10 @@ you personally farm, mine, or kill.
 
 What you are missing, and where to get it. Every accessory tile carries a
 source chip: crafted, bought, dropped, quest reward, or "See wiki" when the
-source genuinely is not known. You do not need an API key to browse the
+source genuinely is not known. You do not need to connect a profile to browse the
 catalogue.
 
-With an API key set, the page splits into Missing and Owned by reading your
+With a profile connected, the page splits into Missing and Owned by reading your
 accessory bag. If the bag cannot be read at all, the page says so and shows
 one ungrouped catalogue instead of inventing a zero. Upgraded-away accessories
 (a talisman you turned into its ring) are not counted as missing.
@@ -93,7 +93,7 @@ one ungrouped catalogue instead of inventing a zero. Upgraded-away accessories
 ### Island (/island)
 
 Where is my stuff. The Hypixel API cannot see inside island chests, so this
-page is fed by the companion mod, plus an optional keyed API pull that fills
+page is fed by the companion mod, plus an optional profile pull that fills
 in sacks. Search sits at the top because the real question is never "show me
 chest 12", it is "where did I put the enchanted mushrooms". Searching
 auto-opens the chests that match.
@@ -115,8 +115,9 @@ in a tool whose one job is telling you where your things are.
 The shard fusion calculator, inherited from SkyShards. Pick a target attribute
 shard and it finds the cheapest fusion path to it. It can use your inventory
 and owned attributes (managed in the same page) so the path accounts for what
-you already hold. Importing your profile from Hypixel needs your own API key
-(see below); the request goes straight from your browser to Hypixel.
+you already hold. On the live site, importing your profile uses Skydex's
+approved production connection. A locally run development build can use your
+own development key instead.
 
 Related pages: **/shards** is the owned-shards editor, where you record which
 shards you hold. **/fusion-lines** draws the fusion family tree as a graph.
@@ -124,29 +125,33 @@ shards you hold. **/fusion-lines** draws the fusion family tree as a graph.
 
 ### Settings (/settings)
 
-One place for everything that is a setting: your Hypixel API key and account,
+One place for everything that is a setting: your Hypixel profile connection,
 your game mode, and the wiki data cache. The Island page links here when it
 needs something.
 
-## Your Hypixel API key
+## Your Hypixel profile connection
 
-Several features are better with your own Hypixel API key: sacks on the Island
-page, the Owned split on Accessories, profile import in Fusion, and automatic
-game mode detection.
+Connecting your Minecraft account adds sacks on the Island page, the Owned
+split on Accessories, profile import in Fusion, and automatic game mode
+detection.
 
-The rules the key is held under, in full:
+On `skydex.ca` and in a locally run checkout, that connection works under these rules:
 
-- It lives in one localStorage entry in your own browser and is never sent
-  anywhere except **api.hypixel.net**, as a request header.
-- It never appears in a URL, never in an error message, and is never shown
-  unmasked (the input is a password field).
-- There is no server between you and Hypixel. Deleting it is one button, and
-  it removes exactly that one stored entry.
+- Skydex asks only for your Minecraft username or UUID, then saves the resolved
+  account and selected SkyBlock profile in this browser.
+- The browser asks `api.skydex.ca` for one snapshot. The Cloudflare Worker can
+  call only Skydex's three fixed Profile, Garden and Museum reads, validates the
+  UUID or profile ID, and authorizes the request when it calls Hypixel.
+- The private credential is an encrypted Cloudflare secret. It never enters the
+  site build, browser storage, a URL, an error message, or a response.
+- Successful Hypixel responses remain fresh at Cloudflare's edge for 5 to 30
+  minutes and can remain as a last-good fallback for up to 24 hours. The same
+  snapshot is cached in this browser, so changing pages does not request it
+  again. Skydex does not write account or profile histories to a database.
+- **Forget account** removes the saved account and profile choice from this
+  browser.
 
-Hypixel keys expire, and Hypixel does not publish the expiry date over the
-API, so the Settings page lets you type the date in yourself. If you do, the
-site counts down and warns you when the key is close to dying. If you do not,
-nothing nags you about it.
+A local `pnpm run dev` build uses the same `api.skydex.ca` path.
 
 ## Ironman vs normal mode
 
@@ -159,8 +164,8 @@ The site has two cost models and a toggle between them:
 - **Normal**: the cheaper of craft or buy is the right call, and coin costs
   are meaningful.
 
-The default is ironman, because that is who the site is for. If you have an
-API key set, the site reads your profile's actual game mode and fills the
+The default is ironman, because that is who the site is for. If you have a
+profile connected, the site reads your profile's actual game mode and fills the
 toggle in, marked with a small "from API" chip so a control never changes on
 its own without saying why. If you set the toggle yourself, your choice is the
 truth from then on: the API never overwrites a manual choice. Settings has an
@@ -187,9 +192,9 @@ the Island page and the site decodes it locally, in your browser. The code
 never touches a network.
 
 By default the export code carries sacks and island chests, the things the
-API cannot give the site. If the site has your API key it fills in the rest
-itself; if not, the mod has a setting to include your inventory, ender chest,
-and storage in the code too.
+API cannot give the site. If the site has a profile connection it fills in the
+available profile data itself; if not, the mod has a setting to include your
+inventory, ender chest, and storage in the code too.
 
 ### Live local server (for a locally run site)
 
@@ -267,7 +272,8 @@ the estimates is sourced, and the sources are in
 
 ## Where your data lives
 
-Everything the site remembers about you is in your browser's localStorage:
-your plan, your owned shards, your island snapshot, your API key, your
-settings. Nothing is synced anywhere. Clearing site data in your browser
-clears all of it, and the site starts fresh.
+Your plan, owned shards, island snapshot, connected account, selected profile
+and settings live in your browser's localStorage. Account identifiers leave
+the browser only when a profile feature calls the fixed
+Skydex API routes described above. Clearing site data in your browser removes
+the local copies and the site starts fresh.

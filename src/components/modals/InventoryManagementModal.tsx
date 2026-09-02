@@ -368,7 +368,7 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
       const result = await importPlayerProfile(username.trim(), shardsArray);
       if (!result.ok) {
         setError(result.error.message);
-        setErrorNeedsKey(result.error.reason === "noKey" || result.error.reason === "auth");
+        setErrorNeedsKey(result.error.reason === "auth");
         return;
       }
 

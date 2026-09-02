@@ -53,7 +53,7 @@ the player plays, then hands it to the website two ways:
 
 1. **Live**: a localhost HTTP server the website polls (real-time updates).
 2. **Code**: a compact clipboard string the player pastes into the website
-   (works even for the hosted GitHub Pages build, no server anywhere).
+   (works on the hosted site without a companion server).
 
 ## JSON schema
 

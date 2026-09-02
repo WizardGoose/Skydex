@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
-import { currentAccess } from "../island/apiKey";
+import { currentAccess, hasApiProfileAccess } from "../island/apiKey";
 import { fetchMuseum, fetchProfileMembers } from "../island/hypixel";
 import { makeGate } from "../island/gate";
 import { loadCatalogue } from "./catalogue";
@@ -129,12 +129,12 @@ const hasBlob = (value: unknown): boolean => isRecord(value) && typeof value.dat
  */
 const hasCredentials = (): boolean => {
   const access = currentAccess();
-  return access.key.trim() !== "" && access.uuid !== "";
+  return hasApiProfileAccess(access);
 };
 
 const runLoad = async (): Promise<void> => {
   const access = currentAccess();
-  if (!access.key.trim() || !access.uuid) {
+  if (!hasApiProfileAccess(access)) {
     state = { ...state, status: "needsKey", error: null };
     publish();
     return;
@@ -172,6 +172,10 @@ const runLoad = async (): Promise<void> => {
   }
 
   const museumData = museum.ok ? museum.value : null;
+  const fetchedAt = Math.min(
+    members.fetchedAt ?? Date.now(),
+    museum.ok ? museum.fetchedAt ?? Date.now() : Number.POSITIVE_INFINITY,
+  );
   const member = isRecord(chosen.member) ? chosen.member : {};
   const inventory = isRecord(member.inventory) ? member.inventory : {};
 
@@ -198,7 +202,7 @@ const runLoad = async (): Promise<void> => {
       gearLoadouts,
       profileName: chosen.cuteName,
       gameMode: chosen.gameMode,
-      fetchedAt: Date.now(),
+      fetchedAt: Number.isFinite(fetchedAt) ? fetchedAt : Date.now(),
     },
     status: "ready",
     error: null,
@@ -268,7 +272,7 @@ export interface ParsedProfileView {
   status: NetworthStatus;
 }
 
-/** One stable empty, so a keyless render does not mint fresh objects per frame and defeat downstream memos. */
+/** One stable empty, so a disconnected render does not mint fresh objects per frame and defeat downstream memos. */
 const EMPTY_LOADOUTS: MemberLoadouts = {
   armorSets: [],
   equipmentSets: [],
@@ -330,7 +334,7 @@ export const useNetworth = (chests: readonly IslandChest[]): NetworthView => {
   const store = useSyncExternalStore(subscribe, getState, getState);
   const prices = pricesState();
 
-  // One unforced load on arrival. It is a no-op without a key, and a no-op
+  // One unforced load on arrival. It is a no-op without profile access, and a no-op
   // again inside the TTL, so a visit costs at most one profile pull.
   useEffect(() => {
     const sources = state.sources;
@@ -372,8 +376,8 @@ export const useNetworth = (chests: readonly IslandChest[]): NetworthView => {
     fetchedAt: store.sources?.fetchedAt ?? null,
     chests: chestValues,
     // `idle` is the state before the effect has run, and it is never worth
-    // showing: either there is no key and the answer is already known, or there
-    // is one and a load is a tick away.
+    // showing: either there is no profile connection and the answer is already
+    // known, or there is one and a load is a tick away.
     status: store.status === "idle" ? (hasCredentials() ? "loading" : "needsKey") : store.status,
     error: store.error,
     coverage: store.sources?.coverage ?? null,

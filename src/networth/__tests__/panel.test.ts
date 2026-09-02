@@ -25,7 +25,7 @@ import type { IslandChest } from "../../island/types";
  *
  * `currentAccess()` reads a localStorage that does not exist in this
  * environment, so the store lands on its blank record and the panel takes the
- * "no key" path. That is exactly the path most visitors see.
+ * "no connected account" path. That is exactly the path a new visitor sees.
  */
 
 const ABSENT: SectionProvenance = { state: "absent", source: null, at: null };
@@ -33,7 +33,7 @@ const CAPTURED: SectionProvenance = { state: "captured", source: "mod", at: Date
 
 describe("the Networth panel", () => {
   // Wrapped in a router because the panel points at the Settings page, which
-  // is the whole answer it gives somebody with no key.
+  // is the whole answer it gives somebody with no connected account.
   const markup = renderToStaticMarkup(
     createElement(MemoryRouter, null, createElement(NetworthPanel, { chests: [], chestProvenance: ABSENT }))
   );
@@ -43,7 +43,7 @@ describe("the Networth panel", () => {
   });
 
   it("says what is missing and how to get it, rather than showing a zero", () => {
-    expect(markup).toContain("Hypixel API key");
+    expect(markup).toContain("connected Minecraft account");
     expect(markup).toContain('href="/?settings=1&amp;settingsSection=hypixel"');
   });
 
@@ -52,13 +52,15 @@ describe("the Networth panel", () => {
   });
 
   it("does not claim a total it has not earned", () => {
-    // No key means no profile, so there must be no Total line at all rather
-    // than a Total of zero.
+    // No account means no profile, so there must be no Total line at all
+    // rather than a Total of zero.
     expect(markup).not.toContain(">Total<");
   });
 
-  it("states where the key goes and where it does not", () => {
-    expect(markup).toContain("api.hypixel.net");
+  it("describes the shared production connection without asking for a key", () => {
+    expect(markup).toContain("shared Hypixel connection");
+    expect(markup).not.toContain("API key");
+    expect(markup).not.toContain("api.hypixel.net");
   });
 });
 

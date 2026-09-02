@@ -16,12 +16,11 @@ import type { ApiFailure, HypixelAccount, ProfileMember } from "../island/hypixe
  * `Access-Control-Allow-Credentials: true`, so a wildcard could never have
  * applied either. In a deployed build the browser simply discarded the answer.
  *
- * So the import now goes straight to `api.hypixel.net/v2/skyblock/profiles`
- * from the player's own browser with the player's own key, which Hypixel's CORS
- * policy allows. The request itself lives in `island/hypixel.ts`, because that
- * file's header states the key is a secret and that it is the only place the
- * key is handled. Nothing here ever sees a URL or a header; it is handed
- * already-fetched member objects and turns them into shard counts.
+ * The import now uses the shared request boundary in `island/hypixel.ts`.
+ * Production sends the request through Skydex's narrow same-origin Worker;
+ * local development can still call Hypixel directly with the developer's own
+ * key. Nothing here sees a URL or header. It is handed already-fetched member
+ * objects and turns them into shard counts.
  *
  * WHAT IS ON THE WIRE, AND WHAT IS NOT
  * ------------------------------------
@@ -259,7 +258,7 @@ export function toProfileData(entry: ProfileMember, catalogue: ShardCatalogueEnt
 /* The one orchestrated import                                                */
 /* -------------------------------------------------------------------------- */
 
-export type ImportFailure = ApiFailure | "noKey";
+export type ImportFailure = ApiFailure;
 
 export interface ImportError {
   reason: ImportFailure;
@@ -269,16 +268,6 @@ export interface ImportError {
 export type ImportResult =
   | { ok: true; value: HypixelProfileResponse }
   | { ok: false; error: ImportError };
-
-/**
- * What to say when there is no key.
- *
- * Not an exception and not a raw error string. Needing a key is the normal
- * state for somebody who has never opened Settings, and the only useful thing
- * to tell them is where the field is.
- */
-export const NO_KEY_MESSAGE =
-  "This import reads the Hypixel API directly from your browser, so it needs your own Hypixel API key. Add it in Site Settings, then try again.";
 
 /**
  * Import one player's shards and attributes.
@@ -294,7 +283,6 @@ export async function importPlayerProfile(
 ): Promise<ImportResult> {
   const access = currentAccess();
   const key = access.key.trim();
-  if (!key) return { ok: false, error: { reason: "noKey", message: NO_KEY_MESSAGE } };
 
   const typed = username.trim();
   if (!typed) {
@@ -313,13 +301,8 @@ export async function importPlayerProfile(
   }
 
   const members = await fetchProfileMembers(account, key, signal);
-  if (!members.ok) {
-    // Same bookkeeping every other authed caller in this codebase does: a 403
-    // is proof the key is bad, and nothing else is proof of anything.
-    if (members.error.reason === "auth") writeAccess({ keyState: "invalid", checkedAt: Date.now() });
-    return { ok: false, error: members.error };
-  }
-  writeAccess({ keyState: "valid", checkedAt: Date.now() });
+  if (!members.ok) return { ok: false, error: members.error };
+  writeAccess({ keyState: "valid", checkedAt: members.fetchedAt ?? Date.now() });
 
   const profiles = members.value.map((entry) => toProfileData(entry, catalogue));
 

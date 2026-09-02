@@ -50,7 +50,7 @@ import { useCompanionLink } from "../island/companionLink";
  * Nothing. That is the design. Every control on it is a view onto a store that
  * already existed and already had a home:
  *
- *   Hypixel key + account   `island/apiKey.ts`            wizardsky.apikey.v1
+ *   Hypixel connection     `island/apiKey.ts`            wizardsky.apikey.v1
  *   Game mode               `profile/useProfile.ts`       wizardsky.profile.v1
  *   Wiki mutation cache     `greenhouse/data/wikiSync.ts` wizardsky.wikidata.v1
  *   Island snapshot         `island/useIsland.ts`         its own key
@@ -60,13 +60,11 @@ import { useCompanionLink } from "../island/companionLink";
  * settings page that keeps its own copy of a setting is a settings page that
  * will one day disagree with the tool the setting belongs to.
  *
- * THE KEY RULES, UNCHANGED
- * ------------------------
- * The API key control is the existing `HypixelPanel`, rendered here rather than
- * reimplemented, so the rules it was written under travel with it: masked
- * input, stored in this browser only, sent only to api.hypixel.net as an
- * `API-Key` header, never in a URL, never in a log line, never interpolated
- * into an error message.
+ * THE CONNECTION BOUNDARY
+ * -----------------------
+ * The existing `HypixelPanel` owns both supported transports. Production uses
+ * Skydex's narrow Worker and never receives a visitor key. Local development
+ * retains the masked, browser-local key field and direct Hypixel request path.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -296,7 +294,7 @@ export const SiteSettingsPage: React.FC = () => {
       <PageHeader
         title="Settings"
         icon={Cog}
-        sub={`Everything ${SITE_NAME} remembers, in one place. All of it is kept in this browser and none of it is uploaded anywhere.`}
+        sub={`Everything ${SITE_NAME} remembers, in one place. Local choices stay in this browser; connected profile reads use the privacy boundary described below.`}
       />
 
       {/* ---- Hypixel connection ------------------------------------------ */}

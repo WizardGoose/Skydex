@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { chooseProfile, fetchGarden, fetchProfiles, shouldAutoRefresh, undash } from "./hypixel";
-import { currentAccess, writeAccess } from "./apiKey";
+import { currentAccess, hasApiProfileAccess, writeAccess } from "./apiKey";
 import { applyApiGameMode } from "../profile/useProfile";
 
 /**
@@ -626,7 +626,7 @@ const forget = () => {
  */
 export async function refreshGreenhouseStats(force = false): Promise<void> {
   const access = currentAccess();
-  if (!access.key.trim() || !access.uuid) return;
+  if (!hasApiProfileAccess(access)) return;
 
   // A different account or profile than the cached numbers belong to is not a
   // refresh, it is a different question, so the old answer goes first.
@@ -669,7 +669,7 @@ export async function refreshGreenhouseStats(force = false): Promise<void> {
         if (list.error.reason === "auth") writeAccess({ keyState: "invalid", checkedAt: Date.now() });
         return;
       }
-      writeAccess({ keyState: "valid", checkedAt: Date.now() });
+      writeAccess({ keyState: "valid", checkedAt: list.fetchedAt ?? Date.now() });
       const chosen = chooseProfile(list.value, access.profileId);
 
       /*
@@ -700,7 +700,7 @@ export async function refreshGreenhouseStats(force = false): Promise<void> {
       return;
     }
 
-    const now = Date.now();
+    const now = garden.fetchedAt ?? Date.now();
     lastPullAt = now;
     cachedProfileId = access.profileId;
 

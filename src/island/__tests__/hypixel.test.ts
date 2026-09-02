@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   apiFeed,
   chooseProfile,
@@ -10,6 +10,7 @@ import {
   shouldAutoRefresh,
   undash,
 } from "../hypixel";
+import { resetHypixelTransportForTesting } from "../hypixelTransport";
 import type { ApiProfile } from "../hypixel";
 
 /**
@@ -25,6 +26,8 @@ const UUID = "b876ec32e396476ba1158438d83c67d4";
 const DASHED = "b876ec32-e396-476b-a115-8438d83c67d4";
 
 const profilesPayload = (profiles: unknown[]) => ({ success: true, profiles });
+
+afterEach(() => resetHypixelTransportForTesting());
 
 describe("readSacks", () => {
   it("finds sacks nested under inventory", () => {
@@ -219,11 +222,11 @@ describe("apiFeed", () => {
 /**
  * The two uuid forms, checked at the seam where they diverge.
  *
- * A stub `fetch` also lets this pin down the thing that must never regress: the
- * key travels as a header and cannot appear in the URL.
+ * A stub `fetch` also lets this pin down the thing that must never regress: a
+ * browser request reaches only api.skydex.ca and never carries a Hypixel key.
  */
 describe("fetchProfiles wire format", () => {
-  it("sends the undashed uuid and keeps the key out of the URL", async () => {
+  it("sends the undashed uuid through Skydex and keeps the key out of the request", async () => {
     const calls: { url: string; init: RequestInit | undefined }[] = [];
     const original = globalThis.fetch;
     const SECRET = "d2a1b3c4-secret-key-value";
@@ -233,7 +236,18 @@ describe("fetchProfiles wire format", () => {
       const body = profilesPayload([
         { profile_id: "p1", cute_name: "Papaya", selected: true, members: { [UUID]: { sacks_counts: { OAK_LOG: 7 } } } },
       ]);
-      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+      const fetchedAt = Date.now();
+      return Promise.resolve(Response.json({
+        success: true,
+        uuid: UUID,
+        profileId: null,
+        fetchedAt,
+        resources: {
+          profiles: { fetchedAt, cache: "miss", data: body },
+          garden: null,
+          museum: null,
+        },
+      }));
     }) as typeof fetch;
 
     try {
@@ -241,11 +255,13 @@ describe("fetchProfiles wire format", () => {
       expect(res.ok).toBe(true);
 
       expect(calls).toHaveLength(1);
+      expect(calls[0].url).toContain("https://api.skydex.ca/v1/hypixel/snapshot");
       expect(calls[0].url).toContain(`uuid=${UUID}`);
       expect(calls[0].url).not.toContain(DASHED);
-      // The one thing that must never happen.
+      // The two things that must never happen.
       expect(calls[0].url).not.toContain(SECRET);
-      expect(new Headers(calls[0].init?.headers).get("API-Key")).toBe(SECRET);
+      expect(new Headers(calls[0].init?.headers).get("API-Key")).toBeNull();
+      expect(new Headers(calls[0].init?.headers).get("x-skydex-client-id")).toBeTruthy();
 
       if (!res.ok) return;
       const feed = apiFeed(res.value[0], { uuid: UUID, name: "Steve" }, 1000);
@@ -255,7 +271,7 @@ describe("fetchProfiles wire format", () => {
     }
   });
 
-  it("reports a rejected key without echoing it", async () => {
+  it("reports rejected authentication without echoing the credential", async () => {
     const original = globalThis.fetch;
     const SECRET = "bad-key-1234";
     globalThis.fetch = (() =>
@@ -268,7 +284,7 @@ describe("fetchProfiles wire format", () => {
       expect(res.ok).toBe(false);
       if (res.ok) return;
       expect(res.error.reason).toBe("auth");
-      expect(res.error.message).toBe("Invalid API key");
+      expect(res.error.message).toBe("Skydex could not authenticate with Hypixel.");
       expect(res.error.message).not.toContain(SECRET);
     } finally {
       globalThis.fetch = original;
@@ -288,7 +304,7 @@ describe("fetchProfiles wire format", () => {
       expect(res.ok).toBe(false);
       if (res.ok) return;
       expect(res.error.message).not.toContain(SECRET);
-      expect(res.error.message).toContain("[redacted]");
+      expect(res.error.message).toBe("Skydex could not authenticate with Hypixel.");
     } finally {
       globalThis.fetch = original;
     }

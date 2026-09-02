@@ -20,16 +20,6 @@
 [next label="I love tutorials!"]
 ---
 [logo]
-# Additional Requirements for Skydex!
-## As `red+italic:scary `of a website as skydex is, we do seriously need your Hypixel API key. Everything runs in `bold:your` browser, on `bold:your` machine. Nothing leaves except the questions we ask Hypixel!
-
-Grab one from the [Hypixel developer portal](https://developer.hypixel.net) (free, instant, yours), then sign the line. We censor it, we never show it, and it only ever whispers to Hypixel.
-
-[input name="apikey" label="`red+bold:Upload`... `white:I mean paste. Paste your API key here!`" placeholder="its a secret to everybody."]
-
-### (Keys live 48 hours. We stamp yours at 47 so you are never caught grinding with a dead one. Weird? Yes. Sketchy? Slightly. Elegant? Soon.)
----
-[logo]
 # How do you play?
 ## Last question, and it is a `red+bold:personality test.`
 

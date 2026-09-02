@@ -4,7 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { BTN_QUIET, FOCUS } from "../../ui/kit";
 import { Wordmark } from "../../ui/Wordmark";
 import { useProfile, type GameMode } from "../../profile/useProfile";
-import { stampExpiry, useApiAccess, uuidForName } from "../../island/apiKey";
+import { useApiAccess, uuidForName } from "../../island/apiKey";
 import {
   SPAN_COLOURS,
   colourOf,
@@ -289,11 +289,9 @@ const ModePicker: React.FC<{ block: Extract<TourBlock, { kind: "mode-picker" }> 
  * field, because that is the joke the authoring format exists to permit.
  *
  * A KNOWN name saves for real; the registry is deliberately tiny and
- * explicit, and it is two names long. "username" writes the same Minecraft
- * name the Settings page uses, and "apikey" writes the same Hypixel key,
- * masked, so signing here genuinely pre-fills the API connection. An unknown
- * or missing name still renders and remembers nothing, which the format doc
- * says out loud.
+ * explicit. "username" writes the same Minecraft name the Settings page uses.
+ * An unknown or missing name still renders and remembers nothing, which the
+ * format doc says out loud.
  */
 /* The strokes line= can ask for, as whole literal utilities. */
 const LINE_CLASS: Record<InputLine, string> = {
@@ -304,24 +302,20 @@ const LINE_CLASS: Record<InputLine, string> = {
 };
 
 /** The whole of the name= registry. Every other name is a line to sign and nothing more. */
-type InputBinding = "username" | "apikey";
+type InputBinding = "username";
 
 const bindingOf = (name: string | null): InputBinding | null =>
-  name === "username" || name === "apikey" ? name : null;
+  name === "username" ? name : null;
 
 const InputBlock: React.FC<{ block: Extract<TourBlock, { kind: "input" }> }> = ({ block }) => {
-  const { access, setAccount, setKey, setExpiresOn } = useApiAccess();
+  const { access, setAccount } = useApiAccess();
   const binding = bindingOf(block.name);
-  /* Masked whatever the author wrote, because the masking belongs to the
-     credential rather than to the marker: a key drawn on screen is a key in
-     the next screenshot, and the tour is the one surface people record. */
-  const secret = binding === "apikey";
   const [local, setLocal] = useState("");
   /* A bound line's failing text lives here instead of the store, so typing
      still echoes while only passing values reach Settings. Null means the
      store's value is showing. */
   const [draft, setDraft] = useState<string | null>(null);
-  const stored = binding === "username" ? access.name : binding === "apikey" ? access.key : "";
+  const stored = binding === "username" ? access.name : "";
   const value = binding ? (draft ?? stored) : local;
 
   const rule = inputRule(block);
@@ -345,11 +339,7 @@ const InputBlock: React.FC<{ block: Extract<TourBlock, { kind: "input" }> }> = (
         </span>
       )}
       <input
-        type={secret ? "password" : "text"}
-        /* No autofill offered on the credential line. The Settings key field
-           says the same, and a key taken into a password manager is a copy
-           this module can make no promises about. */
-        autoComplete={secret ? "off" : undefined}
+        type="text"
         value={value}
         /* The browser draws the placeholder, and it draws text: no element
            exists to hang a colour on. So the syntax is answered honestly
@@ -369,21 +359,10 @@ const InputBlock: React.FC<{ block: Extract<TourBlock, { kind: "input" }> }> = (
             return;
           }
           setDraft(null);
-          if (binding === "username") {
-            /* The uuid comes with the name or not at all. Typing a different
-               name here must not leave the previous player's uuid sitting
-               beside it, because the import path trusts that pair. */
-            setAccount(uuidForName(access, next), next);
-            return;
-          }
-          /* The key and its date are one gesture, and this order is the whole
-             of it. `setKey` drops whatever expiry was standing, because that
-             date described the credential being replaced, so the stamp has to
-             follow the key rather than lead it. The same rule is what clears
-             the date when the line is emptied, and the empty string is how
-             this store spells a cleared date. */
-          setKey(next);
-          setExpiresOn(next ? stampExpiry(Date.now()) : "");
+          /* The uuid comes with the name or not at all. Typing a different
+             name here must not leave the previous player's uuid sitting
+             beside it, because the import path trusts that pair. */
+          setAccount(uuidForName(access, next), next);
         }}
         /* Body font, not mono. What goes on a signature line is handwriting,
            and mono reads as a form field or a code sample, which is the one

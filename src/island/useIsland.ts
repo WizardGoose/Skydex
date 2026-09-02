@@ -4,7 +4,7 @@ import { decodeFeeds, encodeFeeds, ISLAND_KEY } from "./storage";
 import { applyLiveMessage, applyLivePayload, EVENTS_PATH, ISLAND_EVENT } from "./live";
 import { mergeFeeds, modFeed } from "./merge";
 import { apiFeed, chooseProfile, fetchProfiles, shouldAutoRefresh } from "./hypixel";
-import { currentAccess, writeAccess } from "./apiKey";
+import { currentAccess, hasApiProfileAccess, writeAccess } from "./apiKey";
 import { makeGate } from "./gate";
 import { applyApiGameMode } from "../profile/useProfile";
 import type { FeedSet, MergedIsland } from "./merge";
@@ -513,13 +513,13 @@ export const apiCooldownUntil = (): number => apiGate.cooldownUntil();
 const refreshApi = async (force = false): Promise<void> => {
   const access = currentAccess();
 
-  if (!access.key.trim() || !access.uuid) {
+  if (!hasApiProfileAccess(access)) {
     // Only complain when a person asked. The page calls this unforced on mount,
     // and telling the majority of visitors - who have no key and want none -
     // that they are missing one would be nagging, not helping.
     if (force) {
       apiStatus = "error";
-      apiError = "Add your Hypixel API key and Minecraft username first.";
+      apiError = "Complete your Hypixel connection in Settings first.";
       publish();
     }
     return;
@@ -577,7 +577,8 @@ const runApiPull = async (account: HypixelAccount, key: string): Promise<void> =
       return;
     }
 
-    writeAccess({ keyState: "valid", checkedAt: Date.now() });
+    const fetchedAt = res.fetchedAt ?? Date.now();
+    writeAccess({ keyState: "valid", checkedAt: fetchedAt });
     apiProfiles = res.value;
 
     const profile = chooseProfile(res.value, currentAccess().profileId);
@@ -603,7 +604,7 @@ const runApiPull = async (account: HypixelAccount, key: string): Promise<void> =
      */
     applyApiGameMode(profile.gameMode);
 
-    setFeeds({ ...feeds, api: apiFeed(profile, account, Date.now()) });
+    setFeeds({ ...feeds, api: apiFeed(profile, account, fetchedAt) });
     apiStatus = "idle";
     apiError = null;
     publish();

@@ -319,7 +319,7 @@ export const AccessoriesView: React.FC = () => {
             action={
               <SettingsLink section="hypixel" className={BTN_QUIET}>
                 <KeyRound className="h-3 w-3" aria-hidden />
-                Where profiles and keys are set up
+                Set up the Hypixel profile connection
               </SettingsLink>
             }
           />

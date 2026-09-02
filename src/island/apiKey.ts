@@ -1,25 +1,18 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { undash } from "./hypixel";
+import { hasHypixelApiCredential, usesProductionHypixelApi } from "./hypixelTransport";
 
 /**
- * The Hypixel API key, and the account it belongs to.
+ * The saved Hypixel account and legacy credential migration.
  *
- * A Hypixel key is a personal credential. The rules it is held under here are
- * deliberately narrow and worth stating in full, because "we store it locally"
- * is the sort of claim that quietly stops being true:
+ * Skydex.ca and local Skydex checkouts use the approved application key behind
+ * the production Worker and never ask for a visitor's key. The old personal
+ * credential fields remain only long enough to read and remove records written
+ * by an earlier version. No normal application path writes or sends them.
  *
- *   - It lives in one localStorage key on the player's own machine and is never
- *     sent anywhere except api.hypixel.net, as an `API-Key` request header.
- *   - It never appears in a URL. Query strings leak through history, referrers,
- *     browser extensions and any log the request passes.
- *   - It never appears in an error message. `hypixel.ts` builds failure text
- *     from status codes and Hypixel's own fixed `cause` strings, and redacts
- *     the key from those as a backstop.
- *   - It is never rendered unmasked; the input is `type="password"`.
- *
- * The account and profile choice ride along in the same record rather than a
- * key of their own. They are only meaningful in the context of the credential
- * that fetches them, and one credential record beats two half-records.
+ * The account and profile choice ride in the same existing record to preserve
+ * upgrades. On first load, any personal key left by an older Skydex version is
+ * removed while those account choices are retained.
  */
 
 const KEY = "wizardsky.apikey.v1";
@@ -64,6 +57,15 @@ export interface ApiAccess {
   /** The profile the player switched to, if they did. Null means follow Hypixel's `selected`. */
   profileId: string | null;
 }
+
+/** Drop every visitor-credential field while preserving the chosen account. */
+export const withoutPersonalApiKey = (access: ApiAccess): ApiAccess => ({
+  ...access,
+  key: "",
+  keyState: "unchecked",
+  checkedAt: null,
+  keyExpiresOn: null,
+});
 
 const BLANK: ApiAccess = {
   key: "",
@@ -230,6 +232,22 @@ const read = (): ApiAccess => {
 };
 
 let current: ApiAccess = read();
+
+/*
+ * The live site stopped needing visitor credentials once the production key
+ * was approved. Remove that obsolete secret at the first safe opportunity,
+ * but keep the account and selected profile the player already chose.
+ */
+if (usesProductionHypixelApi() && (current.key || current.keyExpiresOn || current.keyState !== "unchecked")) {
+  current = withoutPersonalApiKey(current);
+  try {
+    if (current.uuid) localStorage.setItem(KEY, JSON.stringify(current));
+    else localStorage.removeItem(KEY);
+  } catch {
+    // In-memory sanitisation still prevents the old key from being used.
+  }
+}
+
 const listeners = new Set<() => void>();
 
 const subscribe = (fn: () => void) => {
@@ -251,6 +269,10 @@ const persist = () => {
 
 /** Read the credential outside React, for the store that actually makes the call. */
 export const currentAccess = (): ApiAccess => current;
+
+/** Can this build ask for this saved account's authenticated profile data? */
+export const hasApiProfileAccess = (access: Pick<ApiAccess, "key" | "uuid"> = current): boolean =>
+  Boolean(access.uuid && hasHypixelApiCredential(access.key));
 
 /**
  * Patch the record.
@@ -282,7 +304,7 @@ export const writeAccess = (patch: Partial<ApiAccess>) => {
   for (const fn of listeners) fn();
 };
 
-/** Forget the credential. Removes exactly this one key, and only from a button. */
+/** Forget this connection. Removes exactly this one browser-storage record. */
 export const clearAccess = () => {
   current = BLANK;
   try {

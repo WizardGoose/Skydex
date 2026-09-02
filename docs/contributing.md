@@ -37,7 +37,7 @@ src/
     data/           dataset store, wiki sync overlay, shipped precompute
   items/          crafting trees, bazaar prices, wiki images and recipes
   island/         the Island page's data layer: paste codes, live feed,
-                  Hypixel API client, feed merging, the API key store
+                  Hypixel API client, feed merging, profile access state
   nbt/            a small NBT reader/writer for decoding game item data
   accessories/    the accessories catalogue and its wiki parsers
   shards/         profile import for the fusion calculator

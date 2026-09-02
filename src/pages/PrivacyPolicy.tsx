@@ -11,9 +11,10 @@ import { Link } from "react-router-dom";
  *
  * The words are a description of what the code does, so they are only correct
  * as long as that stays true. Every claim below is checkable against a specific
- * file: the key rules against `src/island/apiKey.ts`, the outbound hosts against
+ * file: the production profile path against `cloudflare/hypixel-api-worker.js`
+ * and `src/island/hypixelTransport.ts`, the remaining outbound hosts against
  * the `fetch` calls in `src/island`, `src/items`, `src/accessories` and
- * `src/networth`, the browser storage against `src/ui/backdrop.ts` and
+ * `src/networth`, and browser storage against `src/ui/backdrop.ts` and
  * `src/utilities/localStorage.ts`. If a change adds a network call or a new
  * store, this page is part of that change.
  */
@@ -36,19 +37,20 @@ const PrivacyPolicy: React.FC = () => (
       <h1 className="text-2xl font-semibold tracking-tight text-slate-100">Privacy Policy</h1>
       <div className="mt-3 h-px bg-gradient-to-r from-emerald-500/60 via-slate-800 to-transparent" />
       <p className="mt-4 text-sm leading-[1.8] text-slate-300">
-        Skydex does not store any of your data or information. Your data is yours: it is stored only on your device. There is no Skydex account or
-        login, the app is served as static files, and every calculation happens on your own machine. A shared Designer link may pass through the
-        stateless preview worker described below; its layout is decoded in memory and discarded immediately. This page says what that means in
-        practice, including the handful of places your browser does reach out to.
+        Skydex has no account system, profile database or advertising identity. The app is served as static files and its calculations happen on your
+        device. Authenticated Hypixel profile requests pass through the narrow Cloudflare Worker described below, where successful responses may be
+        cached briefly and retained as a fallback for up to 24 hours. A shared Designer link may pass through the same Worker for a stateless preview. This page describes each path
+        and what it keeps.
       </p>
     </header>
 
     <Section title="What Skydex collects">
-      <p className={P}>Nothing. There is no collection step for there to be a policy about.</p>
+      <p className={P}>Skydex does not build a user database or a history of player activity.</p>
       <ul className={UL}>
         <li>No accounts, no sign-up, no email address.</li>
         <li>
-          No analytics, no telemetry, and no error reporting. There is no tracking script of any kind, from any vendor, on any page.
+          No browser analytics, advertising telemetry or tracking script. The profile Worker records aggregate service-health numbers such as cache
+          hits and remaining Hypixel capacity, without names, UUIDs, IP addresses or browser ids.
         </li>
         <li>No advertising, and no ad network.</li>
         <li>
@@ -57,41 +59,34 @@ const PrivacyPolicy: React.FC = () => (
       </ul>
     </Section>
 
-    <Section title="Your Hypixel API key">
+    <Section title="Skydex&rsquo;s Hypixel connection">
       <p className={P}>
-        A Hypixel key is a personal credential, so it is held under deliberately narrow rules. You paste one in on the Settings page if you want the
-        profile features; nothing on the site asks for it otherwise. You can get one from{" "}
-        <a href="https://developer.hypixel.net" target="_blank" rel="noopener noreferrer" className={LINK}>
-          developer.hypixel.net
-        </a>
-        .
+        Skydex.ca uses the application access approved for Skydex. Visitors connect a Minecraft account and do not provide Hypixel credentials.
       </p>
       <ul className={UL}>
-        <li>It is stored in one localStorage entry in this browser, on this machine, and nowhere else.</li>
+        <li>The private credential is an encrypted Cloudflare Worker secret. It is not in the source, website build, browser storage or a web address.</li>
         <li>
-          It is sent to exactly one place, <span className={HOST}>api.hypixel.net</span>, and only ever as an <span className={HOST}>API-Key</span>{" "}
-          request header.
+          Only the Worker reads it, and only to call the exact Profile, Garden and Museum routes Skydex uses at{" "}
+          <span className={HOST}>api.hypixel.net</span>.
         </li>
-        <li>
-          It never goes in a web address. Query strings leak through history, referrers, browser extensions and any log the request passes, so the key
-          is kept out of them.
-        </li>
-        <li>It never appears in an error message. Failure text is built from status codes, and the key is stripped from it as a backstop.</li>
-        <li>It is never shown unmasked; the field it is typed into is a password field.</li>
-        <li>The Settings page has a button that forgets it. That removes the entry outright rather than blanking it.</li>
+        <li>The Worker never returns the credential or Hypixel&rsquo;s authentication response details to the browser.</li>
+        <li>Credential data saved by an older live version is removed on first load, while the saved Minecraft account and profile choice remain.</li>
       </ul>
     </Section>
 
     <Section title="Where your browser connects">
       <p className={P}>
-        Skydex has no data-collecting application server, so source data comes straight to your browser. These are all of those sources, and what each
-        one can see:
+        These are the sources your browser or the production Worker contacts, and what each one can see:
       </p>
       <ul className={UL}>
         <li>
-          <span className={HOST}>api.hypixel.net</span>, for your profile. Your key travels as a header, and your account UUID or profile id travels
-          in the address, because that is how the endpoint identifies which profile to return. Skydex also reads Hypixel's public item, skill and
-          bazaar lists, which need no key and say nothing about you.
+          <span className={HOST}>api.skydex.ca/v1/hypixel</span>, for authenticated profile data. Your browser sends the Minecraft UUID or selected
+          profile id plus a random anonymous browser id. The id contains no authentication data and is used only for short-lived abuse limits. Cloudflare also
+          provides the connecting IP address; the Worker turns it into an opaque temporary counter key and does not write it to Skydex telemetry. The
+          Worker validates and authorizes the request, then asks <span className={HOST}>api.hypixel.net</span>. Fresh answers remain in the
+          Worker cache for 5 to 30 minutes depending on the data, with the last good answer retained for up to 24 hours. The same snapshot may remain
+          in this browser for up to 24 hours so changing pages does not request it again. Skydex also reads Hypixel&rsquo;s public item, skill and bazaar
+          lists directly; those require no authentication and say nothing about you.
         </li>
         <li>
           <span className={HOST}>playerdb.co</span>, and <span className={HOST}>api.ashcon.app</span> if the first does not answer, to turn a
@@ -118,7 +113,8 @@ const PrivacyPolicy: React.FC = () => (
         or anyone else, and no IP address is handed over to render text.
       </p>
       <p className={P}>
-        Every source request in this list is made directly by your browser. Skydex is not in the middle of it and keeps no copy.
+        The authenticated profile route is the only source request in this list that passes through Skydex&rsquo;s Worker. The other source requests are
+        made directly by your browser.
       </p>
     </Section>
 
@@ -133,14 +129,15 @@ const PrivacyPolicy: React.FC = () => (
 
     <Section title="What is kept in your browser">
       <p className={P}>
-        Plenty is saved, because a tool that forgot your work every reload would be useless. All of it is written by your browser, on your machine, and
-        none of it is uploaded.
+        Plenty is saved locally, because a tool that forgot your work every reload would be useless. Browser storage is not bulk-synced to Skydex;
+        only the identifiers needed for a profile request leave when you connect or refresh.
       </p>
       <ul className={UL}>
         <li>
           <span className={HOST}>localStorage</span> holds your settings, saved planners and greenhouse layouts, owned-shard inventory, recent
-          searches, the companion-mod link preference, the API key record described above, and cached copies of the wiki and Hypixel data already
-          fetched, so the site is not re-fetching the same public lists on every visit.
+          searches, the companion-mod link preference, your Minecraft account and profile choice, and cached copies of wiki and Hypixel data already
+          fetched, so the site is not re-fetching the same lists on every visit. It also holds the random anonymous browser id used for API abuse
+          limits. The live site stores no Hypixel credential supplied by a visitor.
         </li>
         <li>
           <span className={HOST}>sessionStorage</span> holds one entry, briefly. Opening a deep link on a static host lands on a fallback page first,
@@ -149,6 +146,10 @@ const PrivacyPolicy: React.FC = () => (
         <li>
           <span className={HOST}>IndexedDB</span> holds files you chose yourself: a custom backdrop image, and a Minecraft resource pack if you loaded
           one. The file itself is stored, and it stays in the browser. Nothing about it is sent anywhere.
+        </li>
+        <li>
+          <span className={HOST}>Cache Storage</span> may hold the last profiles, garden and museum snapshot for up to 24 hours. Skydex caps this
+          cache and removes older entries as new ones arrive.
         </li>
       </ul>
       <p className={P}>
@@ -159,12 +160,13 @@ const PrivacyPolicy: React.FC = () => (
 
     <Section title="Hosting">
       <p className={P}>
-        The site is served as static files by GitHub Pages, with Cloudflare handling the public skydex.ca connection in front of it. Like any host and
-        delivery network, they receive ordinary request details such as your IP address, browser user agent, and the path or query string requested.
-        Anything after a <span className={HOST}>#</span> stays in your browser and is never part of that request. A Designer share link is the deliberate
-        exception: its encoded layout is in the path so Cloudflare can render the Discord preview. The stateless preview worker decodes it in memory,
-        returns the page or image, and discards it immediately; Skydex has no database or application log for shared layouts. GitHub and Cloudflare
-        apply their own privacy terms to the traffic they handle. Skydex adds no logging of its own and has no application back end that stores it.
+        The static site is served by GitHub Pages, with Cloudflare handling the public skydex.ca connection in front of it. Like any host and delivery
+        network, they receive ordinary request details such as your IP address, browser user agent, and requested path or query string. The profile
+        Worker uses the anonymous browser id and an opaque network counter only to enforce request ceilings, and does not write either to Skydex
+        telemetry or an application log. Successful Hypixel responses remain fresh at the edge for 5 to 30 minutes, with a last-good fallback retained
+        for up to 24 hours. A Designer share link carries its encoded layout in
+        the path so Cloudflare can render a Discord preview; the Worker decodes it in memory and discards it. Anything after a{" "}
+        <span className={HOST}>#</span> stays in your browser. GitHub and Cloudflare apply their own privacy terms to the traffic they handle.
       </p>
     </Section>
 

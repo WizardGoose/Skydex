@@ -68,7 +68,7 @@ import {
 import { WikiStatus } from "../data/WikiStatus";
 import { GreenhouseSettings, PlannerOptionsList, type GreenhouseGrowth } from "../components/calculator/GreenhouseSettings";
 import { setManualGreenhouseStats, useGreenhouseStats } from "../../island/profileStats";
-import { currentAccess } from "../../island/apiKey";
+import { currentAccess, hasApiProfileAccess } from "../../island/apiKey";
 import { manualGreenhouseLayer, resolveGrowth } from "../planner/growthSource";
 import { parseGreenhouseHash } from "../route";
 
@@ -202,18 +202,18 @@ export const PlannerPage: React.FC = () => {
   const growth = useMemo(() => resolveGrowth(state.growth, apiStats), [state.growth, apiStats]);
 
   /**
-   * A key exists, but no garden pull has ever landed.
+   * Profile access exists, but no garden pull has ever landed.
    *
    * The pull is gated on a connected account, and connecting is a separate
-   * click from entering the key. So a player who typed their key and stopped
-   * there gets silence: every pull returns nothing and the tier row looks
+   * step from enabling the transport. So a player who has not connected an
+   * account gets silence: every pull returns nothing and the tier row looks
    * exactly like the three stats that are manual forever by design. That is
    * the state this flag exists to name.
    *
    * `fetchedAt` is stamped by the store rather than the parser, so it reads as
    * "the store has an answer", which is the question being asked here.
    */
-  const awaitingProfile = Boolean(currentAccess().key.trim()) && apiStats.fetchedAt === null;
+  const awaitingProfile = hasApiProfileAccess(currentAccess()) && apiStats.fetchedAt === null;
 
   /**
    * Mirror the resolved tier into storage.
@@ -246,7 +246,7 @@ export const PlannerPage: React.FC = () => {
    * is the LOWEST of the three precedence steps, so an edit that landed there
    * would be outranked by the API's answer and resolved away on the very next
    * render: the control would look editable and be read only for anybody with a
-   * key, which is worse than never auto-filling it at all.
+   * profile connection, which is worse than never auto-filling it at all.
    *
    * Each branch sends ONE layer carrying BOTH typed numbers, the one it just
    * changed and the one it did not. The store replaces the manual record rather

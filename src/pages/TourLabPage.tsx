@@ -728,13 +728,10 @@ export const TourLabPage: React.FC = () => {
                 the card that lights up and no number anywhere),{" "}
                 <span className="font-mono text-slate-300">[settings-button]</span>,{" "}
                 <span className="font-mono text-slate-300">[input label="Sign here" placeholder="- - - - -"
-                name="username" max="16"]</span> (two names save for real.{" "}
+                name="username" max="16"]</span> (one name saves for real.{" "}
                 <span className="font-mono text-slate-300">username</span> saves the real Minecraft name Settings
                 uses, and holds it to Minecraft&rsquo;s own rule of 2 to 16 letters, numbers and underscores
-                before it saves. <span className="font-mono text-slate-300">apikey</span> saves the Hypixel key
-                Settings uses: that one is drawn masked whatever else you write, carries no shape rule of its own
-                because a wrong key is Hypixel&rsquo;s to refuse, and stamps its expiry 47 hours out, an hour
-                inside the 48 a key lives. Other names are just for fun),{" "}
+                before it saves. Other names are just for fun),{" "}
                 <span className="font-mono text-slate-300">[slider label="How keen?" min="0" max="100"]</span>. A{" "}
                 <span className="font-mono text-slate-300">label=</span> takes spans, so{" "}
                 <span className="font-mono text-slate-300">label="`red+bold:Prick` your finger"</span> colours the

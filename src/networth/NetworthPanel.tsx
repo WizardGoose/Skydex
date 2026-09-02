@@ -46,7 +46,7 @@ import type { IslandChest } from "../island/types";
 const SOURCE_CHIP: Record<string, { label: string; title: string }> = {
   api: {
     label: "API",
-    title: "Read from your Hypixel profile with your own API key.",
+    title: "Read from your Hypixel profile.",
   },
   mod: {
     label: "mod",
@@ -203,16 +203,14 @@ export const NetworthPanel: React.FC<NetworthPanelProps> = ({ chests, chestProve
         {header}
         <div className="space-y-2 p-3">
           <p className="text-[12px] leading-relaxed text-slate-300">
-            Networth needs your Hypixel API key. Everything it values lives on your profile, and Hypixel will only hand
-            that over to a request carrying your own key.
+            Networth needs a connected Minecraft account. Everything it values lives on your Hypixel profile.
           </p>
           <p className="text-[11px] leading-relaxed text-slate-500">
-            The key is stored in this browser and sent to api.hypixel.net and nowhere else. Prices come from a public
-            file that needs no key at all.
+            Skydex.ca reads it through the shared Hypixel connection. Prices come from a public file.
           </p>
           <SettingsLink section="hypixel" className={BTN_QUIET}>
             <KeyRound className="h-3 w-3" />
-            Set up your API key
+            Connect your profile
           </SettingsLink>
         </div>
       </div>
@@ -349,7 +347,7 @@ export const NetworthPanel: React.FC<NetworthPanelProps> = ({ chests, chestProve
         <p className="text-[10px] leading-snug text-slate-500">
           Valuation rules ported from SkyHelper-Networth {view.rulesVersion} (MIT), the same rules other SkyBlock tools
           use, so these numbers should line up with theirs. Prices are fetched in this browser and cached for twenty
-          minutes; nothing about your profile is uploaded anywhere.
+          minutes; profile reads use the connection and cache described in Settings.
         </p>
       </div>
     </div>

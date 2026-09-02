@@ -288,4 +288,29 @@ describe("stateless layout link embeds", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("delegates the production API route instead of falling through to the static site", async () => {
+    const response = await handleLayoutEmbedRequest(
+      new Request("https://api.skydex.ca/v1/hypixel/profiles?uuid=b876ec32e396476ba1158438d83c67d4", {
+        headers: { origin: "https://skydex.ca" },
+      }),
+      {},
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain("anonymous Skydex browser id");
+  });
+
+  it("terminates unknown API-host paths instead of fetching the Worker recursively", async () => {
+    const response = await handleLayoutEmbedRequest(
+      new Request("https://api.skydex.ca/not-a-route"),
+      {},
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      success: false,
+      cause: "That Skydex API route does not exist.",
+    });
+  });
 });

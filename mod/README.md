@@ -75,7 +75,7 @@ would stop it being passive — so if a category has never been opened, it is
 simply not in the data yet. Opening the sack once fixes it permanently, and
 nothing you have already recorded is ever lost by opening a different sack.
 
-If you have an API key on the site, sacks are also available there in bulk.
+Connecting a Minecraft profile on the site also makes sacks available there in bulk.
 
 The Runes sack is skipped on purpose: rune items carry no usable item id, and
 recording plausible-but-wrong ids is worse than recording nothing.

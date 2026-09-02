@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { recipesStore } from "../items/useItemData";
-import { currentAccess } from "../island/apiKey";
+import { currentAccess, hasApiProfileAccess } from "../island/apiKey";
 import { fetchProfileMember } from "../island/hypixel";
 import { setApiBioanalysis } from "../island/profileStats";
 import { accessoriesFromIndex, buildAccessoryCatalogue } from "./catalogue";
@@ -763,7 +763,7 @@ export const refreshOwned = async (force = false): Promise<void> => {
     publish();
   }
 
-  if (!access.key.trim() || !access.uuid) return;
+  if (!hasApiProfileAccess(access)) return;
   if (bagInFlight) return;
   if (!force && bagReadAt !== 0 && Date.now() - bagReadAt < BAG_TTL) return;
 
@@ -783,7 +783,7 @@ export const refreshOwned = async (force = false): Promise<void> => {
       return;
     }
 
-    bagReadAt = Date.now();
+    bagReadAt = result.fetchedAt ?? Date.now();
     const bag = await readOwnedFromMember(result.value.member);
     ownedIds = bag?.ids ?? null;
     // Everything the MP model detects, off the member we already hold: the

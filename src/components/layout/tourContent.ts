@@ -33,10 +33,8 @@
  *                             the choice is a label and never a number
  *       [settings-button]   an "Open Settings" button
  *       [input]             a signature-line text input
- *                             name= a known binding saves for real, and the
- *                             registry is two names long: "username" saves
- *                             the Minecraft name Settings uses, and "apikey"
- *                             saves the Hypixel key Settings uses. An
+ *                             name= a known binding saves for real. "username"
+ *                             saves the Minecraft name Settings uses. An
  *                             unknown or missing name is just for fun and
  *                             saves nowhere
  *                             placeholder= the ghost text. The browser draws
@@ -69,17 +67,6 @@
  *                             numbers, underscores) without being asked, and
  *                             only a passing name is saved. pattern=
  *                             overrides that rule; pattern="" removes it.
- *
- *                             The "apikey" binding is drawn MASKED whatever
- *                             else the marker says, because the masking
- *                             belongs to the credential and not to the
- *                             markup, and it carries no rule of its own: a
- *                             key of the wrong shape is Hypixel's to refuse
- *                             rather than this file's to guess at. Typing
- *                             one also stamps its expiry date 47 hours out,
- *                             an hour inside the 48 a Hypixel key lives, and
- *                             emptying the line clears the key and that date
- *                             together.
  *       [slider]            a slider with a live readout
  *                             min= max= the range (defaults 0 and 100)
  *                             label= a small caption above it, taking spans

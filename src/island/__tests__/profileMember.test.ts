@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fetchProfileMember } from "../hypixel";
+import { resetHypixelTransportForTesting } from "../hypixelTransport";
 
 /**
  * The raw member reader.
@@ -11,9 +12,9 @@ import { fetchProfileMember } from "../hypixel";
  *   - it must pick the SAME profile `chooseProfile` would pick, because two
  *     readers disagreeing about which profile is "the" profile is a bug that
  *     shows up as numbers from one profile sitting beside numbers from another
- *   - it must keep the key in the header and out of the URL, which is the one
- *     invariant `hypixel.ts` states in its own header and the reason this
- *     request lives in that file rather than in the accessories module
+ *   - it must send no Hypixel key from the browser, which is the invariant
+ *     `hypixel.ts` states in its own header and the reason this request lives
+ *     in that file rather than in the accessories module
  */
 
 const UUID = "b876ec32e396476ba1158438d83c67d4";
@@ -25,12 +26,29 @@ const withFetch = async <T>(
   run: () => Promise<T>
 ): Promise<T> => {
   const original = globalThis.fetch;
-  globalThis.fetch = ((url: RequestInfo | URL, init?: RequestInit) =>
-    Promise.resolve(handler(String(url), init))) as typeof fetch;
+  resetHypixelTransportForTesting();
+  globalThis.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
+    const response = handler(String(url), init);
+    if (!response.ok) return response;
+    const data = await response.json();
+    const fetchedAt = Date.now();
+    return Response.json({
+      success: true,
+      uuid: UUID,
+      profileId: null,
+      fetchedAt,
+      resources: {
+        profiles: { fetchedAt, cache: "miss", data },
+        garden: null,
+        museum: null,
+      },
+    });
+  }) as typeof fetch;
   try {
     return await run();
   } finally {
     globalThis.fetch = original;
+    resetHypixelTransportForTesting();
   }
 };
 
@@ -53,7 +71,7 @@ describe("fetchProfileMember", () => {
     expect(result.value.cuteName).toBe("Papaya");
   });
 
-  it("keeps the key in the header and out of the URL", async () => {
+  it("keeps the key out of the Skydex browser request", async () => {
     const SECRET = "d2a1b3c4-secret-key-value";
     let seenUrl = "";
     let seenInit: RequestInit | undefined;
@@ -68,8 +86,10 @@ describe("fetchProfileMember", () => {
     );
 
     expect(seenUrl).toContain(UUID);
+    expect(seenUrl).toContain("https://api.skydex.ca/v1/hypixel/snapshot");
     expect(seenUrl).not.toContain(SECRET);
-    expect((seenInit?.headers as Record<string, string>)["API-Key"]).toBe(SECRET);
+    expect(new Headers(seenInit?.headers).get("API-Key")).toBeNull();
+    expect(new Headers(seenInit?.headers).get("x-skydex-client-id")).toBeTruthy();
   });
 
   it("prefers an explicitly chosen profile over the selected one", async () => {
@@ -154,7 +174,7 @@ describe("fetchProfileMember", () => {
     expect(normal.ok && normal.value.gameMode).toBeNull();
   });
 
-  it("reports a rejected key as auth rather than as an empty bag", async () => {
+  it("reports rejected authentication rather than an empty bag", async () => {
     const result = await withFetch(
       () => new Response(JSON.stringify({ success: false, cause: "Invalid API key" }), { status: 403 }),
       () => fetchProfileMember(ACCOUNT, "key")
@@ -164,7 +184,7 @@ describe("fetchProfileMember", () => {
     expect(result.error.reason).toBe("auth");
   });
 
-  it("redacts the key if Hypixel ever echoes it back", async () => {
+  it("does not repeat a credential if Hypixel ever echoes it back", async () => {
     const SECRET = "d2a1b3c4-secret-key-value";
     const result = await withFetch(
       () => new Response(JSON.stringify({ success: false, cause: `Invalid API key ${SECRET}` }), { status: 403 }),
@@ -173,22 +193,20 @@ describe("fetchProfileMember", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).not.toContain(SECRET);
-    expect(result.error.message).toContain("[redacted]");
+    expect(result.error.message).toBe("Skydex could not authenticate with Hypixel.");
   });
 
-  it("refuses without a key rather than making a doomed request", async () => {
+  it("works without a personal key", async () => {
     let called = false;
     const result = await withFetch(
       () => {
         called = true;
-        return payload([]);
+        return payload([{ profile_id: "p1", selected: true, members: { [UUID]: member("BAG1") } }]);
       },
       () => fetchProfileMember(ACCOUNT, "   ")
     );
-    expect(called).toBe(false);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.reason).toBe("auth");
+    expect(called).toBe(true);
+    expect(result.ok).toBe(true);
   });
 
   it("says not found when the account has no profiles it shares", async () => {

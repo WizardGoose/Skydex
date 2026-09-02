@@ -6,12 +6,11 @@
 
 <img src="docs/assets/wordmark.svg" alt="Skydex" width="880">
 
-Skydex is a Hypixel SkyBlock toolkit that runs entirely in your browser.
+Skydex is a Hypixel SkyBlock toolkit with local browser-run tools and an optional live profile connection.
 
 <a href="LICENSE"><img src="docs/assets/badge-mit.svg" alt="MIT licensed" height="20"></a>
 <a href="#quick-start"><img src="docs/assets/badge-browser.svg" alt="runs in your browser" height="20"></a>
 <a href="#privacy"><img src="docs/assets/badge-no-tracking.svg" alt="no ads, no tracking" height="20"></a>
-<a href="#privacy"><img src="docs/assets/badge-api-key.svg" alt="API key: Hypixel only" height="20"></a>
 <a href="https://github.com/WizardGoose/Skydex/actions/workflows/mod-build.yml"><img src="https://github.com/WizardGoose/Skydex/actions/workflows/mod-build.yml/badge.svg" alt="companion mod build status" height="20"></a>
 
 </div>
@@ -27,11 +26,12 @@ as much time as I do anymore - so Ill be posting smaller updates while I play
 skyblock! I apologize if there are portions of the GUI that do not look very
 visually intriguing, they will be fixed eventually!
 
-So, what is it. Skydex is a Hypixel SkyBlock toolkit that runs entirely in your
-browser. There is no Skydex account, no Skydex login and no Skydex server - the
-site is a folder of static files, and every calculation happens on your own
-machine. The greenhouse solver and the expansion optimizer are local and work
-offline, so they keep going even when nothing else does!
+So, what is it. Skydex is a Hypixel SkyBlock toolkit whose calculations run in
+your browser. There is no Skydex account, login or profile database. The site is
+static, while authenticated profile reads use one narrow Cloudflare Worker so
+the private Hypixel credential never reaches visitors. The greenhouse solver and
+the expansion optimizer remain local and work offline, so they keep going even
+when nothing else does!
 
 New here and just want to run it? Start with the [setup guide](docs/SETUP.md),
 which walks through it from scratch and assumes you have never run a Node
@@ -119,8 +119,13 @@ pnpm run build:pages
 
 ## Configuration
 
-No environment file is needed, and there are no variables to set by hand. The
-production artifact is rooted at `/`, as it is on `https://skydex.ca`.
+The static website build needs no environment file and is rooted at `/`, as it
+is on `https://skydex.ca`. The live Cloudflare Worker separately requires the
+`HYPIXEL_API_KEY` encrypted secret declared in `wrangler.jsonc`; it must never
+be written into this checkout or a Vite environment variable. The Worker is
+configured as the Custom Domain at `https://api.skydex.ca`; hosted and locally
+run copies of Skydex both use that public product API without asking visitors
+for a key.
 
 Deep links on Pages go through `public/404.html`, which is the whole reason that
 file exists: a static host has no rewrite rule, so a visitor opening
@@ -130,10 +135,14 @@ are a pair and only work together (please do not separate them, they get sad).
 
 ## Privacy
 
-Skydex serves no ads, runs no analytics and sets no cookies, and it has no back
-end that could log anything even if it wanted to. Your Hypixel API key is stored
-in your own browser's localStorage and is sent to exactly one place,
-`api.hypixel.net`, as a request header, never in a web address.
+Skydex serves no ads, runs no browser tracking analytics and sets no cookies. Skydex.ca
+uses its approved Hypixel access through a narrow Cloudflare Worker; the
+encrypted credential never enters the site build or a visitor's browser. The
+Worker accepts only the Profile, Garden and Museum reads Skydex uses, rate
+limits real cache misses, retains a protected global reserve, and caches fresh
+responses for 5 to 30 minutes. Aggregate quota telemetry contains numbers only;
+the last good response can be used for up to 24 hours during a temporary limit
+or upstream failure.
 
 The full account of what your browser connects to, and what each host can see,
 is on the Privacy page in the app at `/privacy-policy`

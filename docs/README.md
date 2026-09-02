@@ -5,7 +5,7 @@ Start here.
 ## For players
 
 - **[User guide](user-guide.md)**. What each page does, how to connect your
-  Hypixel API key, how the companion mod feeds the Island page, and what the
+  Hypixel profile, how the companion mod feeds the Island page, and what the
   planner's numbers mean.
 
 ## For contributors

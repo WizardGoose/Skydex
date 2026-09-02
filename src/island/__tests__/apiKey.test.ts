@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { EXPIRY_WARN_MS, expiryLabel, readExpiry, stampExpiry, uuidForName } from "../apiKey";
+import {
+  EXPIRY_WARN_MS,
+  expiryLabel,
+  readExpiry,
+  stampExpiry,
+  uuidForName,
+  withoutPersonalApiKey,
+} from "../apiKey";
 import type { KeyExpiry } from "../apiKey";
 
 /**
@@ -28,6 +35,28 @@ const midnight = (iso: string): number => {
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
+
+describe("production credential migration", () => {
+  it("removes every personal-key field without losing the saved account or profile", () => {
+    expect(withoutPersonalApiKey({
+      key: "old-personal-key",
+      keyState: "valid",
+      checkedAt: 123,
+      keyExpiresOn: "2027-03-09",
+      uuid: "b876ec32e396476ba1158438d83c67d4",
+      name: "Wizard",
+      profileId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    })).toEqual({
+      key: "",
+      keyState: "unchecked",
+      checkedAt: null,
+      keyExpiresOn: null,
+      uuid: "b876ec32e396476ba1158438d83c67d4",
+      name: "Wizard",
+      profileId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    });
+  });
+});
 
 /** `now` placed an exact distance before the named day begins. */
 const before = (iso: string, ms: number): number => midnight(iso) - ms;

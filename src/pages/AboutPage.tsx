@@ -73,7 +73,7 @@ export const AboutPage: React.FC = () => (
       <p className="mt-4 text-sm leading-[1.8] text-slate-300">
         Tools for the long grinds in SkyBlock: shard fusions, greenhouse layouts and crafting costs.
         <InfoGlyph
-          label={`${SITE_NAME} is open source and is not affiliated with the game developers. Item, recipe and mutation data are loaded live from the Hypixel SkyBlock Wiki and the public Hypixel API.`}
+          label={`${SITE_NAME} is open source and is not affiliated with or endorsed by Hypixel Inc. Item, recipe and mutation data are loaded live from the Hypixel SkyBlock Wiki and the public Hypixel API.`}
         />
       </p>
     </header>

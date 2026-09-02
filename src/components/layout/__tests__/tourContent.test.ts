@@ -415,17 +415,8 @@ describe("inputRule", () => {
     expect(inputRule({ name: "guestbook", pattern: null })).toBeNull();
   });
 
-  it("leaves the apikey binding unchecked, unlike the other binding", () => {
-    /* Deliberate, and the one place the two bindings differ on rules: a key of
-       the wrong shape is Hypixel's to refuse. Inventing a format here would
-       reject a perfectly good key the day Hypixel changes one character of it,
-       and the reader would have no way to argue. */
-    expect(inputRule({ name: "apikey", pattern: null })).toBeNull();
-  });
-
-  it("still honours a pattern an author writes on the apikey line", () => {
-    /* No built-in rule is not the same as no rule allowed. */
-    expect(inputRule({ name: "apikey", pattern: "[A-Za-z0-9-]+" })).toBe("[A-Za-z0-9-]+");
+  it("still honours a pattern an author writes on an unbound line", () => {
+    expect(inputRule({ name: "guestbook", pattern: "[A-Za-z0-9-]+" })).toBe("[A-Za-z0-9-]+");
   });
 });
 

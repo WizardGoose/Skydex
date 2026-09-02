@@ -1,15 +1,62 @@
 {
   "$schema": "https://json.schemastore.org/wrangler.json",
-  "name": "skydex-layout-embeds",
+  "name": "skydex-worker",
   "main": "cloudflare/layout-embed-worker.js",
-  "compatibility_date": "2026-08-15",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "secrets": {
+    "required": ["HYPIXEL_API_KEY"]
+  },
   "browser": {
     "binding": "BROWSER"
   },
+  "ratelimits": [
+    {
+      "name": "HYPIXEL_CLIENT_LIMITER",
+      "namespace_id": "832746201",
+      "simple": {
+        "limit": 15,
+        "period": 60
+      }
+    },
+    {
+      "name": "HYPIXEL_NETWORK_LIMITER",
+      "namespace_id": "832746202",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "HYPIXEL_QUOTA",
+        "class_name": "HypixelQuota"
+      }
+    ]
+  },
+  "exports": {
+    "HypixelQuota": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "analytics_engine_datasets": [
+    {
+      "binding": "HYPIXEL_METRICS",
+      "dataset": "skydex_hypixel_api"
+    }
+  ],
   "routes": [
     {
       "pattern": "skydex.ca/greenhouse/share/*",
       "zone_name": "skydex.ca"
+    },
+    {
+      "pattern": "api.skydex.ca",
+      "custom_domain": true
     }
   ]
 }

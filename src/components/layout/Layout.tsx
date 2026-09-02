@@ -167,6 +167,8 @@ export const Layout: React.FC = () => {
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <p className="max-w-[120ch] text-[11px] leading-snug text-slate-300">
               NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT
+              <br />
+              SKYDEX IS NOT AFFILIATED WITH OR ENDORSED BY HYPIXEL.
             </p>
             <details className="basis-full">
               <summary className={`w-fit cursor-pointer rounded-sm text-[10px] leading-snug text-slate-500 transition-colors marker:text-slate-500 hover:text-sky-300 ${FOCUS}`}>

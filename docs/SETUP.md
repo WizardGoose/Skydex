@@ -78,20 +78,16 @@ stops the site. Press `Ctrl+C` in that terminal when you want to stop.
 While this is running, edits you make to the source appear in the browser
 almost immediately, without a reload.
 
-## 5. Connect a Hypixel API key (optional)
+## 5. Connect a Minecraft profile locally (optional)
 
-Most of the site works with no key at all. The profile features need one,
-because they read your SkyBlock profile from Hypixel directly.
+The live site at `skydex.ca` uses Skydex's approved production connection. A
+local `pnpm run dev` session uses the same public `api.skydex.ca` connection.
 
-1. Get a key from [developer.hypixel.net](https://developer.hypixel.net).
-2. In Skydex, open **Settings**, and paste the key into the Hypixel key field
-   there.
+1. In Skydex, open **Settings**.
+2. Enter a Minecraft username or UUID and connect it.
 
-That field is the only place a key should ever go. Skydex stores it in your own
-browser's localStorage and sends it to `api.hypixel.net` as a request header and
-nowhere else. A key is a personal credential: do not paste it into a config
-file, a terminal, a bug report or a chat. The Settings page has a button that
-forgets it again, which removes it outright.
+The browser sends only the account identifier and an anonymous browser id to
+`api.skydex.ca`. Cloudflare holds the private Hypixel credential.
 
 ## 6. Look at a production build
 
@@ -104,7 +100,9 @@ pnpm start
 
 That runs the build and then serves the result at `http://localhost:4180`. This
 is the version to check before publishing anything, because the dev server is
-more forgiving than a real static host.
+more forgiving than a real static host. Its profile connection expects the
+Cloudflare Worker at `api.skydex.ca`, so profile pulls work in this preview once
+that Worker has been deployed.
 
 To build the GitHub Pages artifact locally:
 

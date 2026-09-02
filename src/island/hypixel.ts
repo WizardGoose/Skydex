@@ -1,5 +1,11 @@
 import { validateSnapshot } from "./validate";
 import { makeKeyedGate } from "./gate";
+import {
+  buildHypixelRequest,
+  fetchProductionHypixelResource,
+  hasHypixelApiCredential,
+  usesProductionHypixelApi,
+} from "./hypixelTransport";
 import type { IslandFeed } from "./merge";
 
 /**
@@ -12,10 +18,11 @@ import type { IslandFeed } from "./merge";
  *
  * Three constraints shape everything here.
  *
- * **The key is a secret and this file is the only place it is handled.** It
- * travels as an `API-Key` header, never as a query parameter, because query
- * strings end up in history, referrers and server logs. Nothing in this module
- * interpolates a URL or a header into an error message, and the one place a
+ * **The key is a secret and the transport boundary is the only place it is
+ * handled.** The hosted site and local Skydex checkouts send no browser
+ * credential at all: `hypixelTransport.ts` selects Skydex's narrow API Worker,
+ * where the application key is an encrypted secret.
+ * Nothing interpolates a key into a URL or error message, and the one place a
  * remote string becomes an error message runs it through `redact` first.
  *
  * **No background polling.** The keyed API is pulled on demand behind a five
@@ -67,7 +74,9 @@ export interface ApiError {
   message: string;
 }
 
-export type ApiResult<T> = { ok: true; value: T } | { ok: false; error: ApiError };
+export type ApiResult<T> =
+  | { ok: true; value: T; fetchedAt?: number; cacheState?: string }
+  | { ok: false; error: ApiError };
 
 /**
  * Belt and braces against the one thing that must never happen.
@@ -108,17 +117,42 @@ export const looksLikeUuid = (value: string): boolean => /^[0-9a-f]{32}$/.test(u
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
-const withTimeout = async (url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> => {
+const withTimeoutTask = async <T>(
+  task: (signal: AbortSignal) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> => {
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), TIMEOUT_MS);
   const onAbort = () => controller.abort();
   signal?.addEventListener("abort", onAbort);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await task(controller.signal);
   } finally {
     clearTimeout(deadline);
     signal?.removeEventListener("abort", onAbort);
   }
+};
+
+const withTimeout = (url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> =>
+  withTimeoutTask((timeoutSignal) => fetch(url, { ...init, signal: timeoutSignal }), signal);
+
+/** One authenticated request boundary for every keyed Hypixel endpoint. */
+const fetchAuthenticated = async (url: string, key: string, signal?: AbortSignal): Promise<Response> => {
+  if (usesProductionHypixelApi()) {
+    return withTimeoutTask((timeoutSignal) => fetchProductionHypixelResource(url, timeoutSignal), signal);
+  }
+  const request = buildHypixelRequest(url, key);
+  return withTimeout(request.url, request.init, signal);
+};
+
+const responseMetadata = (response: Response): { fetchedAt?: number; cacheState?: string } => {
+  const fetchedAtText = response.headers.get("x-skydex-fetched-at");
+  const fetchedAt = fetchedAtText === null ? Number.NaN : Number(fetchedAtText);
+  const cacheState = response.headers.get("x-skydex-cache");
+  return {
+    ...(Number.isFinite(fetchedAt) ? { fetchedAt } : {}),
+    ...(cacheState ? { cacheState } : {}),
+  };
 };
 
 /* -------------------------------------------------------------------------- */
@@ -405,27 +439,21 @@ export function shouldAutoRefresh(input: AutoRefreshInput): boolean {
  * Doubles as key validation: a 200 proves the key works, a 403 proves it does
  * not, and there is no reason to spend a second request finding that out.
  *
- * The key goes in the `API-Key` header. Verified from a browser: the preflight
- * answers 200 with `access-control-allow-headers: API-Key` and the real request
- * answers with `access-control-allow-origin: *`, so no proxy is involved and
- * the key never leaves this machine except to api.hypixel.net.
+ * Both the live site and local Skydex checkouts send this request through the
+ * allowlisted Worker; no application key exists in the browser or built files.
  */
 export async function fetchProfiles(
   account: HypixelAccount,
   key: string,
   signal?: AbortSignal
 ): Promise<ApiResult<ApiProfile[]>> {
-  if (!key.trim()) {
-    return { ok: false, error: { reason: "auth", message: "Add your Hypixel API key first." } };
+  if (!hasHypixelApiCredential(key)) {
+    return { ok: false, error: { reason: "auth", message: "Skydex's Hypixel connection is unavailable right now." } };
   }
 
   let res: Response;
   try {
-    res = await withTimeout(
-      `${PROFILES_URL}?uuid=${encodeURIComponent(account.uuid)}`,
-      { headers: { "API-Key": key.trim() }, cache: "no-store" },
-      signal
-    );
+    res = await fetchAuthenticated(`${PROFILES_URL}?uuid=${encodeURIComponent(account.uuid)}`, key, signal);
   } catch {
     // Deliberately says nothing about the request. No URL, no headers.
     return {
@@ -444,10 +472,13 @@ export async function fetchProfiles(
   const cause = isObject(body) && typeof body.cause === "string" ? redact(body.cause, key.trim()) : "";
 
   if (res.status === 403 || res.status === 401) {
-    return { ok: false, error: { reason: "auth", message: cause || "That API key was rejected by Hypixel." } };
+    return { ok: false, error: { reason: "auth", message: "Skydex could not authenticate with Hypixel." } };
   }
   if (res.status === 429) {
-    return { ok: false, error: { reason: "server", message: "Hypixel is rate limiting this key. Try again shortly." } };
+    return {
+      ok: false,
+      error: { reason: "server", message: cause || "Hypixel is rate limiting this connection. Try again shortly." },
+    };
   }
   if (!res.ok) {
     return { ok: false, error: { reason: "server", message: cause || `Hypixel API responded ${res.status}.` } };
@@ -464,7 +495,7 @@ export async function fetchProfiles(
     };
   }
 
-  return { ok: true, value: profiles };
+  return { ok: true, value: profiles, ...responseMetadata(res) };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -490,10 +521,10 @@ const classifyResponse = (res: Response, body: unknown, key: string): ApiError |
   const cause = isObject(body) && typeof body.cause === "string" ? redact(body.cause, key) : "";
 
   if (res.status === 403 || res.status === 401) {
-    return { reason: "auth", message: cause || "That API key was rejected by Hypixel." };
+    return { reason: "auth", message: "Skydex could not authenticate with Hypixel." };
   }
   if (res.status === 429) {
-    return { reason: "server", message: "Hypixel is rate limiting this key. Try again shortly." };
+    return { reason: "server", message: cause || "Hypixel is rate limiting this connection. Try again shortly." };
   }
   if (!res.ok) {
     return { reason: "server", message: cause || `Hypixel API responded ${res.status}.` };
@@ -527,8 +558,8 @@ export async function fetchGarden(
   key: string,
   signal?: AbortSignal
 ): Promise<ApiResult<unknown>> {
-  if (!key.trim()) {
-    return { ok: false, error: { reason: "auth", message: "Add your Hypixel API key first." } };
+  if (!hasHypixelApiCredential(key)) {
+    return { ok: false, error: { reason: "auth", message: "Skydex's Hypixel connection is unavailable right now." } };
   }
   if (!profileId.trim()) {
     return { ok: false, error: { reason: "shape", message: "No SkyBlock profile selected." } };
@@ -536,11 +567,7 @@ export async function fetchGarden(
 
   let res: Response;
   try {
-    res = await withTimeout(
-      `${GARDEN_URL}?profile=${encodeURIComponent(profileId.trim())}`,
-      { headers: { "API-Key": key.trim() }, cache: "no-store" },
-      signal
-    );
+    res = await fetchAuthenticated(`${GARDEN_URL}?profile=${encodeURIComponent(profileId.trim())}`, key, signal);
   } catch {
     return {
       ok: false,
@@ -563,7 +590,7 @@ export async function fetchGarden(
   // saying this profile has never been to the Garden, and the parser turns it
   // into the same honest blank as any other absent field.
   const garden = isObject(body) && isObject(body.garden) ? body.garden : null;
-  return { ok: true, value: garden };
+  return { ok: true, value: garden, ...responseMetadata(res) };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -592,8 +619,8 @@ export async function fetchMuseum(
   key: string,
   signal?: AbortSignal
 ): Promise<ApiResult<unknown>> {
-  if (!key.trim()) {
-    return { ok: false, error: { reason: "auth", message: "Add your Hypixel API key first." } };
+  if (!hasHypixelApiCredential(key)) {
+    return { ok: false, error: { reason: "auth", message: "Skydex's Hypixel connection is unavailable right now." } };
   }
   if (!profileId.trim()) {
     return { ok: false, error: { reason: "shape", message: "No SkyBlock profile selected." } };
@@ -601,11 +628,7 @@ export async function fetchMuseum(
 
   let res: Response;
   try {
-    res = await withTimeout(
-      `${MUSEUM_URL}?profile=${encodeURIComponent(profileId.trim())}`,
-      { headers: { "API-Key": key.trim() }, cache: "no-store" },
-      signal
-    );
+    res = await fetchAuthenticated(`${MUSEUM_URL}?profile=${encodeURIComponent(profileId.trim())}`, key, signal);
   } catch {
     return {
       ok: false,
@@ -624,13 +647,13 @@ export async function fetchMuseum(
   if (failure) return { ok: false, error: failure };
 
   const members = isObject(body) && isObject(body.members) ? body.members : null;
-  if (!members) return { ok: true, value: null };
+  if (!members) return { ok: true, value: null, ...responseMetadata(res) };
 
   const wanted = undash(playerUuid);
   for (const [memberId, value] of Object.entries(members)) {
-    if (undash(memberId) === wanted) return { ok: true, value };
+    if (undash(memberId) === wanted) return { ok: true, value, ...responseMetadata(res) };
   }
-  return { ok: true, value: null };
+  return { ok: true, value: null, ...responseMetadata(res) };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -718,7 +741,12 @@ export async function fetchProfileMember(
     all.value.find((c) => c.selected) ??
     all.value[0];
 
-  return { ok: true, value: chosen };
+  return {
+    ok: true,
+    value: chosen,
+    ...(all.fetchedAt === undefined ? {} : { fetchedAt: all.fetchedAt }),
+    ...(all.cacheState === undefined ? {} : { cacheState: all.cacheState }),
+  };
 }
 
 /**
@@ -738,17 +766,13 @@ export async function fetchProfileMembers(
   key: string,
   signal?: AbortSignal
 ): Promise<ApiResult<ProfileMember[]>> {
-  if (!key.trim()) {
-    return { ok: false, error: { reason: "auth", message: "Add your Hypixel API key first." } };
+  if (!hasHypixelApiCredential(key)) {
+    return { ok: false, error: { reason: "auth", message: "Skydex's Hypixel connection is unavailable right now." } };
   }
 
   let res: Response;
   try {
-    res = await withTimeout(
-      `${PROFILES_URL}?uuid=${encodeURIComponent(account.uuid)}`,
-      { headers: { "API-Key": key.trim() }, cache: "no-store" },
-      signal
-    );
+    res = await fetchAuthenticated(`${PROFILES_URL}?uuid=${encodeURIComponent(account.uuid)}`, key, signal);
   } catch {
     // Says nothing about the request. No URL, no headers, same as everywhere else here.
     return {
@@ -806,5 +830,5 @@ export async function fetchProfileMembers(
     };
   }
 
-  return { ok: true, value: candidates };
+  return { ok: true, value: candidates, ...responseMetadata(res) };
 }

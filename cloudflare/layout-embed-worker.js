@@ -1,12 +1,16 @@
 /*
- * Stateless social previews for Designer share links.
+ * Skydex's two edge-only routes.
  *
- * The layout code is the request path. It is decoded in memory, used to build
- * one HTML response or one screenshot, and discarded. There is deliberately
- * no KV, D1, R2, cache write, analytics engine, or application logging binding.
+ * Designer share links remain stateless: the layout code is decoded in memory,
+ * used once, and discarded. Authenticated Hypixel reads are delegated to the
+ * narrow production handler, which owns its separate cache and rate limits.
+ * Profile responses use only temporary caches plus numeric aggregate metrics;
+ * the quota coordinator stores no player or visitor identity.
  */
 
 import { evaluateMutationTargets } from "../src/greenhouse/utilities/mutationValidation.ts";
+import { handleHypixelApiRequest } from "./hypixel-api-worker.js";
+export { HypixelQuota } from "./hypixel-quota.js";
 
 const CROP_IDS = [
   "wheat", "potato", "carrot", "pumpkin", "melon", "cocoa_beans",
@@ -413,8 +417,21 @@ const securityHeaders = {
   "x-robots-tag": "noindex, nofollow",
 };
 
-export const handleLayoutEmbedRequest = async (request, env) => {
+export const handleLayoutEmbedRequest = async (request, env, context) => {
   const url = new URL(request.url);
+  const hypixelResponse = await handleHypixelApiRequest(request, env, context);
+  if (hypixelResponse) return hypixelResponse;
+
+  // A Custom Domain makes this Worker the origin for every path on the API
+  // hostname. Falling through to fetch(request) there would call the same
+  // Worker again, so unknown API paths terminate here.
+  if (url.hostname === "api.skydex.ca") {
+    return Response.json(
+      { success: false, cause: "That Skydex API route does not exist." },
+      { status: 404, headers: { ...securityHeaders, "content-type": "application/json; charset=utf-8" } },
+    );
+  }
+
   const route = layoutShareRoute(url.pathname);
   if (!route) return fetch(request);
 

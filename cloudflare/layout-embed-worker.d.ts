@@ -58,6 +58,7 @@ export function buildLayoutOembed(
 export function handleLayoutEmbedRequest(
   request: Request,
   env: unknown,
+  context?: { waitUntil(promise: Promise<unknown>): void },
 ): Promise<Response>;
 
 declare const worker: { fetch: typeof handleLayoutEmbedRequest };

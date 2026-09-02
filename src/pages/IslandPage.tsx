@@ -18,7 +18,7 @@ import {
 } from "../ui/slotGrid";
 import { SlotIcon } from "../island/SlotIcon";
 import { PlayerModel } from "../island/PlayerModel";
-import { useApiAccess } from "../island/apiKey";
+import { hasApiProfileAccess, useApiAccess } from "../island/apiKey";
 import { useIsland } from "../island/useIsland";
 import { totalItems, slotLayout } from "../island/aggregate";
 import { withoutChrome } from "../island/chrome";
@@ -1956,39 +1956,23 @@ const PetsSection: React.FC<{
   </div>
 );
 
-/**
- * Where the Hypixel key now lives.
- *
- * The key entry itself moved to `/settings`, which is the one screen that
- * collects every setting on the site. What stays here is the sentence that
- * explains what a key buys, because that only makes sense standing next to the
- * sections it fills in, and a link to the control.
- *
- * The panel is not duplicated: `/settings` renders the same `HypixelPanel`
- * component this page used to render, so there is still exactly one API key
- * control in the codebase and it is still the one written under the credential
- * rules in `island/apiKey.ts`.
- *
- * Rendered ONLY while no key is set. Once a key exists the pitch is
- * describing a sale
- * already made, and the control stays reachable through Settings.
- */
-const ApiKeyLink: React.FC = () => {
+/** A short route to the shared connection controls while no profile is linked. */
+const HypixelConnectionLink: React.FC = () => {
   const { access } = useApiAccess();
-  if (access.key) return null;
+  if (hasApiProfileAccess(access)) return null;
 
   return (
     <div className={PANEL}>
       <SectionHead title="Hypixel API" right={<span className={LABEL}>optional</span>} />
       <div className="p-3 space-y-2.5">
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          A key adds your <span className="text-slate-200">sack totals, networth, armour, saved equipment and pets</span> without
-          the mod. It cannot add chests, inventory or ender chest. Hypixel does not publish those at any privacy setting,
-          which is why the mod exists.
+          Connect a Minecraft account to load{" "}
+          <span className="text-slate-200">sack totals, networth, armour, saved equipment and pets</span> without the mod. It cannot add
+          chests, inventory or ender chest. Hypixel does not publish those at any privacy setting, which is why the mod exists.
         </p>
         <SettingsLink section="hypixel" className={BTN_QUIET}>
           <KeyRound className="w-3 h-3" />
-          Set up your API key
+          Connect your profile
         </SettingsLink>
       </div>
     </div>
@@ -2479,7 +2463,7 @@ export const IslandPage: React.FC = () => {
             </div>
           </div>
           <p className="text-[11px] text-slate-400 pt-1">
-            No mod at all? A Hypixel API key fills in your sacks, networth, gear and pets - everything except chests.
+            No mod at all? A Hypixel profile connection fills in your sacks, networth, gear and pets - everything except chests.
           </p>
         </div>
 
@@ -2507,7 +2491,7 @@ export const IslandPage: React.FC = () => {
             <PetsSection pets={pets} />
           </>
         )}
-        <ApiKeyLink />
+        <HypixelConnectionLink />
 
         {lastError && lastError !== pasteError && <p className="text-[11px] text-red-400">{lastError}</p>}
       </div>
@@ -2901,19 +2885,19 @@ export const IslandPage: React.FC = () => {
           {activeTab === "pets" && profile.parsed && <PetsSection pets={pets} />}
         </div>
 
-        <ApiKeyLink />
+        <HypixelConnectionLink />
 
       <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
         <p className="text-[10px] text-slate-500 leading-relaxed max-w-xl">
           {sources.mod !== null &&
             (live ? `Live from the ${SOURCE_LABEL.mod}. ` : `${SOURCE_LABEL.mod}: ${ago(sources.mod)}. `)}
           {sources.api !== null && `${SOURCE_LABEL.api}: ${ago(sources.api)}. `}
-          Kept in this browser only; nothing here has been uploaded anywhere.
+          Saved in this browser; authenticated profile requests pass through Skydex&rsquo;s short-lived Cloudflare cache.
         </p>
         <button
           className={BTN_QUIET}
           onClick={clear}
-          title="Removes only the stored island snapshot. Your API key and everything else in this browser are untouched."
+          title="Removes only the stored island snapshot. Your Hypixel connection and everything else in this browser are untouched."
         >
           <Trash2 className="w-3 h-3" />
           Clear snapshot

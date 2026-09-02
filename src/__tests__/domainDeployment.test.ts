@@ -35,6 +35,25 @@ describe("skydex.ca deployment contract", () => {
     expect(privacy).toMatch(/IP address/);
   });
 
+  it("routes only the bounded production Hypixel API through the Worker", () => {
+    const wrangler = read("wrangler.jsonc");
+    const worker = read("cloudflare/hypixel-api-worker.js");
+    const transport = read("src/island/hypixelTransport.ts");
+
+    expect(wrangler).toContain('"name": "skydex-worker"');
+    expect(wrangler).toContain('"HYPIXEL_API_KEY"');
+    expect(wrangler).toContain('"pattern": "api.skydex.ca"');
+    expect(wrangler).toContain('"custom_domain": true');
+    expect(wrangler).toContain('"HYPIXEL_QUOTA"');
+    expect(wrangler).toContain('"HYPIXEL_METRICS"');
+    expect(wrangler).toContain('"workers_dev": false');
+    expect(worker).toContain('const ENDPOINTS = {');
+    expect(worker).not.toMatch(/HYPIXEL_API_KEY\s*[:=]\s*["'][^"']+["']/);
+    expect(transport).toContain('const PRODUCTION_API_ORIGIN = "https://api.skydex.ca"');
+    expect(transport).toContain('new URL("/v1/hypixel/snapshot"');
+    expect(transport).not.toContain('import.meta.env.VITE_');
+  });
+
   it("does not put repository-dispatch values or a PAT into a shell-capable action", () => {
     const workflow = read(".github/workflows/update-fusions.yml");
     expect(workflow).not.toContain("github.event.client_payload.target_branch");
