@@ -2,7 +2,7 @@ import React from "react";
 import { ItemTooltip } from "./ItemTooltip";
 import { SlotIcon } from "../island/SlotIcon";
 import type { ItemExtra } from "../island/types";
-import { NUM } from "./kit";
+import { FOCUS, NUM, rarityTileClass, recombDisplayTier } from "./kit";
 
 /**
  * The slot grid: items drawn the way the game draws a container.
@@ -135,42 +135,65 @@ export const SLOT_PANE = "max-w-[28.5rem]";
  * memoised per section rather than rebuilt inline, which is what makes the
  * comparison actually bite instead of failing on a fresh object.
  */
-export const Slot: React.FC<{ item: SlotItem; needle: string; context: SlotContext }> = React.memo(
-  ({ item, needle, context }) => {
+export const Slot: React.FC<{
+  item: SlotItem;
+  needle: string;
+  context: SlotContext;
+  iconSize?: number;
+}> = React.memo(
+  ({ item, needle, context, iconSize = 22 }) => {
     const hit = needle !== "" && matches(item, needle);
     const missed = needle !== "" && !hit;
+    const tier = context.tierOf(item.id);
+    const displayTier = recombDisplayTier(tier, item.extra?.recomb ?? false);
 
     return (
-      <div
-        className={`group relative aspect-square rounded-[2px] border flex items-center justify-center ${
-          hit ? "border-emerald-500/70 bg-emerald-500/15" : "border-slate-800 bg-slate-900/60"
-        } ${missed ? "opacity-30" : ""}`}
+      <ItemTooltip
+        id={item.id}
+        name={item.name}
+        count={item.count}
+        extra={item.extra}
+        tier={tier}
+        provenance={context.provenance}
+        unitPrice={item.unitPrice !== undefined ? item.unitPrice : context.priceOf(item.id)}
+        priceLabel={context.priceLabel}
+        icon={
+          <SlotIcon
+            name={item.iconName ?? item.name}
+            id={item.id}
+            skin={item.extra?.skin}
+            src={item.src}
+            size={Math.max(30, iconSize + 8)}
+          />
+        }
+        ariaLabel={`${item.name}: show item details`}
+        wrapperClassName="block aspect-square"
       >
-        <SlotIcon name={item.iconName ?? item.name} id={item.id} skin={item.extra?.skin} src={item.src} size={22} />
+      <button
+        type="button"
+        className={`group relative flex h-full w-full items-center justify-center rounded-md border ${FOCUS} ${
+          hit ? "border-emerald-500/70 bg-emerald-500/15" : rarityTileClass(displayTier)
+        } ${missed ? "opacity-30" : ""}`}
+        data-profile-item-tier={displayTier ?? "unknown"}
+      >
+        <SlotIcon
+          name={item.iconName ?? item.name}
+          id={item.id}
+          skin={item.extra?.skin}
+          src={item.src}
+          size={iconSize}
+        />
 
         {item.count > 1 && (
           <span
-            className={`absolute bottom-0 right-0 rounded-[2px] bg-slate-950/85 px-0.5 text-[9px] leading-[1.3] ${NUM} text-slate-100`}
+            className={`profile-item-overlay-text absolute bottom-0.5 right-0.5 text-[9px] leading-[1.3] ${NUM} text-slate-100`}
           >
-            {shortCount(item.count)}
+            ×{shortCount(item.count)}
           </span>
         )}
 
-        {/* Hover card rather than a `title`: instant, and it can carry a rarity
-            band and an enchant list that a native tooltip cannot. */}
-        <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1 hidden -translate-x-1/2 group-hover:block">
-          <ItemTooltip
-            id={item.id}
-            name={item.name}
-            count={item.count}
-            extra={item.extra}
-            tier={context.tierOf(item.id)}
-            provenance={context.provenance}
-            unitPrice={item.unitPrice !== undefined ? item.unitPrice : context.priceOf(item.id)}
-            priceLabel={context.priceLabel}
-          />
-        </span>
-      </div>
+      </button>
+      </ItemTooltip>
     );
   }
 );
@@ -189,10 +212,16 @@ export const EmptySlot: React.FC = () => (
  * and a list of what happens to be in one, and they are what lets somebody
  * recognise the chest they are thinking of.
  */
-export const TrueGrid: React.FC<{ cells: (SlotItem | null)[]; needle: string; context: SlotContext }> = ({
+export const TrueGrid: React.FC<{
+  cells: (SlotItem | null)[];
+  needle: string;
+  context: SlotContext;
+  iconSize?: number;
+}> = ({
   cells,
   needle,
   context,
+  iconSize,
 }) => (
   <div className="grid grid-cols-9 gap-1 px-3 pb-3 pt-2">
     {/*
@@ -204,17 +233,24 @@ export const TrueGrid: React.FC<{ cells: (SlotItem | null)[]; needle: string; co
       `name` prop correctly on its own, so there is nothing to gain by that.
     */}
     {cells.map((cell, i) =>
-      cell ? <Slot key={i} item={cell} needle={needle} context={context} /> : <EmptySlot key={i} />
+      cell ? <Slot key={i} item={cell} needle={needle} context={context} iconSize={iconSize} /> : <EmptySlot key={i} />
     )}
   </div>
 );
 
 /** Packed nine-wide, padded to the container's real capacity. */
-export const SlotGrid: React.FC<{ items: SlotItem[]; capacity: number; needle: string; context: SlotContext }> = ({
+export const SlotGrid: React.FC<{
+  items: SlotItem[];
+  capacity: number;
+  needle: string;
+  context: SlotContext;
+  iconSize?: number;
+}> = ({
   items,
   capacity,
   needle,
   context,
+  iconSize,
 }) => {
   // Always the container's real size. A Large Chest is 9x6 and draws 54 cells
   // whether it holds 54 stacks or two, because the empty cells are the point:
@@ -235,7 +271,7 @@ export const SlotGrid: React.FC<{ items: SlotItem[]; capacity: number; needle: s
         first mover onward.
       */}
       {items.map((item) => (
-        <Slot key={item.id} item={item} needle={needle} context={context} />
+        <Slot key={item.id} item={item} needle={needle} context={context} iconSize={iconSize} />
       ))}
 
       {Array.from({ length: pad }, (_, i) => (

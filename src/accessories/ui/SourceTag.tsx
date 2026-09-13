@@ -1,5 +1,6 @@
 import React from "react";
 import { FOCUS, LABEL, NUM, RADIUS } from "../../ui/kit";
+import { ItemIcon } from "../../ui/ItemIcon";
 import { SOURCE_CHIP, SOURCE_HINT, SOURCE_LABEL, SOURCE_ORDER } from "./sourceMeta";
 import type { SourceCategory } from "./types";
 
@@ -56,53 +57,55 @@ export const SourceTag: React.FC<{ source: SourceCategory; className?: string }>
  * = craftable category", which is only two-thirds true and the wrong third
  * misleads.
  */
+export interface SourceLegendExample {
+  name: string;
+  id: string;
+}
+
+/** Compact visual decoder: real catalogue icons make the border meaning scannable without prose. */
 export const SourceLegend: React.FC<{
   counts: Record<SourceCategory, number>;
   selected: readonly SourceCategory[];
   onToggle: (source: SourceCategory) => void;
-}> = ({ counts, selected, onToggle }) => (
-  <div className="px-2.5 py-2">
+  examples?: Partial<Record<SourceCategory, SourceLegendExample>>;
+}> = ({ counts, selected, onToggle, examples = {} }) => (
+  <div className="px-2.5 py-2" aria-label="Accessory source legend" data-accessory-source-legend>
     <div className="flex flex-wrap items-center gap-1.5">
       <span className={`${LABEL} mr-0.5`}>Source</span>
       {SOURCE_ORDER.map((source) => {
-      const count = counts[source] ?? 0;
-      const active = selected.includes(source);
-      return (
-        <button
-          key={source}
-          type="button"
-          disabled={count === 0}
-          aria-pressed={active}
-          title={SOURCE_HINT[source]}
-          onClick={() => onToggle(source)}
-          className={
-            `inline-flex items-center gap-1.5 border px-1.5 py-1 transition-colors duration-150 ` +
-            `${RADIUS.control} ${FOCUS} ` +
-            (count === 0
-              ? "cursor-not-allowed border-white/8 bg-transparent opacity-45"
-              : active
-                ? "cursor-pointer border-emerald-500/50 bg-emerald-500/10"
-                : "cursor-pointer border-white/12 bg-white/5 hover:border-white/20 hover:bg-white/8")
-          }
-        >
-          <SourceTag source={source} />
-          <span className={`text-[10px] ${NUM} ${active ? "text-emerald-200" : "text-slate-400"}`}>{count}</span>
-        </button>
-      );
+        const count = counts[source] ?? 0;
+        const active = selected.includes(source);
+        const example = examples[source];
+        const label = source === "wiki" ? "Unknown / Wiki" : SOURCE_LABEL[source];
+        return (
+          <button
+            key={source}
+            type="button"
+            disabled={count === 0}
+            aria-pressed={active}
+            aria-label={`${label} source, ${count} entries`}
+            title={SOURCE_HINT[source]}
+            onClick={() => onToggle(source)}
+            className={
+              `inline-flex items-center gap-1.5 border px-1.5 py-1 transition-colors duration-150 ` +
+              `${RADIUS.control} ${FOCUS} ` +
+              (count === 0
+                ? "cursor-not-allowed border-white/8 bg-transparent opacity-45"
+                : active
+                  ? "cursor-pointer border-cyan-500/50 bg-cyan-500/10"
+                  : "cursor-pointer border-white/12 bg-white/5 hover:border-white/20 hover:bg-white/8")
+            }
+          >
+            <span className={`grid h-7 w-7 place-items-center rounded-sm border ${SOURCE_CHIP[source]}`} aria-hidden>
+              {example ? <ItemIcon name={example.name} id={example.id} size={22} fallback="blank" /> : <span className="text-[10px]">?</span>}
+            </span>
+            <span className="min-w-0 text-left">
+              <span className="block max-w-[7rem] truncate text-[10px] font-semibold text-slate-200">{label}</span>
+              <span className={`block text-[9px] ${NUM} ${active ? "text-cyan-200" : "text-slate-400"}`}>{count}</span>
+            </span>
+          </button>
+        );
       })}
     </div>
-    {/*
-      The one line that keeps the legend's two jobs apart: chips filter by
-      source, borders mean actionable. The three hue words are written out so
-      the sentence decodes the border without the reader needing to map chip
-      to path themselves.
-    */}
-    <p className="mt-1.5 text-[10px] leading-snug text-slate-500">
-      These chips filter by where an accessory comes from. A coloured border on a tile means you can act
-      on it right now: <span className="text-green-300">green</span> you can craft it,{" "}
-      <span className="text-blue-300">blue</span> an NPC shop sells it,{" "}
-      <span className="text-yellow-300">yellow</span> its event is running. A plain border means no route
-      is open today.
-    </p>
   </div>
 );

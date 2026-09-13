@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 /**
- * `uniqueCrops` after the demotion.
+ * The greenhouse-wide `uniqueCrops` timing input.
  *
- * The value had two homes: derived per plot from the solver's own answer, and
- * separately persisted under `skyshards-unique-crops` as though that copy were
- * the truth. The derived figure wins, so the persisted one became a seed.
+ * The value used to compete with a per-plot derived count, but Hypixel applies
+ * the bonus across any Greenhouse plot. This shared store is now the one timing
+ * authority and the old key remains only as a migration seed.
  *
  * What is actually load bearing, and therefore what is pinned here:
  *   - the legacy key is READ, so nobody's slider silently resets to zero

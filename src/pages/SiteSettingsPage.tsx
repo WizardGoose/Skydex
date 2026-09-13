@@ -1,35 +1,52 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Cog, Link2, Loader2, RefreshCw, Unlink, Wifi, WifiOff } from "lucide-react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  ArrowRightLeft,
+  CircleUserRound,
+  Database,
+  Gem,
+  Link2,
+  Loader2,
+  Paintbrush,
+  RefreshCw,
+  Settings2,
+  Shield,
+  Unlink,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import greenhouseData from "../../public/greenhouse/data.json";
 import { HypixelPanel } from "../island/HypixelPanel";
-import { TexturePackPanel } from "../ui/TexturePackPanel";
 import { useApiAccess } from "../island/apiKey";
 import { useIsland } from "../island/useIsland";
 import { chooseProfile } from "../island/hypixel";
 import { ago } from "../island/format";
-import { applyApiGameMode, useProfile, type GameMode } from "../profile/useProfile";
+import { applyApiGameMode } from "../profile/useProfile";
+import { useProfileType, type ProfileType } from "../profile/profileType";
 import { usePlannerState } from "../greenhouse/planner/usePlannerState";
+import { IslandSnapshotImportPanel } from "../island/IslandSnapshotImportPanel";
 import { fetchWikiMutations, readCache, MAX_AGE_MS, SYNC_REFUSED } from "../greenhouse/data/wikiSync";
+import { publishWikiSnapshot } from "../greenhouse/data/datasetStore";
 import { SITE_NAME } from "../ui/brand";
 import {
   PANEL,
   LABEL,
   NUM,
   BTN_QUIET,
-  FOCUS,
-  PageHeader,
   SectionHead,
   ControlGrid,
   ControlRow,
   ToggleRow,
-  Segmented,
   Tag,
 } from "../ui/kit";
-import { replayTour } from "../components/layout/WelcomeTour";
-import { clearBackdrop, readBackdropFlag, saveBackdrop, type BackdropFlag } from "../ui/backdrop";
-import { SETTINGS_SECTION_PARAM } from "../components/layout/settingsRoute";
+import { replayTour } from "../components/layout/tourState";
+import { SPAN_COLOURS } from "../components/layout/tourContent";
+import { closeSettingsLocation, SETTINGS_SECTION_PARAM } from "../components/layout/settingsRoute";
+import { clearManagedInventory } from "../inventory";
 import { useCompanionLink } from "../island/companionLink";
+import { SettingsAppearancePanel } from "./SettingsAppearancePanel";
+import { ShardSettingsPanel } from "./ShardSettingsPanel";
+import "./site-settings.css";
 
 /**
  * One place for everything that is a setting.
@@ -50,8 +67,8 @@ import { useCompanionLink } from "../island/companionLink";
  * Nothing. That is the design. Every control on it is a view onto a store that
  * already existed and already had a home:
  *
- *   Hypixel connection     `island/apiKey.ts`            wizardsky.apikey.v1
- *   Game mode               `profile/useProfile.ts`       wizardsky.profile.v1
+ *   Hypixel connection      `island/apiKey.ts`            wizardsky.apikey.v1
+ *   Profile type            `profile/useProfile.ts`       wizardsky.profile.v1
  *   Wiki mutation cache     `greenhouse/data/wikiSync.ts` wizardsky.wikidata.v1
  *   Island snapshot         `island/useIsland.ts`         its own key
  *   Display preferences     `greenhouse/planner`          wizardsky.planner.v2
@@ -62,9 +79,8 @@ import { useCompanionLink } from "../island/companionLink";
  *
  * THE CONNECTION BOUNDARY
  * -----------------------
- * The existing `HypixelPanel` owns both supported transports. Production uses
- * Skydex's narrow Worker and never receives a visitor key. Local development
- * retains the masked, browser-local key field and direct Hypixel request path.
+ * The existing `HypixelPanel` owns the account connection. Authenticated
+ * profile reads use Skydex's narrow Worker and never receive a visitor key.
  */
 
 /* -------------------------------------------------------------------------- */
@@ -135,6 +151,7 @@ const useWikiCache = () => {
 
     fetchWikiMutations(knownNames.current)
       .then((snapshot) => {
+        publishWikiSnapshot(snapshot);
         if (!live.current) return;
         setState({
           fetchedAt: snapshot.fetchedAt,
@@ -173,16 +190,79 @@ const useWikiCache = () => {
 /* The page                                                                   */
 /* -------------------------------------------------------------------------- */
 
-const MODE_OPTIONS: ReadonlyArray<{ value: GameMode; label: string; title: string }> = [
-  { value: "ironman", label: "Ironman", title: "No Bazaar and no Auction House. Everything has to be gathered." },
-  { value: "normal", label: "Normal", title: "Bazaar and Auction House available, so coin costs are meaningful." },
-];
+const MODE_OPTIONS = [
+  {
+    value: "ironman" as const,
+    label: "Ironman",
+    title: "Use profile-specific acquisition guidance.",
+    icon: Shield,
+    tone: SPAN_COLOURS.blue,
+  },
+  {
+    value: "converter" as const,
+    label: "Converter",
+    title: "Normal, but spiritually undefeated.",
+    icon: ArrowRightLeft,
+    tone: SPAN_COLOURS.gold,
+  },
+  {
+    value: "normal" as const,
+    label: "Normal",
+    title: "Use standard acquisition and source guidance.",
+    icon: CircleUserRound,
+    tone: SPAN_COLOURS.green,
+  },
+] satisfies ReadonlyArray<{
+  value: ProfileType;
+  label: string;
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: string;
+}>;
 
+const ModeControl: React.FC<{ value: ProfileType; onChange: (mode: ProfileType) => void }> = ({ value, onChange }) => (
+  <div className="settings-profile-types" role="group" aria-label="Profile type">
+    {MODE_OPTIONS.map(({ value: option, label, title, icon: Icon, tone }) => {
+      const active = value === option;
+      return (
+        <button
+          key={option}
+          type="button"
+          title={title}
+          aria-pressed={active}
+          data-active={active || undefined}
+          className="settings-profile-type"
+          style={{ "--settings-profile-tone": tone } as React.CSSProperties}
+          onClick={() => onChange(option)}
+        >
+          <Icon aria-hidden />
+          <span>{label}</span>
+        </button>
+      );
+    })}
+  </div>
+);
+
+type SettingsSection = "general" | "shards" | "appearance" | "connections";
+
+const SETTINGS_SECTIONS = [
+  { id: "general" as const, label: "General", detail: "Profile and planner", icon: Settings2 },
+  { id: "shards" as const, label: "Shards", detail: "Sources and route rules", icon: Gem },
+  { id: "appearance" as const, label: "Appearance", detail: "Backdrop and item art", icon: Paintbrush },
+  { id: "connections" as const, label: "Data & connections", detail: "Hypixel, mod and cache", icon: Database },
+] satisfies ReadonlyArray<{
+  id: SettingsSection;
+  label: string;
+  detail: string;
+  icon: React.ComponentType<{ className?: string }>;
+}>;
 export const SiteSettingsPage: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [settingsParams] = useSearchParams();
-  const { mode, source, setMode, clearOverride } = useProfile();
+  const { profileType, source, setProfileType, clearOverride } = useProfileType();
   const { access } = useApiAccess();
-  const { status, sources, modVersion, apiProfiles, snapshot } = useIsland();
+  const { status, sources, modVersion, apiProfiles, snapshot, clearInventorySnapshot } = useIsland();
   const { linked: companionLinked, link: linkCompanion, unlink: unlinkCompanion } = useCompanionLink();
   const wiki = useWikiCache();
   const [companionBusy, setCompanionBusy] = useState(false);
@@ -201,9 +281,7 @@ export const SiteSettingsPage: React.FC = () => {
     if (controller.signal.aborted) return;
     setCompanionBusy(false);
     if (!ok) {
-      setCompanionError(
-        "Skydex could not reach the mod. Start Minecraft in Locally hosted mode, then allow local-device access when your browser asks.",
-      );
+      setCompanionError("Skydex could not reach the mod. Make sure Minecraft is running, silly!");
     }
   };
 
@@ -215,10 +293,80 @@ export const SiteSettingsPage: React.FC = () => {
   };
 
   const settingsSection = settingsParams.get(SETTINGS_SECTION_PARAM);
+  const requestedSection: SettingsSection =
+    settingsSection === "appearance" || settingsSection === "texture-pack"
+      ? "appearance"
+      : settingsSection === "shards"
+        ? "shards"
+        : settingsSection === "hypixel"
+        ? "general"
+        : "general";
+  const [activeSection, setActiveSection] = useState<SettingsSection>(requestedSection);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollToTarget = useCallback((target: HTMLElement, behavior: ScrollBehavior) => {
+    const scrollRoot = contentRef.current;
+    if (!scrollRoot) return;
+    const top = scrollRoot.scrollTop
+      + target.getBoundingClientRect().top
+      - scrollRoot.getBoundingClientRect().top
+      - 8;
+    scrollRoot.scrollTo({ top: Math.max(0, top), behavior });
+  }, []);
+
+  const scrollToSection = useCallback((id: SettingsSection) => {
+    const target = document.getElementById(`settings-panel-${id}`);
+    if (!target) return;
+    setActiveSection(id);
+    scrollToTarget(
+      target,
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    );
+  }, [scrollToTarget]);
+
+  useEffect(() => {
+    const scrollRoot = contentRef.current;
+    if (!scrollRoot) return;
+
+    const updateActiveSection = () => {
+      const marker = scrollRoot.getBoundingClientRect().top + Math.min(120, scrollRoot.clientHeight * 0.22);
+      let next: SettingsSection = "general";
+      for (const { id } of SETTINGS_SECTIONS) {
+        const section = document.getElementById(`settings-panel-${id}`);
+        if (section && section.getBoundingClientRect().top <= marker) next = id;
+      }
+      if (scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight <= 2) {
+        next = "connections";
+      }
+      setActiveSection((current) => (current === next ? current : next));
+    };
+
+    updateActiveSection();
+    scrollRoot.addEventListener("scroll", updateActiveSection, { passive: true });
+    window.addEventListener("resize", updateActiveSection);
+    return () => {
+      scrollRoot.removeEventListener("scroll", updateActiveSection);
+      window.removeEventListener("resize", updateActiveSection);
+    };
+  }, []);
+
   useEffect(() => {
     if (!settingsSection) return;
-    document.getElementById(settingsSection)?.scrollIntoView({ block: "nearest" });
-  }, [settingsSection]);
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(settingsSection)
+        ?? document.getElementById(`settings-panel-${requestedSection}`);
+      if (target) scrollToTarget(target, "auto");
+      setActiveSection(requestedSection);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [requestedSection, scrollToTarget, settingsSection]);
+
+  const [resetPending, setResetPending] = useState(false);
+  const resetInventoryData = () => {
+    clearManagedInventory();
+    clearInventorySnapshot();
+    setResetPending(false);
+  };
 
   /*
    * The planner's own hook, used the way the Dashboard already uses it, rather
@@ -260,299 +408,257 @@ export const SiteSettingsPage: React.FC = () => {
 
   const wikiStale = wiki.fetchedAt !== null && Date.now() - wiki.fetchedAt > MAX_AGE_MS;
 
-  /* The custom backdrop's flag mirrors localStorage; re-read after every
-     save/clear so the panel always states what is actually stored. */
-  const [backdrop, setBackdrop] = useState<BackdropFlag | null>(() => readBackdropFlag());
-  const [backdropError, setBackdropError] = useState<string | null>(null);
-  const [backdropBusy, setBackdropBusy] = useState(false);
-  const onBackdropFile = async (file: File | undefined) => {
-    if (!file) return;
-    setBackdropBusy(true);
-    setBackdropError(null);
-    try {
-      await saveBackdrop(file);
-      setBackdrop(readBackdropFlag());
-    } catch (e) {
-      setBackdropError(e instanceof Error ? e.message : "That image could not be stored.");
-    } finally {
-      setBackdropBusy(false);
-    }
-  };
-  const onBackdropClear = async () => {
-    setBackdropBusy(true);
-    setBackdropError(null);
-    try {
-      await clearBackdrop();
-      setBackdrop(null);
-    } finally {
-      setBackdropBusy(false);
-    }
-  };
-
   return (
-    <div className="mx-auto max-w-3xl space-y-3 p-4">
-      <PageHeader
-        title="Settings"
-        icon={Cog}
-        sub={`Everything ${SITE_NAME} remembers, in one place. Local choices stay in this browser; connected profile reads use the privacy boundary described below.`}
-      />
+    <div className="profile-settings-page sd-toolkit">
+      <header className="profile-settings-hero">
+        <span className="profile-settings-eyebrow">{SITE_NAME}</span>
+        <h1>Settings</h1>
+        <p>Make {SITE_NAME} yours. Changes save in this browser.</p>
+      </header>
 
-      {/* ---- Hypixel connection ------------------------------------------ */}
-      {/*
-        The anchor the Island page links to. It is a plain id rather than
-        scroll-into-view machinery: the browser already does this correctly,
-        including for a link pasted from somewhere else.
-      */}
-      <section id="hypixel" className="scroll-mt-4">
-        <HypixelPanel />
-      </section>
-
-      {/* ---- Profile ------------------------------------------------------ */}
-      <div className={PANEL}>
-        <SectionHead
-          title="Profile"
-          right={detected ? <Tag>{detected.cuteName}</Tag> : <span className={LABEL}>no profile yet</span>}
-        />
-        <div className="space-y-2 p-3">
-          <ControlGrid>
-            <ControlRow
-              label="Game mode"
-              source={source}
-              hint="On Ironman there is no Bazaar and no Auction House, so nothing can be bought and every tree has to bottom out in what you gather."
+      <div className="profile-settings-workspace">
+        <nav className="profile-settings-nav" aria-label="Settings sections">
+          {SETTINGS_SECTIONS.map(({ id, label, detail, icon: Icon }, index) => (
+            <button
+              key={id}
+              type="button"
+              id={`settings-link-${id}`}
+              aria-current={activeSection === id ? "location" : undefined}
+              aria-controls={`settings-panel-${id}`}
+              className="profile-settings-nav-item"
+              data-active={activeSection === id || undefined}
+              onClick={() => scrollToSection(id)}
+              onKeyDown={(event) => {
+                let nextIndex: number | null = null;
+                if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+                  nextIndex = (index + 1) % SETTINGS_SECTIONS.length;
+                } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+                  nextIndex = (index - 1 + SETTINGS_SECTIONS.length) % SETTINGS_SECTIONS.length;
+                } else if (event.key === "Home") {
+                  nextIndex = 0;
+                } else if (event.key === "End") {
+                  nextIndex = SETTINGS_SECTIONS.length - 1;
+                }
+                if (nextIndex === null) return;
+                event.preventDefault();
+                const next = SETTINGS_SECTIONS[nextIndex].id;
+                scrollToSection(next);
+                document.getElementById(`settings-link-${next}`)?.focus();
+              }}
             >
-              <Segmented options={MODE_OPTIONS} value={mode} onChange={setMode} ariaLabel="Game mode" />
-            </ControlRow>
-
-            <ControlRow
-              label="Hypixel says"
-              value={
-                detected ? (
-                  <span className="text-slate-300">{detected.gameMode ?? "normal"}</span>
-                ) : (
-                  <span className="text-slate-400">unknown</span>
-                )
-              }
-              hint="Read from game_mode on the profile response. A normal profile does not carry the field at all, which is why an absent value reads as normal."
-            />
-          </ControlGrid>
-
-          {overridden && (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-              <p className="text-[11px] leading-snug text-slate-400">
-                You set this by hand, so it stays where you put it. Nothing from the API will move it.
-              </p>
-              <button className={BTN_QUIET} onClick={followProfile} title="Hand the setting back to your Hypixel profile.">
-                Follow my profile
-              </button>
-            </div>
-          )}
-
-          {!overridden && (
-            <p className="text-[11px] leading-snug text-slate-400">
-              Filled in from your Hypixel profile when there is one. Pick a mode yourself and your choice wins from
-              then on.
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* ---- Wiki data ---------------------------------------------------- */}
-      <div className={PANEL}>
-        <SectionHead
-          title="Wiki data"
-          right={
-            <span className={`text-[10px] ${NUM} text-slate-400`}>
-              {wiki.fetchedAt ? ago(wiki.fetchedAt) : "bundled copy"}
-            </span>
-          }
-        />
-        <div className="space-y-2 p-3">
-          <p className="text-[11px] leading-relaxed text-slate-400">
-            Mutation figures are read from the wiki itself and laid over the copy shipped with the app, so the numbers
-            follow a game update without waiting for a release. The bundled copy is always there underneath, which is
-            why a failed sync costs nothing.
-          </p>
-
-          <ControlGrid>
-            <ControlRow
-              label="Mutations in cache"
-              value={<span className="text-slate-200">{wiki.count || "-"}</span>}
-            />
-            <ControlRow
-              label="Last synced"
-              value={
-                <span className={wikiStale ? "text-amber-300" : "text-slate-300"}>
-                  {wiki.fetchedAt ? ago(wiki.fetchedAt) : "never"}
-                </span>
-              }
-              hint="Refreshed automatically when it is more than twelve hours old."
-            />
-          </ControlGrid>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button className={BTN_QUIET} onClick={wiki.refresh} disabled={wiki.syncing}>
-              <RefreshCw className={`h-3 w-3 ${wiki.syncing ? "motion-safe:animate-spin" : ""}`} />
-              {wiki.syncing ? "Syncing…" : "Sync now"}
+              <Icon aria-hidden />
+              <span>
+                <strong>{label}</strong>
+                <small>{detail}</small>
+              </span>
             </button>
-            {wiki.error && <span className="text-[11px] text-amber-300">{wiki.error}</span>}
-          </div>
-        </div>
-      </div>
+          ))}
+          <span className="profile-settings-save-note">Preferences save automatically</span>
+        </nav>
 
-      {/* ---- Texture pack ------------------------------------------------- */}
-      {/*
-        Custom texture pack support, cached on the user's side so nothing
-        is ever redistributed: the user's own downloaded pack,
-        parsed and stored in this browser, winning over the wiki icon
-        wherever ItemIcon renders. It sits by the Wiki data block because
-        both are about where item pictures come from. All of its state
-        lives in items/texturePack.ts, per this page's rule of owning
-        nothing.
-      */}
-      <TexturePackPanel />
+        <div ref={contentRef} className="profile-settings-content">
+          <section
+            id="settings-panel-general"
+            aria-labelledby="settings-link-general"
+            className="profile-settings-tab-panel"
+          >
+              <section id="hypixel" className="scroll-mt-4">
+                <HypixelPanel />
+              </section>
 
-      {/* ---- Island ------------------------------------------------------- */}
-      <div className={PANEL}>
-        <SectionHead
-          title="Island connection"
-          right={
-            companionLinked && status === "live" ? (
-              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400">
-                <Wifi className="h-3 w-3" />
-                mod live
-              </span>
-            ) : companionLinked ? (
-              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
-                <WifiOff className="h-3 w-3" />
-                mod offline
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
-                <WifiOff className="h-3 w-3" />
-                not linked
-              </span>
-            )
-          }
-        />
-        <div className="space-y-2 p-3">
-          <ControlGrid>
-            <ControlRow
-              label="Companion mod"
-              value={<span className={NUM}>{sources.mod === null ? "never" : ago(sources.mod)}</span>}
-              hint="Chests, inventory and ender chest can only come from the mod. Hypixel does not publish them at any privacy setting."
-            />
-            <ControlRow
-              label="Hypixel API"
-              value={<span className={NUM}>{sources.api === null ? "never" : ago(sources.api)}</span>}
-              hint="Sack totals, and nothing else."
-            />
-            {modVersion && <ControlRow label="Mod version" value={<span className={NUM}>{modVersion}</span>} />}
-            {snapshot?.profile.name && (
-              <ControlRow label="Snapshot profile" value={<span className="text-slate-300">{snapshot.profile.name}</span>} />
-            )}
-          </ControlGrid>
+              <div className={PANEL}>
+                <SectionHead
+                  title="Profile preferences"
+                  right={detected ? <Tag>{detected.cuteName}</Tag> : <span className={LABEL}>local</span>}
+                />
+                <div className="p-3">
+                  <ControlGrid>
+                    <ControlRow
+                      label="Profile type"
+                      hint="Changes acquisition guidance for coins and gathered materials. A manual choice wins over the profile value."
+                    >
+                      <ModeControl value={profileType} onChange={setProfileType} />
+                    </ControlRow>
+                    {detected && (
+                      <ControlRow
+                        label="Profile reports"
+                        value={<span>{detected.gameMode === "ironman" ? "Ironman" : "Normal"}</span>}
+                      />
+                    )}
+                  </ControlGrid>
+                  {overridden && (
+                    <div className="settings-inline-action">
+                      <span>Manual override active.</span>
+                      <button className={BTN_QUIET} onClick={followProfile}>
+                        Follow profile
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-2">
-            {companionLinked ? (
-              <button type="button" className={BTN_QUIET} onClick={onUnlinkCompanion}>
-                <Unlink className="h-3 w-3" />
-                Unlink companion mod
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={BTN_QUIET}
-                onClick={() => void onLinkCompanion()}
-                disabled={companionBusy}
-              >
-                {companionBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
-                {companionBusy ? "Checking…" : "Link companion mod"}
-              </button>
-            )}
-            <span className="text-[11px] leading-snug text-slate-400">
-              Linking is the only action that asks your browser for access to the mod on this device.
-            </span>
-          </div>
+              <div className={PANEL}>
+                <SectionHead title="Planner preferences" />
+                <div className="p-3">
+                  <ControlGrid>
+                    <ToggleRow
+                      label="Show base crops"
+                      checked={planner.options.showBaseCrops}
+                      onChange={(v) => setOption("showBaseCrops", v)}
+                      hint="List the plain crops a mutation is grown from."
+                    />
+                    <ToggleRow
+                      label="Hide finished mutations"
+                      checked={planner.options.hideCompleted}
+                      onChange={(v) => setOption("hideCompleted", v)}
+                      hint="Collapse mutations whose plantings are complete."
+                    />
+                    <ToggleRow
+                      label="Show time estimates"
+                      checked={planner.options.showTime}
+                      onChange={(v) => setOption("showTime", v)}
+                      hint="Show growth-time estimates beside planting counts."
+                    />
+                    <ControlRow label="Welcome introduction">
+                      <button type="button" onClick={() => {
+                        navigate(closeSettingsLocation(location), { replace: true });
+                        replayTour();
+                      }} className={BTN_QUIET}>
+                        Replay
+                      </button>
+                    </ControlRow>
+                  </ControlGrid>
+                </div>
+              </div>
+          </section>
 
-          {companionError && <p className="text-[11px] leading-snug text-red-300">{companionError}</p>}
+          <section
+            id="settings-panel-shards"
+            aria-labelledby="settings-link-shards"
+            className="profile-settings-tab-panel"
+          >
+              <ShardSettingsPanel />
+          </section>
 
-          <p className="text-[11px] leading-snug text-slate-400">
-            The snapshot itself, and the button that clears it, stay on the{" "}
-            <Link
-              to="/island"
-              className={`rounded-sm text-slate-300 underline decoration-slate-600 underline-offset-4 transition-colors hover:text-emerald-300 hover:decoration-emerald-400/70 ${FOCUS}`}
-            >
-              Island page
-            </Link>
-            , next to the data they belong to.
-          </p>
-        </div>
-      </div>
+          <section
+            id="settings-panel-appearance"
+            aria-labelledby="settings-link-appearance"
+            className="profile-settings-tab-panel"
+          >
+              <SettingsAppearancePanel />
+          </section>
 
-      {/* ---- Display ------------------------------------------------------ */}
-      <div className={PANEL}>
-        <SectionHead title="Appearance" />
-        <div className="space-y-2 p-3">
-          <p className="text-[12px] leading-relaxed text-slate-300">
-            The image behind the glass. Yours is kept in this browser only and can be any picture up to
-            12&nbsp;MB; the frosted surfaces adapt to whatever is behind them.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className={`${BTN_QUIET} ${backdropBusy ? "pointer-events-none opacity-40" : ""}`}>
-              Use your own image
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={(e) => {
-                  void onBackdropFile(e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-            {backdrop && (
-              <button type="button" className={BTN_QUIET} onClick={() => void onBackdropClear()} disabled={backdropBusy}>
-                Reset to the hub render
-              </button>
-            )}
-            <span className="text-[11px] text-slate-400">
-              {backdrop
-                ? `${backdrop.name} (${(backdrop.size / 1024 / 1024).toFixed(1)} MB)`
-                : "currently: the hub render"}
-            </span>
-          </div>
-          {backdropError && <p className="text-[11px] text-red-400">{backdropError}</p>}
-        </div>
-      </div>
+          <section
+            id="settings-panel-connections"
+            aria-labelledby="settings-link-connections"
+            className="profile-settings-tab-panel"
+          >
+              <div className={PANEL}>
+                <SectionHead
+                  title="Skydex mod"
+                  right={
+                    companionLinked && status === "live" ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400">
+                        <Wifi className="h-3 w-3" /> live
+                      </span>
+                    ) : companionLinked ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                        <WifiOff className="h-3 w-3" /> offline
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                        <WifiOff className="h-3 w-3" /> not linked
+                      </span>
+                    )
+                  }
+                />
+                <div className="space-y-2 p-3">
+                  <ControlGrid>
+                    <ControlRow
+                      label="Inventory source"
+                      value={<span className={NUM}>{sources.mod === null ? "never" : ago(sources.mod)}</span>}
+                      hint="Chests, inventory and ender chest can only come from the mod."
+                    />
+                    <ControlRow
+                      label="Sack source"
+                      value={<span className={NUM}>{sources.api === null ? "never" : ago(sources.api)}</span>}
+                    />
+                    {modVersion && <ControlRow label="Mod version" value={<span className={NUM}>{modVersion}</span>} />}
+                    {snapshot?.profile.name && (
+                      <ControlRow label="Snapshot profile" value={<span>{snapshot.profile.name}</span>} />
+                    )}
+                  </ControlGrid>
 
-      <div className={PANEL}>
-        <SectionHead title="Display" right={<span className={LABEL}>planner</span>} />
-        <div className="p-3">
-          <ControlGrid>
-            <ToggleRow
-              label="Show base crops"
-              checked={planner.options.showBaseCrops}
-              onChange={(v) => setOption("showBaseCrops", v)}
-              hint="List the plain crops a mutation is grown from, not only the mutations themselves."
-            />
-            <ToggleRow
-              label="Hide finished mutations"
-              checked={planner.options.hideCompleted}
-              onChange={(v) => setOption("hideCompleted", v)}
-              hint="Collapse mutations whose plantings are all done."
-            />
-            <ToggleRow
-              label="Show time estimates"
-              checked={planner.options.showTime}
-              onChange={(v) => setOption("showTime", v)}
-              hint="Growth-time estimates next to each planting count."
-            />
-          </ControlGrid>
-          <div className="mt-3 border-t border-white/10 pt-3">
-            <button type="button" onClick={replayTour} className={BTN_QUIET}>
-              Show the welcome tour again
-            </button>
-          </div>
+                  <div className="settings-inline-action">
+                    {companionLinked ? (
+                      <button type="button" className={BTN_QUIET} onClick={onUnlinkCompanion}>
+                        <Unlink className="h-3 w-3" /> Unlink mod
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className={BTN_QUIET}
+                        onClick={() => void onLinkCompanion()}
+                        disabled={companionBusy}
+                      >
+                        {companionBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
+                        {companionBusy ? "Checking…" : "Link mod"}
+                      </button>
+                    )}
+                  </div>
+
+                  {companionError && <p className="text-[11px] leading-snug text-red-300">{companionError}</p>}
+
+                  <details className="settings-disclosure">
+                    <summary>Inventory import and reset</summary>
+                    <div className="settings-disclosure-body">
+                      <IslandSnapshotImportPanel title="Import inventory snapshot" />
+                      <div className="settings-reset-row" data-reset-inventory-data>
+                        <span>Remove imported inventory, sacks, chests, ender chest and storage data.</span>
+                        {!resetPending ? (
+                          <button type="button" className={BTN_QUIET} onClick={() => setResetPending(true)}>
+                            Reset inventory data
+                          </button>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2" role="alert">
+                            <span className="text-amber-200">Are you sure?</span>
+                            <button type="button" className={BTN_QUIET} onClick={resetInventoryData}>Reset</button>
+                            <button type="button" className={BTN_QUIET} onClick={() => setResetPending(false)}>Cancel</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </div>
+
+              <div className={PANEL}>
+                <SectionHead
+                  title="Wiki data"
+                  right={<span className={`text-[10px] ${NUM} text-slate-400`}>{wiki.fetchedAt ? ago(wiki.fetchedAt) : "bundled"}</span>}
+                />
+                <div className="p-3">
+                  <ControlGrid>
+                    <ControlRow label="Cached mutations" value={<span>{wiki.count || "-"}</span>} />
+                    <ControlRow
+                      label="Last synced"
+                      value={
+                        <span className={wikiStale ? "text-amber-300" : ""}>
+                          {wiki.fetchedAt ? ago(wiki.fetchedAt) : "never"}
+                        </span>
+                      }
+                      hint="Automatically refreshed when more than twelve hours old."
+                    >
+                      <button className={BTN_QUIET} onClick={wiki.refresh} disabled={wiki.syncing}>
+                        <RefreshCw className={`h-3 w-3 ${wiki.syncing ? "motion-safe:animate-spin" : ""}`} />
+                        {wiki.syncing ? "Syncing…" : "Sync"}
+                      </button>
+                    </ControlRow>
+                  </ControlGrid>
+                  {wiki.error && <p className="mt-2 text-[11px] text-amber-300">{wiki.error}</p>}
+                </div>
+              </div>
+          </section>
         </div>
       </div>
     </div>

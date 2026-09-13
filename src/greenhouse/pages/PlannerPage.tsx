@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Search, X, Plus, Minus, RotateCcw, Package, TriangleAlert, PencilRuler, Check, Undo2, ChevronRight, Route, Undo, Info, Menu } from "lucide-react";
+import { Search, X, Plus, Minus, RotateCcw, TriangleAlert, PencilRuler, Check, Undo2, ChevronRight, Route, Undo, Info, Menu } from "lucide-react";
 import { useGreenhouseData, useDesigner } from "../context";
 import { CropImage } from "../components/shared/CropImage";
 import { usePlannerState } from "../planner/usePlannerState";
@@ -13,11 +13,15 @@ import { FULL_GRID, useSolvedLayout } from "../planner/useSolvedLayout";
 import { SolvedGridView, SolvedSummary } from "../planner/SolvedGridView";
 import { cropIconSrc } from "../planner/icons";
 import type { CropDefinition, MutationDefinition } from "../types/greenhouse";
-import { PANEL, LABEL, NUM, RARITY, Bar, PageHeader, Tag, FOCUS, INPUT, BTN_PRIMARY, BTN_QUIET, SplitPage } from "../../ui/kit";
-import { InventoryPanel } from "../../components/common/InventoryPanel";
+import { PANEL, LABEL, NUM, RARITY, Bar, PageHeader, Tag, FOCUS, INPUT, BTN_PRIMARY, BTN_QUIET } from "../../ui/kit";
 import { useOwned, describeSources, dominantSource, SOURCE_LABEL, type OwnedSource } from "../../inventory";
 import { withMutationIds } from "../planner/mutationBridge";
+import { ManagedInventoryPanel } from "../../components/common/ManagedInventoryPanel";
 import { needSplit } from "../planner/needSplit";
+import { PlannerCycleBoundary } from "../planner/PlannerCycleBoundary";
+import { plannerCycleSignature } from "../planner/plannerCycleBoundaryModel";
+import { PlannerRowBoundary } from "../planner/PlannerRowBoundary";
+import { GreenhouseCapabilityFrame } from "../GreenhouseCapabilityFrame";
 
 /**
  * What colour a source chip is.
@@ -40,6 +44,20 @@ const SOURCE_TONE: Record<OwnedSource, string> = {
   "island.inventory": "text-stat-white",
   "island.enderChest": "text-stat-dark-purple",
   "island.storage": "text-stat-gold",
+  "profile.armor": "text-stat-red",
+  "profile.equipment": "text-stat-yellow",
+  "profile.wardrobe": "text-stat-red",
+  "profile.accessories": "text-stat-dark-purple",
+  "profile.personalVault": "text-stat-aqua",
+  "profile.fishingBag": "text-stat-aqua",
+  "profile.potionBag": "text-stat-dark-purple",
+  "profile.sacksBag": "text-stat-green",
+  "profile.quiver": "text-stat-gold",
+  "profile.candy": "text-stat-pink",
+  "profile.carnivalMasks": "text-stat-light-purple",
+  "profile.farmingToolkit": "text-stat-green",
+  "profile.huntingToolkit": "text-stat-yellow",
+  "profile.museum": "text-stat-light-purple",
   shards: "text-stat-aqua",
   // Never rendered as a chip: a number you typed shows the undo control instead.
   manual: "text-slate-300",
@@ -146,8 +164,8 @@ const TABLE_WIDTH = "max-w-[1100px]";
  * what stops a missing local asset from leaving a row iconless.
  */
 
-export const PlannerPage: React.FC = () => {
-  const { crops, mutations, isLoading } = useGreenhouseData();
+export const PlannerPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
+  const { crops, mutations, isLoading, uniqueCrops } = useGreenhouseData();
   const { targets: catalogue, items: itemIndex, loading: catalogueLoading } = useTargetCatalogue(useMemo(() => mutations.map((m) => m.id), [mutations]));
   const planner = usePlannerState();
   const { state, setView, setGrowth } = planner;
@@ -199,7 +217,10 @@ export const PlannerPage: React.FC = () => {
    * and `buildPlanEstimates` read this, which is what stops the "from API" chip
    * from advertising a value the estimates never saw.
    */
-  const growth = useMemo(() => resolveGrowth(state.growth, apiStats), [state.growth, apiStats]);
+  const growth = useMemo(
+    () => ({ ...resolveGrowth(state.growth, apiStats), uniqueCrops }),
+    [state.growth, apiStats, uniqueCrops],
+  );
 
   /**
    * Profile access exists, but no garden pull has ever landed.
@@ -230,8 +251,8 @@ export const PlannerPage: React.FC = () => {
 
   /**
    * The settings panel speaks `GreenhouseGrowth`, which is the planner's
-   * `GrowthConfig` minus `uniqueCrops`. That field is derived from the plan
-   * rather than set by the user, so the control grid has no business offering
+   * `GrowthConfig` minus `uniqueCrops`. The greenhouse-wide count has its own
+   * shared control and store, so this panel must not create a second writer for
    * it. The key set is a strict subset, so this is only a variance adapter and
    * never widens what the panel is allowed to write.
    *
@@ -349,7 +370,7 @@ export const PlannerPage: React.FC = () => {
    * carries thousands of items the solver has no use for. Typed numbers for
    * anything else are carried through anyway - they are still the player's word.
    */
-  const effectiveInventory = useMemo(() => {
+  const reportedInventory = useMemo(() => {
     const out: Record<string, number> = {};
     for (const id of [...Object.keys(dataset.mutations), ...Object.keys(dataset.crops)]) {
       const n = owned.count(id);
@@ -360,6 +381,11 @@ export const PlannerPage: React.FC = () => {
     }
     return out;
   }, [owned, dataset, state.inventory]);
+
+  const effectiveInventory = useMemo(
+    () => (state.options.useInventory ? reportedInventory : {}),
+    [reportedInventory, state.options.useInventory]
+  );
 
   const planTargets = useMemo(() => {
     const acc = new Map<string, number>();
@@ -469,7 +495,7 @@ export const PlannerPage: React.FC = () => {
     [planTargets, dataset, economy.economies, effectiveInventory, mutations.length, growFresh]
   );
 
-  const doneFor = (n: SolverPlanNode) => Math.min(state.progress[n.id] ?? 0, n.plots ?? 0);
+  const doneFor = useCallback((n: SolverPlanNode) => Math.min(state.progress[n.id] ?? 0, n.plots ?? 0), [state.progress]);
 
   /** Every schedulable row of the plan, flat. Both rollups walk it. */
   const planNodes = useMemo(() => (plan ? plan.cycles.flatMap((c) => c.produce) : []), [plan]);
@@ -597,7 +623,7 @@ export const PlannerPage: React.FC = () => {
       if (remaining.length) return { cycle, node: remaining[0] };
     }
     return null;
-  }, [plan, state.progress]);
+  }, [doneFor, plan]);
 
   // Which mutation's plot is on screen: whatever you picked, else up-next.
   const focusId = state.view.mutation ?? upNext?.node.id ?? null;
@@ -651,55 +677,9 @@ export const PlannerPage: React.FC = () => {
    */
   const inventoryRows = useMemo(() => {
     const q = inventoryQuery.trim().toLowerCase();
-    const listed = new Set([...Object.keys(state.inventory), ...Object.keys(effectiveInventory)]);
+    const listed = new Set([...Object.keys(state.inventory), ...Object.keys(reportedInventory)]);
     return mutations.filter((m) => (!q ? listed.has(m.id) : m.name.toLowerCase().includes(q))).sort((a, b) => a.name.localeCompare(b.name));
-  }, [mutations, state.inventory, effectiveInventory, inventoryQuery]);
-
-  /**
-   * The rows actually held, independent of the search box, because the panel's
-   * count chip and summary describe what you own and must not swell to thirty
-   * while you are mid-search for something to add.
-   */
-  const heldRows = useMemo(() => {
-    const listed = new Set([...Object.keys(state.inventory), ...Object.keys(effectiveInventory)]);
-    return mutations.filter((m) => listed.has(m.id));
-  }, [mutations, state.inventory, effectiveInventory]);
-
-  /**
-   * The panel's one line summary, stating only what the data actually says.
-   *
-   * Each held row contributes its units to exactly one bucket, by the same
-   * precedence rule the rows themselves render: a typed number replaces the
-   * island's answer outright, so an overridden row counts as "set by you" and
-   * its underlying source counts are NOT also summed, which would double-tell
-   * the story of stock the player has explicitly re-stated. Non-overridden
-   * rows split by source so the line reads like the chips do: "245 from
-   * backpack, 16 from sacks". Sources with nothing to say get no mention.
-   */
-  const inventorySummary = useMemo(() => {
-    if (heldRows.length === 0) return null;
-    const bySource = new Map<OwnedSource, number>();
-    let typed = 0;
-    for (const m of heldRows) {
-      const entry = owned.get(m.id);
-      if (!entry) {
-        typed += state.inventory[m.id] ?? 0;
-        continue;
-      }
-      if (entry.overridden) {
-        typed += entry.manual ?? 0;
-        continue;
-      }
-      for (const s of entry.sources) {
-        if (s.count > 0) bySource.set(s.source, (bySource.get(s.source) ?? 0) + s.count);
-      }
-    }
-    const parts = [...bySource.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([source, n]) => `${n.toLocaleString()} from ${SOURCE_LABEL[source]}`);
-    if (typed > 0) parts.push(`${typed.toLocaleString()} set by you`);
-    return `${heldRows.length} item type${heldRows.length === 1 ? "" : "s"} held${parts.length ? `, ${parts.join(", ")}` : ""}`;
-  }, [heldRows, owned, state.inventory]);
+  }, [mutations, state.inventory, reportedInventory, inventoryQuery]);
 
   const targetLabel = useMemo(
     () =>
@@ -795,15 +775,17 @@ export const PlannerPage: React.FC = () => {
    * the wordmark. A fragment rather than a wrapper div, so each piece takes
    * the results column's own rhythm.
    */
+  const plannerHeading = (
+    <PageHeader
+      title="Planner"
+      sub="Pick a target, work the cycles, tick off plantings"
+      icon={Route}
+      actions={<WikiStatus />}
+    />
+  );
+
   const summary = (
     <>
-      <PageHeader
-        title="Planner"
-        sub="Pick a target, work the cycles, tick off plantings"
-        icon={Route}
-        actions={<WikiStatus />}
-      />
-
       {/* ---------- status strip ---------- */}
       <div className={`${PANEL} px-3 py-2.5`}>
         <div className="flex items-baseline justify-between gap-4 flex-wrap">
@@ -881,8 +863,11 @@ export const PlannerPage: React.FC = () => {
   return (
     /* The signature split: controls in the rail under the logo, the plan
        under the section tabs. Same furniture positions as every page. */
-    <SplitPage
+    <GreenhouseCapabilityFrame
+      embedded={embedded}
+      variant="planner"
       railLabel="Planner controls"
+      leading={plannerHeading}
       rail={
         <>
           {/* Narrow viewports collapse the rail behind one button. */}
@@ -895,6 +880,87 @@ export const PlannerPage: React.FC = () => {
 
           {/* ---------- rail panels ---------- */}
           <div className={`${sidebarOpen ? "block" : "hidden min-[900px]:block"} space-y-2.5`}>
+          <ManagedInventoryPanel
+            items={bridgeIndex}
+            manual={state.inventory}
+            defaultOpen={false}
+            useInventory={state.options.useInventory}
+            onUseInventoryChange={(checked) => planner.setOption("useInventory", checked)}
+            headerExtra={
+              Object.keys(state.inventory).length > 0 ? (
+                <button type="button" onClick={planner.clearInventory} className="cursor-pointer text-[11px] text-slate-500 hover:text-slate-300">
+                  clear
+                </button>
+              ) : undefined
+            }
+          >
+            <div className="space-y-2">
+              <input
+                value={inventoryQuery}
+                onChange={(e) => setInventoryQuery(e.target.value)}
+                placeholder="Search to add"
+                className={INPUT + " w-full"}
+              />
+              <div className="max-h-64 space-y-0.5 overflow-y-auto scrollbar-dark">
+                {inventoryRows.map((m) => {
+                  const entry = owned.get(m.id);
+                  const auto = owned.auto(m.id);
+                  const overridden = entry?.overridden ?? false;
+                  const value = entry?.total ?? 0;
+                  return (
+                    <div key={m.id} className="flex items-center gap-1.5">
+                      <WikiLink
+                        name={m.name}
+                        icon
+                        iconSize={18}
+                        iconSrc={cropIconSrc(m.id)}
+                        className="min-w-0 flex-1 text-[12px] text-slate-400"
+                        nameClassName="truncate"
+                      />
+                      {auto !== undefined &&
+                        (overridden ? (
+                          <button
+                            type="button"
+                            onClick={() => planner.clearInventoryEntry(m.id)}
+                            className={"cursor-pointer rounded-sm p-0.5 text-slate-500 hover:text-cyan-300 " + FOCUS}
+                            title={"Yours. Undo to go back to " + auto.toLocaleString() + " from your island data (" + describeSources(entry) + (sacksSeen ? "" : ", no sack data yet") + ")"}
+                            aria-label={"Use the island count for " + m.name}
+                          >
+                            <Undo className="h-3 w-3" />
+                          </button>
+                        ) : (
+                          (() => {
+                            const top = dominantSource(entry);
+                            if (!top) return null;
+                            return (
+                              <Tag title={"From your island data: " + describeSources(entry) + (sacksSeen ? "" : ". No sack data yet.")}>
+                                <span className={SOURCE_TONE[top.source]}>{SOURCE_LABEL[top.source]}</span>
+                              </Tag>
+                            );
+                          })()
+                        ))}
+                      <input
+                        type="number"
+                        min={0}
+                        value={value}
+                        onChange={(e) => planner.setInventory(m.id, Number(e.target.value))}
+                        title={overridden ? "Set by you. This beats your island data." : undefined}
+                        className={
+                          "w-14 rounded-md border bg-slate-800/50 px-1.5 py-1 text-right text-[12px] focus:border-cyan-500 " +
+                          NUM +
+                          " " +
+                          FOCUS +
+                          " " +
+                          (auto !== undefined && !overridden ? "border-emerald-500/40 text-emerald-200" : "border-slate-600/50 text-slate-200")
+                        }
+                      />
+                    </div>
+                  );
+                })}
+                {inventoryRows.length === 0 && <p className="text-[11px] text-slate-500">{inventoryQuery ? "No match" : "Search above to add what you have"}</p>}
+              </div>
+            </div>
+          </ManagedInventoryPanel>
           <section className={`${PANEL} p-2.5 space-y-2`}>
             <div className="flex items-center justify-between">
               {/*
@@ -974,132 +1040,7 @@ export const PlannerPage: React.FC = () => {
             </div>
           </section>
 
-          {/*
-            The fusion sidebar's Inventory panel, replicated here to keep the
-            two pages' gui elements aligned. Same primitive, same header row,
-            same count chip
-            and summary line; what changed is only the container. The rows,
-            the search-to-add input, and every precedence rule underneath
-            (typed number beats island sync, undo hands the row back) are
-            exactly what they were under the old "Already own" heading. The
-            provenance note rides beside the summary now instead of in the
-            heading, same hover it always was.
-          */}
-          <InventoryPanel
-            icon={Package}
-            count={heldRows.length > 0 ? `${heldRows.length} item${heldRows.length !== 1 ? "s" : ""}` : null}
-            summary={
-              inventorySummary && (
-                <span className="flex items-center gap-1.5">
-                  <span>{inventorySummary}</span>
-                  {owned.has && (
-                    <InfoGlyph
-                      label={
-                        `Tagged counts were read from your island data, and the tag says where they are sitting` +
-                        (sacksSeen
-                          ? `, sacks and containers included.`
-                          : `. No sack data yet, so this is chests, inventory, ender chest and backpacks.`) +
-                        ` Type over one to set your own and it wins from then on, until you undo it. Owned counts are already taken off the plan below.`
-                      }
-                    />
-                  )}
-                </span>
-              )
-            }
-            headerExtra={
-              Object.keys(state.inventory).length > 0 ? (
-                <button onClick={planner.clearInventory} className="text-[11px] text-slate-500 hover:text-slate-300 cursor-pointer">
-                  clear
-                </button>
-              ) : undefined
-            }
-          >
-            <input
-              value={inventoryQuery}
-              onChange={(e) => setInventoryQuery(e.target.value)}
-              placeholder="Search to add"
-              className={`${INPUT} w-full`}
-            />
-            <div className="max-h-64 overflow-y-auto scrollbar-dark space-y-0.5">
-              {inventoryRows.map((m) => {
-                const entry = owned.get(m.id);
-                /*
-                 * Three states per row, and the player can always tell which
-                 * one they are looking at:
-                 *
-                 *   synced    the island reported it and you have not typed
-                 *             anything, so the box shows the island's number
-                 *             and carries the "island" chip.
-                 *   yours     you typed something. It wins outright, it is
-                 *             marked, and the undo button hands the row back
-                 *             to the island number.
-                 *   plain     nobody has anything to say yet. No chip, because
-                 *             there is nothing to disambiguate.
-                 */
-                const auto = owned.auto(m.id);
-                const overridden = entry?.overridden ?? false;
-                const value = entry?.total ?? 0;
-                return (
-                  <div key={m.id} className="flex items-center gap-1.5">
-                    <WikiLink
-                      name={m.name}
-                      icon
-                      iconSize={18}
-                      iconSrc={cropIconSrc(m.id)}
-                      className="flex-1 min-w-0 text-[12px] text-slate-400"
-                      nameClassName="truncate"
-                    />
-                    {auto !== undefined &&
-                      (overridden ? (
-                        <button
-                          onClick={() => planner.clearInventoryEntry(m.id)}
-                          className={`p-0.5 rounded-sm text-slate-500 hover:text-emerald-300 cursor-pointer ${FOCUS}`}
-                          title={`Yours. Undo to go back to ${auto.toLocaleString()} from your island data (${describeSources(entry)}${sacksSeen ? "" : ", no sack data yet"})`}
-                          aria-label={`Use the island count for ${m.name}`}
-                        >
-                          <Undo className="w-3 h-3" />
-                        </button>
-                      ) : (
-                        (() => {
-                          /*
-                           * The chip names where the count actually is. Colour
-                           * lives on a child span rather than on the Tag's own
-                           * className, because Tag always sets a text colour of
-                           * its own and two utilities of equal specificity are
-                           * settled by stylesheet order, not by which one was
-                           * written last. A descendant always wins.
-                           */
-                          const top = dominantSource(entry);
-                          if (!top) return null;
-                          return (
-                            <Tag title={`From your island data: ${describeSources(entry)}${sacksSeen ? "" : ". No sack data yet."}`}>
-                              <span className={SOURCE_TONE[top.source]}>{SOURCE_LABEL[top.source]}</span>
-                            </Tag>
-                          );
-                        })()
-                      ))}
-                    <input
-                      type="number"
-                      min={0}
-                      value={value}
-                      onChange={(e) => planner.setInventory(m.id, Number(e.target.value))}
-                      title={overridden ? "Set by you. This beats your island data." : undefined}
-                      /*
-                       * Stays bespoke: a w-14 count box in a 260px rail cannot
-                       * afford the kit INPUT's px-3, and the border doubles as
-                       * the synced/overridden signal. Metrics match the shards
-                       * scale anyway: translucent fill, rounded-md, 12px mono.
-                       */
-                      className={`w-14 px-1.5 py-1 rounded-md bg-slate-800/50 border text-[12px] text-right focus:border-emerald-500 ${NUM} ${FOCUS} ${
-                        auto !== undefined && !overridden ? "border-emerald-500/40 text-emerald-200" : "border-slate-600/50 text-slate-200"
-                      }`}
-                    />
-                  </div>
-                );
-              })}
-              {inventoryRows.length === 0 && <p className="text-[11px] text-slate-500">{inventoryQuery ? "No match" : "Search above to add what you have"}</p>}
-            </div>
-          </InventoryPanel>
+
 
           {/*
             Your greenhouse is its own panel now, above Options.
@@ -1116,7 +1057,13 @@ export const PlannerPage: React.FC = () => {
           */}
           {state.options.showTime && (
             <section className={`${PANEL} p-2.5`}>
-              <GreenhouseSettings growth={growth} onChange={setGrowthField} stats={apiStats} awaitingProfile={awaitingProfile} />
+              <GreenhouseSettings
+                growth={growth}
+                onChange={setGrowthField}
+                stats={apiStats}
+                uniqueCrops={uniqueCrops}
+                awaitingProfile={awaitingProfile}
+              />
             </section>
           )}
 
@@ -1142,7 +1089,7 @@ export const PlannerPage: React.FC = () => {
     >
       {summary}
           {!plan && (
-            <div className={`${PANEL} p-10 text-center`}>
+            <div className={`${PANEL} p-4 text-center sm:p-5`}>
               <p className="text-sm text-slate-400">Pick a target to start.</p>
               <p className="text-[12px] text-slate-500 mt-1">Rose Dragon Pet is a good one. It needs five legendary mutations.</p>
             </div>
@@ -1365,7 +1312,19 @@ export const PlannerPage: React.FC = () => {
           )}
 
           {/* ---- ledger ---- */}
-          {plan?.cycles.map((cycle) => {
+          {plan?.cycles.map((cycle) => (
+            <PlannerCycleBoundary
+              key={cycle.index}
+              cycle={cycle}
+              signature={plannerCycleSignature(cycle, {
+                progress: state.progress,
+                growFresh: state.growFresh,
+                focusId,
+                hideCompleted: state.options.hideCompleted,
+                showTime: state.options.showTime,
+                estimates,
+              })}
+              renderCycle={(cycle) => {
             /*
              * "Hide finished" hides PLANTINGS you have finished. A covered step
              * is not one.
@@ -1423,7 +1382,19 @@ export const PlannerPage: React.FC = () => {
                 <Bar done={cycleUnits.harvestedUnits} owned={cycleUnits.ownedUnits} total={cycleUnits.wantedUnits} />
 
                 <div className="divide-y divide-slate-800/70">
-                  {rows.map((n, i) => {
+                  {rows.map((n, i) => (
+                    <PlannerRowBoundary
+                      key={n.id}
+                      node={n}
+                      index={i}
+                      signature={JSON.stringify([
+                        state.progress[n.id] ?? 0,
+                        Boolean(state.growFresh[n.id]),
+                        focusId === n.id,
+                        state.options.showTime,
+                        state.options.showTime ? (estimates?.byId[n.id] ?? null) : null,
+                      ])}
+                      renderRow={(n, i) => {
                     const done = doneFor(n);
                     const total = n.plots ?? 0;
                     const complete = total > 0 && done >= total;
@@ -1460,7 +1431,7 @@ export const PlannerPage: React.FC = () => {
                           if (hit.closest("button, a, input, select, textarea, label")) return;
                           setView({ mutation: n.id });
                         }}
-                        className={`ws-row flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 hover:bg-slate-800/40 cursor-pointer ${
+                        className={`ws-row sd-planner-row flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 hover:bg-slate-800/40 cursor-pointer ${
                           state.options.showTime ? ROW_GRID_TIMED : ROW_GRID_PLAIN
                         } ${tint}`}
                       >
@@ -1647,11 +1618,15 @@ export const PlannerPage: React.FC = () => {
                         </div>
                       </div>
                     );
-                  })}
+                      }}
+                    />
+                  ))}
                 </div>
               </section>
             );
-          })}
+              }}
+            />
+          ))}
 
           {plan && plan.manual.length > 0 && (
             <section className={`${PANEL} p-3`}>
@@ -1827,7 +1802,7 @@ export const PlannerPage: React.FC = () => {
                 ))}
             </section>
           )}
-    </SplitPage>
+    </GreenhouseCapabilityFrame>
   );
 };
 

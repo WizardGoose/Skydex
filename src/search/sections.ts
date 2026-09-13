@@ -5,7 +5,7 @@ import { normalise } from "./normalise";
  * The site's own pages, as search results.
  *
  * A universal search that can find 2,000 crafting ingredients but not the
- * Planner is not universal. These are hand written because there are eleven of
+ * Planner is not universal. These are hand written because there are only a few of
  * them and because each one wants aliases a route table could not supply:
  * people look for the Solver by typing "layout", and for Owned by typing
  * "inventory".
@@ -56,39 +56,39 @@ const SECTIONS: RawSection[] = [
     aliases: ["design", "build", "grid", "by hand"],
   },
   {
-    name: "Items",
-    href: "/items",
+    name: "Recipes",
+    href: "/recipes",
     destination: "items",
     glyph: "items",
-    aliases: ["craft", "crafting", "recipe", "bazaar", "cost", "materials"],
+    aliases: ["craft", "crafting", "recipe", "bazaar", "cost", "materials", "obtain", "drop", "shop", "forge"],
   },
   {
-    name: "Island",
-    href: "/island",
+    name: "Profile",
+    href: "/profile",
     destination: "site",
     glyph: "island",
-    aliases: ["profile", "storage", "chests", "what i own", "hypixel"],
+    aliases: ["profile", "stats", "skills", "hypixel"],
   },
   {
-    name: "Fusion calculator",
-    href: "/fusion",
+    name: "Storage",
+    href: "/storage",
+    destination: "site",
+    glyph: "island",
+    aliases: ["inventory", "storage", "sacks", "backpacks", "island chests", "what i own", "mod data"],
+  },
+  {
+    name: "Shards",
+    href: "/shards",
     destination: "shards",
     glyph: "fusion",
-    aliases: ["fuse", "attribute", "cheapest", "shard calculator"],
+    aliases: ["fuse", "fusion calculator", "attribute", "cheapest", "shard calculator", "owned shards", "inventory", "have", "collection"],
   },
   {
     name: "Shard recipes",
-    href: "/recipes",
+    href: "/shard-recipes",
     destination: "shards",
     glyph: "recipes",
     aliases: ["recipe list", "fuse list"],
-  },
-  {
-    name: "Owned shards",
-    href: "/shards",
-    destination: "shards",
-    glyph: "owned",
-    aliases: ["inventory", "have", "collection"],
   },
   {
     name: "Fusion lines",

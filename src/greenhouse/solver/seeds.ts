@@ -102,10 +102,24 @@ const latticeSeed = (
   const usable = chosen.filter((ai) => problem.anchors[ai].ring.every((cell) => !blockCells.has(cell)));
   if (usable.length === 0) return null;
 
-  const assignment = new Int16Array(CELL_COUNT).fill(-1);
+  // A lattice seed may be built around crops pinned by an earlier finite
+  // target. Start from that immutable baseline instead of an empty field;
+  // otherwise the seed scores replacement crops at those coordinates while
+  // the response still reports the original locks.
+  const assignment = Int16Array.from(problem.baseline);
   const deficit = usable.map((ai) =>
     problem.targets[problem.anchors[ai].targetIndex].requirements.map((req) => req.count)
   );
+  for (let i = 0; i < usable.length; i++) {
+    const anchor = problem.anchors[usable[i]];
+    const anchorTarget = problem.targets[anchor.targetIndex];
+    for (const cell of anchor.ring) {
+      const cropIndex = assignment[cell];
+      if (cropIndex < 0) continue;
+      const slot = anchorTarget.reqSlotOfCrop[cropIndex];
+      if (slot >= 0 && deficit[i][slot] > 0) deficit[i][slot]--;
+    }
+  }
 
   // Round-robin over blocks by remaining need, so shared ring cells are handed
   // to whoever needs them most rather than to whoever was visited first.
@@ -122,7 +136,7 @@ const latticeSeed = (
     if (pick < 0) break;
 
     const anchor = problem.anchors[usable[pick]];
-    const free = anchor.ring.filter((cell) => assignment[cell] < 0 && problem.cellMask[cell]);
+    const free = anchor.ring.filter((cell) => assignment[cell] < 0 && problem.plantableMask[cell]);
     if (free.length === 0) {
       deficit[pick].fill(0);
       continue;
@@ -152,7 +166,7 @@ const latticeSeed = (
   // Fill whatever the constructive pass left over; repaint will sort it out.
   for (const ai of usable) {
     for (const cell of problem.anchors[ai].ring) {
-      if (assignment[cell] < 0 && problem.cellMask[cell]) assignment[cell] = target.requirements[0].cropIndex;
+      if (assignment[cell] < 0 && problem.plantableMask[cell]) assignment[cell] = target.requirements[0].cropIndex;
     }
   }
   for (const cell of blockCells) assignment[cell] = -1;

@@ -21,9 +21,40 @@ type InventoryRecipeNode = Extract<
 // the shard's real minCost so cheaper freely-usable shards are consumed first.
 const FREELY_USABLE_RESIDUAL = 0.02;
 
+interface PreparedInventoryGraph {
+  minCosts: Map<string, number>;
+  choices: Map<string, RecipeChoice>;
+  exclusivityScores: Map<string, number>;
+  cycleNodes: string[][];
+  freelyUsable?: { key: string; shards: Set<string> };
+}
+
 export class InvCalculationService {
   private static instance: InvCalculationService;
   private service = new CalculationService();
+  // Parsed data owns prices, rates and catalogue identity. Only graph-wide work
+  // is reused; target trees and inventory allocation are always fresh.
+  private preparedGraphs = new WeakMap<Data, Map<string, PreparedInventoryGraph>>();
+
+  private prepareGraph(data: Data, params: CalculationParams, overrides: RecipeOverride[]): PreparedInventoryGraph {
+    const { crocodileMultiplier, craftPenalty } = this.service.calculateMultipliers(params);
+    const key = JSON.stringify([params.rateAsCoinValue, crocodileMultiplier, craftPenalty, params.crocodileLevel > 0, overrides]);
+    let graphs = this.preparedGraphs.get(data);
+    const cached = graphs?.get(key);
+    if (cached) return cached;
+
+    const { minCosts, choices } = this.service.computeMinCosts(data, params, overrides);
+    const graph: PreparedInventoryGraph = {
+      minCosts, choices,
+      exclusivityScores: this.service.computeExclusivityScores(data, minCosts),
+      cycleNodes: params.crocodileLevel > 0 || overrides.length > 0 ? this.service.findCycleNodes(choices) : [],
+    };
+    if (!graphs) this.preparedGraphs.set(data, graphs = new Map());
+    // Bound recipe-override variants while allowing parsed data to be collected.
+    if (graphs.size >= 8) graphs.delete(graphs.keys().next().value!);
+    graphs.set(key, graph);
+    return graph;
+  }
 
   public static getInstance(): InvCalculationService {
     if (!InvCalculationService.instance) {
@@ -352,10 +383,11 @@ export class InvCalculationService {
         }
       }
 
-      // Current recipe cost with full inventory discount (no exclusivity penalty).
+      // Compare inventory-backed batches against the gather-only fallback. A
+      // single covered craft must not discount the entire remaining quantity.
       const currentEffectiveCost = this.calculateEffectiveCost(
         node.recipe,
-        workingInventory,
+        new Map(),
         parsed,
         minCosts,
         crocodileMultiplier,
@@ -363,10 +395,12 @@ export class InvCalculationService {
       );
 
       let bestCandidate:
-        | {recipe: Recipe; outputQuantity: number; craftsSupported: number; effectiveCost: number}
+        | {recipe: Recipe; outputQuantity: number; craftsSupported: number; effectiveCost: number; replacementCost: number}
         | null = null;
 
-      for (const recipe of alternatives) {
+      // The original recipe competes too, but only for the crafts its stock
+      // covers. Re-evaluate every candidate after that stock has been consumed.
+      for (const recipe of [node.recipe, ...alternatives]) {
         // Reject alternatives that consume the shard we're currently producing, or
         // any ancestor shard still being built further up this path. Feeding a shard
         // into its own production is a net-negative inventory loop: e.g. picking
@@ -442,20 +476,20 @@ export class InvCalculationService {
           continue;
         }
 
-        // Calculate how many crafts are supported by inventory.
-        // Shared inputs: don't limit (consumed by current recipe too, handled by processNode)
-        // Unique inputs in surplus: limit based on surplus availability
+        // End the batch when any covered input runs out, including shared inputs.
+        // Sum duplicate input slots so one stack cannot cover both twice.
         const outputQuantity = this.service.getEffectiveOutputQuantity(recipe, crocodileMultiplier);
         const inventoryCraftLimits: number[] = [];
+        const perCraft = new Map<string, number>();
         for (const inputId of recipe.inputs) {
-          if (currentInputSet.has(inputId)) {
-            // Shared input - consumed by current recipe too, doesn't limit alternative
-            continue;
-          }
-          const available = surplusInventory.get(inputId) || 0;
-          const fuseAmount = parsed.shards[inputId].fuse_amount;
+          perCraft.set(inputId, (perCraft.get(inputId) ?? 0) + parsed.shards[inputId].fuse_amount);
+        }
+        let replacementCost = 0;
+        for (const [inputId, fuseAmount] of perCraft) {
+          const available = fairInventory.get(inputId) || 0;
           if (available >= fuseAmount) {
             inventoryCraftLimits.push(Math.floor(available / fuseAmount));
+            replacementCost += (minCosts.get(inputId) ?? Infinity) * fuseAmount / outputQuantity;
           }
         }
         const craftsSupported = inventoryCraftLimits.length > 0
@@ -466,9 +500,11 @@ export class InvCalculationService {
           continue;
         }
 
-        // Pick the alternative with the lowest effective cost
-        if (!bestCandidate || effectiveCost < bestCandidate.effectiveCost) {
-          bestCandidate = {recipe, outputQuantity, craftsSupported, effectiveCost};
+        // Equally cheap stored recipes should preserve the more costly inputs,
+        // not depend on the order recipes happen to appear in the catalogue.
+        const tied = bestCandidate && Math.abs(effectiveCost - bestCandidate.effectiveCost) < 1e-12;
+        if (!bestCandidate || effectiveCost < bestCandidate.effectiveCost - 1e-12 || (tied && replacementCost < bestCandidate.replacementCost)) {
+          bestCandidate = {recipe, outputQuantity, craftsSupported, effectiveCost, replacementCost};
         }
       }
 
@@ -485,7 +521,7 @@ export class InvCalculationService {
 
       const quantityProduced = Math.min(
         remainingQuantity,
-        craftsToUse * bestCandidate.outputQuantity
+        Math.floor(craftsToUse * bestCandidate.outputQuantity + 1e-9)
       );
 
       if (quantityProduced <= 0) {
@@ -898,26 +934,21 @@ export class InvCalculationService {
       }
     }
 
-    const {minCosts, choices} = this.service.computeMinCosts(parsed, params, recipeOverrides);
-
-    // Compute exclusivity scores: measures how irreplaceable each shard is
-    // in the recipe graph, weighted by the value of outputs it uniquely enables.
-    const exclusivityScores = this.service.computeExclusivityScores(parsed, minCosts);
+    const graph = this.prepareGraph(parsed, params, recipeOverrides);
+    const { minCosts, choices, exclusivityScores, cycleNodes } = graph;
 
     // Shards whose entire special-fusion line is maxed in the player's attributes:
     // their hoarding (exclusivity) penalty is dropped so inventory gets used freely.
     const defaultRates = this.service.getDefaultRates();
-    const freelyUsableShards = computeFreelyUsableShards(
-      parsed,
-      ownedAttributes,
-      (id) => (defaultRates[id] ?? 0) > 0,
-      (id) => minCosts.get(id) ?? Infinity
-    );
-
-    // Find cycle nodes to prevent infinite recursion in buildRecipeTree
-    const cycleNodes = params.crocodileLevel > 0 || recipeOverrides.length > 0
-      ? this.service.findCycleNodes(choices)
-      : [];
+    const ownedKey = JSON.stringify([...ownedAttributes]);
+    if (graph.freelyUsable?.key !== ownedKey) {
+      graph.freelyUsable = { key: ownedKey, shards: computeFreelyUsableShards(
+        parsed, ownedAttributes,
+        (id) => (defaultRates[id] ?? 0) > 0,
+        (id) => minCosts.get(id) ?? Infinity
+      ) };
+    }
+    const freelyUsableShards = graph.freelyUsable.shards;
 
     const {crocodileMultiplier} = this.service.calculateMultipliers(params);
 

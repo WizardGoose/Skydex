@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { SITE_NAME } from "../ui/brand";
-import { parseGreenhouseHash } from "../greenhouse/route";
 
 /** "<site> · <page>". Only the page half is literal here; the name comes from src/ui/brand.ts. */
 const title = (page: string) => `${SITE_NAME} · ${page}`;
@@ -14,12 +13,19 @@ const TITLES: Record<string, string> = {
   "/": SITE_NAME,
   "/dashboard": title("Dashboard"),
   "/forge": title("Forge"),
-  "/items": title("Items"),
+  "/greenhouse": title("Greenhouse"),
+  "/greenhouse/planner": title("Greenhouse"),
+  "/greenhouse/designer": title("Greenhouse"),
+  "/crafting": title("Recipes"),
+  "/items": title("Recipes"),
+  "/storage": title("Storage"),
+  "/island": title("Storage"),
   /* "/accessories" redirects into the profile page now, so its old
      entry is gone and the profile route gets the name the nav calls it. */
-  "/island": title("Profile"),
-  "/fusion": title("Fusion"),
+  "/profile": title("Profile"),
+  "/fusion": title("Shards"),
   "/recipes": title("Recipes"),
+  "/shard-recipes": title("Shard Recipes"),
   "/shards": title("Shards"),
   "/fusion-lines": title("Fusion Lines"),
   "/settings": title("Settings"),
@@ -29,10 +35,10 @@ export const usePageTitle = () => {
   const location = useLocation();
 
   useEffect(() => {
-    const greenhouseTitle =
-      location.pathname === "/greenhouse"
-        ? title(parseGreenhouseHash(location.hash).tool.replace(/^./, (letter) => letter.toUpperCase()))
+    const profileViewerTitle =
+      location.pathname === "/pv" || location.pathname.startsWith("/pv/")
+        ? title("Profile Viewer")
         : null;
-    document.title = greenhouseTitle ?? TITLES[location.pathname] ?? SITE_NAME;
+    document.title = profileViewerTitle ?? TITLES[location.pathname] ?? SITE_NAME;
   }, [location.hash, location.pathname]);
 };

@@ -3,11 +3,17 @@ import type { CropDefinition, MutationDefinition } from "../types/greenhouse";
 /**
  * Growth time.
  *
- * The wiki gives one formula for how long a single growth stage takes:
+ * Skydex's 2026-07-28 Hypixel SkyBlock Wiki snapshot gives this candidate
+ * formula for how long a single growth stage takes. Hypixel's own December 12
+ * notes confirm the four-hour base and that Garden/Crop Growth, unique crops
+ * and the Growth Speed upgrade reduce it, but they do not publish the complete
+ * equation. Keep the date and uncertainty attached rather than presenting an
+ * inferred formula as an official one.
  *
  *   stage seconds = 14400 / (1 + 0.025c + 0.0025g + upgradeTerm)
  *
- *     c            unique crop types growing in the plot (0 to 12)
+ *     c            unique crop types growing across any Greenhouse plot
+ *                  (0 to 12)
  *     g            your Crop Growth stat (0 to 200)
  *     upgradeTerm  0.05 per Growth Speed upgrade tier for tiers 0 to 8,
  *                  and a flat 0.50 at tier 9
@@ -24,7 +30,7 @@ export interface GrowthSettings {
   cropGrowth: number;
   /** Greenhouse Growth Speed upgrade tier, 0 to 9. */
   speedTier: number;
-  /** Unique crop types growing in the plot, 0 to 12. */
+  /** Unique crop types growing across any Greenhouse plot, 0 to 12. */
   uniqueCrops: number;
 }
 
@@ -58,17 +64,11 @@ export const plantingSeconds = (
   mutationId: string,
   data: Dataset,
   settings: GrowthSettings,
-  /**
-   * Distinct crop types in this mutation's plot. The solver already tells us
-   * exactly what a plot plants, so this is derived rather than guessed, and
-   * falls back to the settings value only when no solve is available.
-   */
-  uniqueCrops?: number
 ): number | null => {
   const mutation = data.mutations[mutationId];
   if (!mutation) return null;
 
-  const perStage = stageSeconds(uniqueCrops === undefined ? settings : { ...settings, uniqueCrops });
+  const perStage = stageSeconds(settings);
 
   let inputStages = 0;
   for (const req of mutation.requirements) {

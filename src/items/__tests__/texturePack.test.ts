@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { gzipSync, strToU8, zipSync } from "fflate";
-import { foldPackKey, packKeyCandidates, parseTexturePack, unpackCats } from "../texturePackParse";
+import { foldPackKey, packKeyCandidates, packModelKey, parseTexturePack, unpackCats } from "../texturePackParse";
 
 /**
  * The fixture is SYNTHETIC and built in-test, deliberately: no real pack
@@ -14,6 +14,16 @@ import { foldPackKey, packKeyCandidates, parseTexturePack, unpackCats } from "..
 
 /** Any bytes serve as a texture; the parser stores PNGs, it does not decode them. */
 const png = (tag: string): Uint8Array => strToU8(`\x89PNG-fake-${tag}`);
+
+/** Enough of a PNG header for the parser to read an IHDR width and height. */
+const sizedPng = (width: number, height: number): Uint8Array => {
+  const bytes = new Uint8Array(24);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return bytes;
+};
 
 const json = (value: unknown): Uint8Array => strToU8(JSON.stringify(value));
 
@@ -127,6 +137,7 @@ describe("parseTexturePack, catharsis layout", () => {
     expect(parsed.counts.files).toBe(17);
     expect(parsed.counts.recognised).toBe(5);
     expect(parsed.counts.catharsis).toBe(4);
+    expect(parsed.counts.hypixel).toBe(0);
     expect(parsed.counts.vanilla).toBe(1);
     // hyperion_broken.json points nowhere; garbage.json does not parse.
     expect(parsed.counts.unresolved).toBe(2);
@@ -137,6 +148,29 @@ describe("parseTexturePack, catharsis layout", () => {
     // credits.txt, the ogg, the broken and garbage definitions, and the
     // out-of-scope enchantment definition.
     expect(parsed.counts.ignored).toBe(5);
+  });
+});
+
+describe("parseTexturePack, Hypixel's official item-model layout", () => {
+  it("keys the resolved texture by the exact item_model supplied by the API", () => {
+    const model = "hypixel_skyblock:item/island_relevant/foraging_3/accessories/lumberjack/lumberjack_talisman";
+    const modelPath = "island_relevant/foraging_3/accessories/lumberjack/lumberjack_talisman";
+    const zip = zipSync({
+      "pack.mcmeta": json({ pack: { pack_format: 84, description: "official fixture" } }),
+      [`assets/hypixel_skyblock/items/item/${modelPath}.json`]: json({
+        model: { type: "minecraft:model", model },
+      }),
+      [`assets/hypixel_skyblock/models/item/${modelPath}.json`]: json({
+        textures: { layer0: model },
+      }),
+      [`assets/hypixel_skyblock/textures/item/${modelPath}.png`]: png("lumberjack"),
+    });
+
+    const parsed = parseTexturePack(zip);
+    const texture = parsed.textures.get(packModelKey(model));
+    expect(texture?.source).toBe("hypixel");
+    expect(texture?.path).toBe(`assets/hypixel_skyblock/textures/item/${modelPath}.png`);
+    expect(parsed.counts.hypixel).toBe(1);
   });
 });
 
@@ -192,6 +226,76 @@ describe("parseTexturePack, overlays", () => {
     const parsed = parseTexturePack(zip);
     expect(parsed.textures.get("HYPERION")?.path).toBe("working/assets/working/textures/item/hyperion.png");
     expect(parsed.counts.unresolved).toBe(1);
+  });
+});
+
+describe("parseTexturePack, animated item textures", () => {
+  it("records the first mcmeta frame instead of treating the whole sheet as one icon", () => {
+    const zip = zipSync({
+      "pack.mcmeta": json({ pack: { pack_format: 15 } }),
+      "assets/skyblock/items/animated_default.json": json({
+        model: { type: "model", model: "fixture:item/animated_default" },
+      }),
+      "assets/fixture/models/item/animated_default.json": json({
+        textures: { layer0: "fixture:item/animated_default" },
+      }),
+      "assets/fixture/textures/item/animated_default.png": sizedPng(16, 48),
+      "assets/fixture/textures/item/animated_default.png.mcmeta": json({
+        animation: { frametime: 2 },
+      }),
+      "assets/skyblock/items/animated_grid.json": json({
+        model: { type: "model", model: "fixture:item/animated_grid" },
+      }),
+      "assets/fixture/models/item/animated_grid.json": json({
+        textures: { layer0: "fixture:item/animated_grid" },
+      }),
+      "assets/fixture/textures/item/animated_grid.png": sizedPng(32, 32),
+      "assets/fixture/textures/item/animated_grid.png.mcmeta": json({
+        animation: {
+          width: 16,
+          height: 16,
+          // Invalid entries are skipped; the first drawable declared frame wins.
+          frames: [99, { index: 3, time: 6 }, 0],
+        },
+      }),
+      "assets/skyblock/items/rectangular_static.json": json({
+        model: { type: "model", model: "fixture:item/rectangular_static" },
+      }),
+      "assets/fixture/textures/item/rectangular_static.png": sizedPng(16, 48),
+      // The vanilla layer uses the same metadata rule.
+      "assets/minecraft/textures/item/clock.png": sizedPng(16, 64),
+      "assets/minecraft/textures/item/clock.png.mcmeta": json({
+        animation: { frames: [2, 3, 0, 1] },
+      }),
+    });
+
+    const parsed = parseTexturePack(zip);
+    expect(parsed.textures.get("ANIMATED_DEFAULT")?.frame).toEqual({
+      sheetWidth: 16,
+      sheetHeight: 48,
+      frameX: 0,
+      frameY: 0,
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    expect(parsed.textures.get("ANIMATED_GRID")?.frame).toEqual({
+      sheetWidth: 32,
+      sheetHeight: 32,
+      frameX: 16,
+      frameY: 16,
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    expect(parsed.textures.get("CLOCK")?.frame).toEqual({
+      sheetWidth: 16,
+      sheetHeight: 64,
+      frameX: 0,
+      frameY: 32,
+      frameWidth: 16,
+      frameHeight: 16,
+    });
+    // A rectangular texture without animation metadata keeps the old behavior.
+    expect(parsed.textures.get("RECTANGULAR_STATIC")?.frame).toBeUndefined();
   });
 });
 
@@ -317,4 +421,13 @@ describe("the matching rule", () => {
     expect(packKeyCandidates(null, "Diamond Sword")).toEqual(["DIAMOND_SWORD"]);
     expect(packKeyCandidates(undefined, undefined)).toEqual([]);
   });
+
+  it("adds Hypixel's exact model key after the stable id and name fallbacks", () => {
+    const model = "hypixel_skyblock:item/island_relevant/foraging_3/accessories/lumberjack/lumberjack_talisman";
+    expect(packKeyCandidates("LUMBERJACK_TALISMAN", "Lumberjack Talisman", model)).toEqual([
+      "LUMBERJACK_TALISMAN",
+      packModelKey(model),
+    ]);
+  });
+
 });

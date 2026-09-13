@@ -1,0 +1,10 @@
+html, body { background: transparent; overflow: hidden; }
+#skydex-current-greenhouse-mod { visibility: hidden; }
+#skydex-current-greenhouse-mod.is-ready { visibility: visible; }
+#skydex-current-greenhouse-mod .sdm-stage { background: transparent; }
+#skydex-current-greenhouse-mod .sdm-world,
+#skydex-current-greenhouse-mod .sdm-shade { display: none; }
+#skydex-current-greenhouse-mod .sdm-share-field.is-invalid { border-color: #ff5d68; }
+#skydex-current-greenhouse-mod .sdm-connection.is-disconnected .sdm-connection-dot { background: #8190a2; box-shadow: none; }
+#skydex-current-greenhouse-mod .sdm-item-list { overflow: auto; }
+#skydex-current-greenhouse-mod .sdm-loadout-copy strong { overflow-wrap: anywhere; }

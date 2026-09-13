@@ -12,7 +12,8 @@ import type {
   Shard,
   Shards,
 } from "../types/types";
-import { BLACK_HOLE_SHARD, NO_FORTUNE_SHARDS, WOODEN_BAIT_SHARDS } from "../constants";
+import { estimateAcquisition } from "../shards/huntingModel";
+import { DataService } from "./dataService";
 
 export class CalculationService {
   private static instance: CalculationService;
@@ -46,6 +47,7 @@ export class CalculationService {
       customRates: params.customRates,
       hunterFortune: params.hunterFortune,
       excludeChameleon: params.excludeChameleon,
+      excludedFusionInputs: params.excludedFusionInputs,
       frogBonus: params.frogBonus,
       newtLevel: params.newtLevel,
       salamanderLevel: params.salamanderLevel,
@@ -61,6 +63,9 @@ export class CalculationService {
       customKuudraTime: params.customKuudraTime,
       kuudraTimeSeconds: params.kuudraTimeSeconds,
       noWoodenBait: params.noWoodenBait,
+      rateAsCoinValue: params.rateAsCoinValue,
+      huntingEquipment: params.huntingEquipment,
+      hunterEquipmentFortune: params.hunterEquipmentFortune,
     });
   }
 
@@ -73,10 +78,8 @@ export class CalculationService {
     }
 
     try {
-      const [fusionResponse, ratesResponse] = await Promise.all([fetch(`${import.meta.env.BASE_URL}fusion-data.json`), fetch(`${import.meta.env.BASE_URL}rates.json`)]);
-
-      const fusionJson = await fusionResponse.json();
-      const defaultRates = await ratesResponse.json();
+      const dataService = DataService.getInstance();
+      const [fusionJson, defaultRates] = await Promise.all([dataService.loadFusionData(), dataService.loadDefaultRates()]);
 
       const result = this.buildData(fusionJson, defaultRates, params);
 
@@ -102,12 +105,14 @@ export class CalculationService {
   ): Data {
     this.defaultRates = defaultRates;
     const recipes: Recipes = {};
+    const excludedInputs = new Set(params.excludedFusionInputs);
     for (const outputShard in fusionJson.recipes) {
       recipes[outputShard] = [];
       for (const qtyStr in fusionJson.recipes[outputShard]) {
         const qty = parseInt(qtyStr);
         const recipeList = fusionJson.recipes[outputShard][qtyStr];
         recipeList.forEach((inputs: [string, string]) => {
+          if (inputs.some(input => excludedInputs.has(input))) return;
           const isReptile = inputs.some((input) => fusionJson.shards[input].family.includes("Reptile"));
           recipes[outputShard].push({ inputs, outputQuantity: qty, isReptile: isReptile });
         });
@@ -129,37 +134,19 @@ export class CalculationService {
       }
 
       // Handle Kuudra rates for L15
-      if (shardId === "L15" && rate === 0) {
+      if (shardId === "L15" && rate === 0 && !Object.hasOwn(params.customRates, shardId)) {
         // If moneyPerHour is null, treat as Infinity (ignore key cost)
         const moneyPerHour = params.moneyPerHour == null ? Infinity : params.moneyPerHour;
         rate = this.calculateKuudraRate(params.kuudraTier, moneyPerHour, params.customKuudraTime ? params.kuudraTimeSeconds : null);
       }
 
-      if (rate > 0) {
-        // Apply wooden bait modifier - different rates for shiny fish vs other wooden bait
-        if (params.noWoodenBait && WOODEN_BAIT_SHARDS.includes(shardId)) {
-          if (shardId === "L23") {
-            rate *= 0.1; // Reduce rate to 10% for shiny fish when wooden bait is excluded
-          } else {
-            rate *= 0.05; // Reduce rate to 5% for other wooden bait shards
-          }
-        }
-
-        // Apply fortune calculations
-        if (!NO_FORTUNE_SHARDS.includes(shardId)) {
-          rate = this.applyFortuneModifiers(rate, shardId, fusionJson.shards[shardId], params);
-        }
-      }
-
-      // Exclude chameleon
-      if (params.excludeChameleon && shardId === "L4") {
-        rate = 0;
-      }
+      const acquisition = estimateAcquisition({ ...fusionJson.shards[shardId], id: shardId }, rate, params);
 
       shards[shardId] = {
         ...fusionJson.shards[shardId],
         id: shardId,
-        rate,
+        rate: acquisition.rate ?? 0,
+        acquisition,
       };
     }
 
@@ -221,37 +208,6 @@ export class CalculationService {
 
   public getEffectiveOutputQuantity(recipe: { isReptile: boolean; outputQuantity: number }, crocodileMultiplier: number): number {
     return recipe.isReptile ? recipe.outputQuantity * crocodileMultiplier : recipe.outputQuantity;
-  }
-
-  private applyFortuneModifiers(rate: number, shardId: string, shard: Shard, params: CalculationParams): number {
-    let effectiveFortune = params.hunterFortune;
-    const multipliers = this.calculateMultipliers(params);
-
-    // Apply rarity bonuses
-    const rarityBonuses = {
-      common: 2 * params.newtLevel,
-      uncommon: 2 * params.salamanderLevel,
-      rare: params.lizardKingLevel,
-      epic: params.leviathanLevel,
-      legendary: 0,
-    };
-
-    effectiveFortune += rarityBonuses[shard.rarity] || 0;
-
-    // Apply frog bonus
-    if (params.frogBonus) {
-      rate *= 1.1;
-    }
-
-    // Apply black hole shard bonuses
-    if (shardId in BLACK_HOLE_SHARD) {
-      if (BLACK_HOLE_SHARD[shardId]) {
-        rate *= 1 + multipliers.pythonMultiplier;
-      }
-      effectiveFortune *= 1 + multipliers.kingCobraMultiplier;
-    }
-
-    return rate * (1 + effectiveFortune / 100);
   }
 
   public areRecipesEqual(a: Recipe | null, b: Recipe | null | undefined): boolean {

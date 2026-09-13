@@ -22,6 +22,29 @@ export const BACKDROP_FLAG_KEY = "skydex.backdrop.v1";
 /** Fired after every save or clear, so the shell re-applies without a reload. */
 export const BACKDROP_UPDATED_EVENT = "skydex:backdrop-updated";
 
+/** Fired when framing changes, without needlessly reloading the image bytes. */
+export const BACKDROP_PREFERENCES_UPDATED_EVENT = "skydex:backdrop-preferences-updated";
+
+/** Lightweight presentation choices. The image bytes continue to live in IDB. */
+export const BACKDROP_PREFERENCES_KEY = "skydex.backdrop.preferences.v1";
+
+export type BackdropHorizontalFocus = "left" | "center" | "right";
+export type BackdropVerticalFocus = "top" | "center" | "bottom";
+
+export interface BackdropPreferences {
+  v: 1;
+  horizontal: BackdropHorizontalFocus;
+  vertical: BackdropVerticalFocus;
+  shade: number;
+}
+
+export const DEFAULT_BACKDROP_PREFERENCES: BackdropPreferences = {
+  v: 1,
+  horizontal: "center",
+  vertical: "center",
+  shade: 12,
+};
+
 /** Anything larger is almost certainly a mistake, and blob URLs are not free. */
 export const MAX_BACKDROP_BYTES = 12 * 1024 * 1024;
 
@@ -31,6 +54,68 @@ export interface BackdropFlag {
   size: number;
   type: string;
 }
+
+const isHorizontalFocus = (value: unknown): value is BackdropHorizontalFocus =>
+  value === "left" || value === "center" || value === "right";
+
+const isVerticalFocus = (value: unknown): value is BackdropVerticalFocus =>
+  value === "top" || value === "center" || value === "bottom";
+
+const clampShade = (value: unknown): number => {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? Math.min(40, Math.max(8, Math.round(number))) : DEFAULT_BACKDROP_PREFERENCES.shade;
+};
+
+export const readBackdropPreferences = (): BackdropPreferences => {
+  try {
+    const raw = localStorage.getItem(BACKDROP_PREFERENCES_KEY);
+    if (!raw) return DEFAULT_BACKDROP_PREFERENCES;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || (parsed as { v?: unknown }).v !== 1) {
+      return DEFAULT_BACKDROP_PREFERENCES;
+    }
+    const candidate = parsed as Partial<BackdropPreferences>;
+    return {
+      v: 1,
+      horizontal: isHorizontalFocus(candidate.horizontal) ? candidate.horizontal : DEFAULT_BACKDROP_PREFERENCES.horizontal,
+      vertical: isVerticalFocus(candidate.vertical) ? candidate.vertical : DEFAULT_BACKDROP_PREFERENCES.vertical,
+      shade: clampShade(candidate.shade),
+    };
+  } catch {
+    return DEFAULT_BACKDROP_PREFERENCES;
+  }
+};
+
+export const saveBackdropPreferences = (next: Omit<BackdropPreferences, "v">): BackdropPreferences => {
+  const preferences: BackdropPreferences = {
+    v: 1,
+    horizontal: isHorizontalFocus(next.horizontal) ? next.horizontal : DEFAULT_BACKDROP_PREFERENCES.horizontal,
+    vertical: isVerticalFocus(next.vertical) ? next.vertical : DEFAULT_BACKDROP_PREFERENCES.vertical,
+    shade: clampShade(next.shade),
+  };
+  try {
+    localStorage.setItem(BACKDROP_PREFERENCES_KEY, JSON.stringify(preferences));
+  } catch {
+    // The current visit still receives the update through the event below.
+  }
+  window.dispatchEvent(new Event(BACKDROP_PREFERENCES_UPDATED_EVENT));
+  return preferences;
+};
+
+export const applyBackdropPreferences = (
+  preferences: BackdropPreferences = readBackdropPreferences(),
+  root: HTMLElement = document.documentElement,
+): void => {
+  root.style.setProperty("--sd-bg-position-x", preferences.horizontal);
+  root.style.setProperty("--sd-bg-position-y", preferences.vertical);
+  root.style.setProperty("--sd-scrim", (preferences.shade / 100).toFixed(2));
+};
+
+export const clearAppliedBackdropPreferences = (root: HTMLElement = document.documentElement): void => {
+  root.style.removeProperty("--sd-bg-position-x");
+  root.style.removeProperty("--sd-bg-position-y");
+  root.style.removeProperty("--sd-scrim");
+};
 
 const openDb = (): Promise<IDBDatabase> =>
   new Promise((resolve, reject) => {

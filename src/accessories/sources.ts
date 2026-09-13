@@ -58,12 +58,18 @@ const API = "https://hypixelskyblock.minecraft.wiki/api.php";
 // wrote a v4 snapshot after the key bump but before the events field landed,
 // which is exactly the poisoned-cache shape this list exists for, so it is
 // retired the same way.
-export const SOURCE_CACHE_KEY = "skydex.accessories.wiki.v5";
+// v6: event, Dark Auction and quest evidence now outrank a merchant field.
+// v7: the official Year of the Witch marker is `Exclusive|Year/Witch`, not the
+// rendered "Year of the Witch" wording. Refill the short-lived v6 snapshots
+// rather than retain their Witch merchant classifications for a day.
+export const SOURCE_CACHE_KEY = "skydex.accessories.wiki.v7";
 const STALE_SOURCE_KEYS = [
   "skydex.accessories.sources.v1",
   "skydex.accessories.wiki.v2",
   "skydex.accessories.wiki.v3",
   "skydex.accessories.wiki.v4",
+  "skydex.accessories.wiki.v5",
+  "skydex.accessories.wiki.v6",
 ];
 
 /** Same day-long freshness the crafting index uses. Sources change rarely. */
@@ -104,7 +110,10 @@ export type SourceCategory =
  * alone would match "cannot be sold in any shop" and classify an unobtainable
  * item as a shop purchase.
  */
-const RULES: readonly { category: SourceCategory; pattern: RegExp }[] = [
+type SourceRule = { category: SourceCategory; pattern: RegExp };
+
+/** These routes describe the gate itself, so they outrank a merchant field. */
+const SPECIFIC_RULES: readonly SourceRule[] = [
   { category: "darkAuction", pattern: /dark\s*auction/i },
   {
     category: "quest",
@@ -113,8 +122,12 @@ const RULES: readonly { category: SourceCategory; pattern: RegExp }[] = [
   {
     category: "event",
     pattern:
-      /\b(spooky\s*festival|new\s*year|season\s*of\s*jerry|jerry'?s\s*workshop|winter\s*island|travelling\s*zoo|traveling\s*zoo|bingo|hoppity|easter|halloween|christmas|advent|anniversary|carnival|event)\b/i,
+      /\b(spooky\s*festival|new\s*year|season\s*of\s*jerry|jerry'?s\s*workshop|winter\s*island|travelling\s*zoo|traveling\s*zoo|year(?:\s+of\s+the\s+|\s*\/\s*)witch|bingo|hoppity|easter|halloween|christmas|advent|anniversary|carnival|event)\b/i,
   },
+];
+
+/** General prose routes, checked after the exact structured merchant field. */
+const GENERAL_RULES: readonly SourceRule[] = [
   {
     /*
      * Plurals matter here more than they look.
@@ -196,9 +209,28 @@ export { obtainRegion };
 export function classifyFromWikitext(wikitext: string): SourceCategory | null {
   if (!wikitext.trim()) return null;
 
+  const region = withoutDenials(obtainRegion(wikitext));
   /*
-   * Structured fields are consulted before prose, because they are a fact
-   * rather than a phrase.
+   * Event exclusivity banners and the introductory sentence sit above the
+   * first section on the official wiki, outside `Obtaining`. That lead is
+   * narrow enough to trust for an event declaration while still excluding
+   * later History and Trivia sections.
+   */
+  const lead = withoutDenials(wikitext.split(/^={2,}\s/m, 1)[0] ?? "");
+
+  /*
+   * A venue, quest or timed event is the actual gate, even when the item is
+   * handed over by a merchant. The wiki screenshots that exposed this were a
+   * Year of the Witch item sold by Agnes and an Anniversary legacy item.
+  */
+  for (const rule of SPECIFIC_RULES) {
+    const evidence = rule.category === "event" ? `${region}\n${lead}` : region;
+    if (rule.pattern.test(evidence)) return rule.category;
+  }
+
+  /*
+   * The structured merchant field is then consulted before general prose,
+   * because it is a fact rather than a phrase.
    *
    * `Infobox/Accessory` carries `|merchant = Junker Joel` and `|buy = ...` on
    * items you buy from an NPC. An editor filling that field in is making a
@@ -213,8 +245,7 @@ export function classifyFromWikitext(wikitext: string): SourceCategory | null {
   const merchant = wikitext.match(/\|\s*merchant\s*=\s*([^\n|}]+)/i)?.[1]?.trim();
   if (merchant && !/^(n|no|none)$/i.test(merchant)) return "shop";
 
-  const region = withoutDenials(obtainRegion(wikitext));
-  for (const rule of RULES) {
+  for (const rule of GENERAL_RULES) {
     if (rule.pattern.test(region)) return rule.category;
   }
   return null;

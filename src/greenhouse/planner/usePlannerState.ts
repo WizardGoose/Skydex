@@ -29,6 +29,8 @@ export interface PlannerOptions {
   hideCompleted: boolean;
   /** Show growth-time estimates next to each planting count. */
   showTime: boolean;
+  /** Subtract reported holdings from the calculated greenhouse plan. */
+  useInventory: boolean;
 }
 
 /** Your greenhouse, for turning plantings into wall-clock time. */
@@ -222,7 +224,7 @@ const DEFAULT_STATE: PlannerState = {
   progress: {},
   growFresh: {},
   sizing: {},
-  options: { showBaseCrops: true, hideCompleted: false, showTime: true },
+  options: { showBaseCrops: true, hideCompleted: false, showTime: true, useInventory: true },
   view: { cycle: null, mutation: null },
   snapshot: null,
   growth: { ...DEFAULT_GROWTH, plots: 1, bioanalysis: "none" },
@@ -599,10 +601,18 @@ const addTarget = (id: string, kind: TargetKind): void => {
   update((prev) => (prev.targets.some((t) => t.id === id) ? prev : { ...prev, targets: [...prev.targets, { id, kind, qty: 1 }] }));
 };
 
+/**
+ * Goal quantities are game counts, not a three-digit UI setting. Keep the
+ * lower bound that makes a target meaningful, but do not impose a product cap
+ * on values that routinely reach into SkyBlock's billions.
+ */
+export const normaliseTargetQuantity = (qty: number): number =>
+  Number.isFinite(qty) ? Math.max(1, Math.trunc(qty)) : 1;
+
 const setTargetQty = (id: string, qty: number): void => {
   update((prev) => ({
     ...prev,
-    targets: prev.targets.map((t) => (t.id === id ? { ...t, qty: Math.max(1, Math.min(999, qty)) } : t)),
+    targets: prev.targets.map((t) => (t.id === id ? { ...t, qty: normaliseTargetQuantity(qty) } : t)),
   }));
 };
 

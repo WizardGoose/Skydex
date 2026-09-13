@@ -42,8 +42,12 @@ const CopyChip: React.FC<{ value: string }> = ({ value }) => {
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const copy = () => {
-    void navigator.clipboard.writeText(value).catch(() => undefined);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      return;
+    }
     setCopied(true);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setCopied(false), 1200);
@@ -73,7 +77,7 @@ export const AboutPage: React.FC = () => (
       <p className="mt-4 text-sm leading-[1.8] text-slate-300">
         Tools for the long grinds in SkyBlock: shard fusions, greenhouse layouts and crafting costs.
         <InfoGlyph
-          label={`${SITE_NAME} is open source and is not affiliated with or endorsed by Hypixel Inc. Item, recipe and mutation data are loaded live from the Hypixel SkyBlock Wiki and the public Hypixel API.`}
+          label={`${SITE_NAME} is open source and is not affiliated with the game developers. Item, recipe and mutation data are loaded live from the Hypixel SkyBlock Wiki and the public Hypixel API.`}
         />
       </p>
     </header>
@@ -122,7 +126,7 @@ export const AboutPage: React.FC = () => (
         >
           SkyOcean
         </a>
-        . SkyOcean was a major inspiration for the companion mod and for making
+        . SkyOcean was a major inspiration for the Skydex mod and for making
         broad SkyBlock tooling feel like one cohesive, in-game-first toolkit.
       </p>
 

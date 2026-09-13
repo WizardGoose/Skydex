@@ -85,13 +85,27 @@ export const simplifyCompound = (compound: NbtCompound): Record<string, unknown>
  * `readInventoryItems`.
  */
 export const simplifyItems = (root: NbtCompound): RawItem[] => {
+  return simplifyItemSlots(root).filter((item): item is RawItem => item !== null);
+};
+
+/**
+ * A container document's real slot sequence, including empty compounds.
+ *
+ * Valuation wants a packed list and uses `simplifyItems` above. Profile
+ * inventory views answer a different question: where each stack sits and how
+ * much room the container exposes. Keeping that projection separate prevents
+ * visual layout metadata from leaking into net-worth categories.
+ */
+export const simplifyItemSlots = (root: NbtCompound): (RawItem | null)[] => {
   const list = root.value.get("i");
   if (!list || list.type !== "list") return [];
 
-  const out: RawItem[] = [];
+  const out: (RawItem | null)[] = [];
   for (const entry of list.value) {
-    if (entry.type !== "compound") continue;
-    if (entry.value.size === 0) continue;
+    if (entry.type !== "compound" || entry.value.size === 0) {
+      out.push(null);
+      continue;
+    }
     out.push(simplifyCompound(entry) as RawItem);
   }
   return out;

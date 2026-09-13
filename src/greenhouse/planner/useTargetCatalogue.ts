@@ -1,5 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRecipes } from "../../items/useItemData";
+import type { ItemIndex } from "../../items/useItemData";
+import {
+  itemResourceVersion,
+  requestItemResource,
+  resourceTierFor,
+  subscribeItemResource,
+} from "../../items/itemResource";
+import {
+  fetchWikiTiers,
+  readTierCache,
+  tierCacheFresh,
+  writeTierCache,
+  type WikiTierCache,
+} from "../../items/wikiTiers";
 import { wikiIconUrl, norm, slug } from "../../items/wikiCrafting";
 
 /**
@@ -46,6 +60,9 @@ export interface CatalogueTarget {
   source: "crafting" | "infobox";
   wiki: string;
   ingredients: TargetIngredient[];
+  /** Game-owned colour and inventory bridge, when Hypixel's item row supplies them. */
+  rarity: string | null;
+  hypixelId: string | null;
 }
 
 /** Icons come straight from the wiki, so there is no local icon path. */
@@ -57,7 +74,7 @@ export const itemIconPath = (target: CatalogueTarget): string | null => wikiIcon
  * filter that only runs at fetch time cannot reach into it. New key, old key
  * left alone, per the storage rules.
  */
-const CACHE_KEY = "wizardsky.targets.v3";
+const CACHE_KEY = "wizardsky.targets.v4";
 const TTL = 24 * 60 * 60 * 1000;
 
 /**
@@ -82,26 +99,101 @@ export const isNpcPage = (wikitext: string): boolean => {
   return kinds.every((k) => k === "character" || k === "npc");
 };
 
-/** Parse `{{RD|5 Condensed Helianthus}}` rows out of an article's wikitext. */
+/** Parse mutation costs from both generations of the wiki's item templates. */
 export const parseInfoboxIngredients = (wikitext: string): { name: string; qty: number }[] => {
   const merged = new Map<string, { name: string; qty: number }>();
-  for (const [, qtyRaw, nameRaw] of wikitext.matchAll(/\{\{RD\|\s*([\d,]+)?\s*([^}|]+?)\s*\}\}/g)) {
+  const add = (nameRaw: string, qtyRaw?: string) => {
     const name = nameRaw.trim();
-    if (!name) continue;
+    if (!name) return;
     const qty = qtyRaw ? Number(qtyRaw.replace(/,/g, "")) : 1;
-    const k = norm(name);
-    const prev = merged.get(k);
-    if (!prev) merged.set(k, { name, qty });
-    else prev.qty = Math.max(prev.qty, qty);
+    const key = norm(name);
+    const previous = merged.get(key);
+    if (!previous) merged.set(key, { name, qty });
+    else previous.qty = Math.max(previous.qty, qty);
+  };
+
+  // Legacy mutation rows are still present on older articles and caches.
+  for (const [, qtyRaw, nameRaw] of wikitext.matchAll(/\{\{RD\|\s*([\d,]+)?\s*([^}|]+?)\s*\}\}/g)) {
+    add(nameRaw, qtyRaw);
+  }
+
+  // Current articles state purchase ingredients in the Infobox/Item `buy`
+  // field as `{{Item|Condensed Helianthus|amount=5}}`. Restricting the scan to
+  // that field avoids treating unrelated item mentions elsewhere on the page
+  // as costs.
+  const lines = wikitext.split("\n");
+  let buy = "";
+  let reading = false;
+  for (const line of lines) {
+    if (/^\|\s*buy\s*=/.test(line)) {
+      reading = true;
+      buy += `${line.replace(/^\|\s*buy\s*=/, "")}\n`;
+      continue;
+    }
+    if (reading && (/^\|\s*[A-Za-z_]+\s*=/.test(line) || /^\s*\}\}\s*$/.test(line))) break;
+    if (reading) buy += `${line}\n`;
+  }
+  for (const match of buy.matchAll(/\{\{Item\|([^}|]+)(?:\|([^}]*))?\}\}/g)) {
+    const amount = match[2]?.match(/(?:^|\|)\s*amount\s*=\s*([\d,]+)/i)?.[1];
+    add(match[1], amount);
   }
   return [...merged.values()];
+};
+
+/**
+ * Resolve every mutation consumed anywhere below one crafting target.
+ *
+ * The old catalogue only checked the target's immediate recipe. That kept a
+ * mutation-crafted intermediate visible but dropped every item made from that
+ * intermediate. Walking the same recipe graph used by Crafting makes the
+ * planner catalogue complete without maintaining another item list.
+ */
+export const mutationIngredientsFor = (
+  items: ItemIndex,
+  targetId: string,
+  mutationSet: ReadonlySet<string>
+): TargetIngredient[] => {
+  const totals = new Map<string, number>();
+
+  const visit = (id: string, required: number, path: ReadonlySet<string>) => {
+    if (mutationSet.has(id)) {
+      totals.set(id, (totals.get(id) ?? 0) + required);
+      return;
+    }
+    if (path.has(id)) return;
+
+    const item = items[id];
+    if (!item?.recipe?.length) return;
+    const crafts = Math.ceil(required / Math.max(1, item.yields));
+    const nextPath = new Set(path);
+    nextPath.add(id);
+    for (const ingredient of item.recipe) visit(ingredient.id, ingredient.qty * crafts, nextPath);
+  };
+
+  visit(targetId, 1, new Set());
+  return [...totals.entries()].map(([id, qty]) => ({
+    name: items[id]?.name ?? id.replace(/_/g, " "),
+    qty,
+    mutation: id,
+    crop: null,
+  }));
 };
 
 export const useTargetCatalogue = (mutationIds: string[] = []) => {
   const { items, loading: recipesLoading } = useRecipes();
   const [nonCrafted, setNonCrafted] = useState<CatalogueTarget[]>([]);
+  const [wikiTiers, setWikiTiers] = useState<WikiTierCache>(() => readTierCache());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const resourceVersion = useSyncExternalStore(
+    subscribeItemResource,
+    itemResourceVersion,
+    itemResourceVersion,
+  );
+
+  useEffect(() => {
+    requestItemResource();
+  }, []);
 
   const mutationSet = useMemo(() => new Set(mutationIds), [mutationIds]);
 
@@ -112,20 +204,27 @@ export const useTargetCatalogue = (mutationIds: string[] = []) => {
 
     for (const [id, it] of Object.entries(items)) {
       if (!it.recipe) continue;
-      const usesMutation = it.recipe.some((ing) => mutationSet.has(ing.id));
-      if (!usesMutation) continue;
+      if (mutationSet.has(id)) continue;
+      const resolvedMutations = mutationIngredientsFor(items, id, mutationSet);
+      if (!resolvedMutations.length) continue;
+
+      const usesMutationDirectly = it.recipe.some((ing) => mutationSet.has(ing.id));
 
       out.push({
         id,
         name: it.name,
         source: "crafting",
         wiki: `${WIKI}/w/${encodeURIComponent(it.name.replace(/ /g, "_"))}`,
-        ingredients: it.recipe.map((ing) => ({
-          name: ing.name,
-          qty: ing.qty,
-          mutation: mutationSet.has(ing.id) ? ing.id : null,
-          crop: null,
-        })),
+        rarity: it.tier,
+        hypixelId: it.hypixelId,
+        ingredients: usesMutationDirectly
+          ? it.recipe.map((ing) => ({
+              name: ing.name,
+              qty: ing.qty,
+              mutation: mutationSet.has(ing.id) ? ing.id : null,
+              crop: null,
+            }))
+          : resolvedMutations,
       });
     }
 
@@ -187,6 +286,8 @@ export const useTargetCatalogue = (mutationIds: string[] = []) => {
           source: "infobox",
           wiki: `${WIKI}/w/${encodeURIComponent(page.replace(/ /g, "_"))}`,
           ingredients,
+          rarity: items[slug(page)]?.tier ?? null,
+          hypixelId: items[slug(page)]?.hypixelId ?? null,
         };
       })
     )
@@ -208,12 +309,61 @@ export const useTargetCatalogue = (mutationIds: string[] = []) => {
       });
 
     return () => controller.abort();
-  }, [mutationSet]);
+  }, [items, mutationSet]);
 
   const targets = useMemo(
-    () => [...crafted, ...nonCrafted].sort((a, b) => a.name.localeCompare(b.name)),
-    [crafted, nonCrafted]
+    () => {
+      void resourceVersion;
+      return [...crafted, ...nonCrafted]
+        .map((target) => {
+          const hypixelId = items[target.id]?.hypixelId ?? target.hypixelId ?? null;
+          const resourceTier = resourceTierFor(hypixelId) ?? resourceTierFor(target.name);
+          return {
+            ...target,
+            rarity: items[target.id]?.tier
+              ?? target.rarity
+              ?? (resourceTier ? resourceTier.toUpperCase() : null)
+              ?? wikiTiers.tiers[norm(target.name)]
+              ?? null,
+            hypixelId,
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+    [crafted, items, nonCrafted, resourceVersion, wikiTiers],
   );
+
+  useEffect(() => {
+    if (!targets.length) return;
+    const fresh = tierCacheFresh(wikiTiers);
+    const ask = targets
+      .filter((target) => !target.rarity)
+      .map((target) => target.name)
+      .filter((name) => {
+        const known = wikiTiers.tiers[norm(name)];
+        return known === undefined || (known === null && !fresh);
+      });
+    if (!ask.length) return;
+
+    const controller = new AbortController();
+    fetchWikiTiers(ask, controller.signal)
+      .then((learned) => {
+        if (controller.signal.aborted || !Object.keys(learned).length) return;
+        setWikiTiers((previous) => {
+          const next: WikiTierCache = {
+            fetchedAt: Date.now(),
+            tiers: { ...previous.tiers, ...learned },
+          };
+          writeTierCache(next);
+          return next;
+        });
+      })
+      .catch(() => {
+        // A missing network answer remains visually unknown rather than guessed.
+      });
+
+    return () => controller.abort();
+  }, [targets, wikiTiers]);
 
   /*
    * `items` is handed back rather than kept private because it is the only

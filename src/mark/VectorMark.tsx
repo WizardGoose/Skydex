@@ -1,12 +1,14 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { SITE_NAME } from "../ui/brand";
 import {
+  MARK_WAKE_PADDING_PX,
   PET_TRAVEL_PX,
   TIMING,
   YAWN_DELAY_MS,
   YAWN_TOTAL_MS,
   blinkDuration,
   blinkGap,
+  nearField,
   petTravel,
   resolveEye,
   shouldYawn,
@@ -24,6 +26,7 @@ import {
   blushCentres,
   underscoreSpans,
   zzzAt,
+  ZZZ_VIEWPORT,
 } from "./adornments";
 import type { BlushName } from "./adornments";
 import {
@@ -44,7 +47,6 @@ import {
   SLOSH_SCALE,
   STROKE,
   accentMix,
-  breathScale,
   ease,
   eyePath,
   eyePosesFor,
@@ -52,12 +54,20 @@ import {
   lerpMouth,
   lerpPose,
   mouthGeometry,
-  yawnStretch,
-  satisfiedBumpScale,
   sloshAt,
   transitionFor,
+  yawnStretch,
 } from "./pose";
 import type { EaseName, MouthPose, Pose, PoseName } from "./pose";
+import {
+  RIG_TRANSITION_MS,
+  lerpRigPose,
+  rigTransform,
+  sampleRig,
+  sampleRigClip,
+} from "./rig";
+import type { RigClip, WonderRigMode, WonderRigPose } from "./rig";
+import { resolveWonderRigSelection, wonderAmbientEligible } from "./personality";
 
 /**
  * The mark: the wordmark `W.W`, alive.
@@ -79,32 +89,21 @@ import type { EaseName, MouthPose, Pose, PoseName } from "./pose";
  *
  * WHAT IS DIFFERENT
  * -----------------
- * The renderer. Where `FramePlayer` mapped a state to a FRAME INDEX, this maps
- * it to a PROPORTION and tweens to it. The poses and every number governing the
- * tweening live in `pose.ts`; this file is timers and one loop.
- *
- * NOTHING HERE TRANSLATES ANYTHING
- * ---------------------------------
- * Worth saying in the renderer as well as in `pose.ts`, because this is the
- * file where it would be easy to reintroduce by accident. The eye paths carry
- * NO `transform` attribute at all: their geometry is recomputed each frame and
- * that is the entire animation. The mouth carries a transform, and it is a
- * scale pinned to the baseline, never a translate. The wrapper carries the
- * breath, and it is a scale whose origin is the baseline, so the mark grows and
- * settles without its feet ever leaving the line.
- *
- * The first version of this component leaned the letters toward the search
- * field, drifted them around while idle, and tipped the whole mark. All of it is
- * gone. A wordmark does not go anywhere.
+ * The renderer has two cooperating layers. `pose.ts` deforms the two W paths
+ * into expressions. `rig.ts` is a real four-part hierarchy: root, left eye,
+ * right eye and mouth. Its reusable clips add floating, breathing, anticipation
+ * and follow-through without baking those motions into the letter geometry.
+ * This is Wonder rather than a static wordmark now, so spatial movement is part
+ * of the character instead of an accidental transform scattered through JSX.
  *
  * ARCHITECTURE
  * ------------
  * One `requestAnimationFrame` loop owns the whole picture, and React renders
  * once. The flags driving the face live in refs, not state, so a blink does not
  * re-render the landing page; the loop reads those refs, resolves the pose
- * through `face.ts`, notices when a resolved pose has changed, starts a tween
- * from wherever that letter's proportions actually are at that instant, and
- * writes attributes straight onto the SVG nodes.
+ * through `face.ts`, notices when a resolved pose or rig clip has changed,
+ * starts a tween from the exact current shape, and writes the complete rig to
+ * the SVG nodes.
  *
  * Starting the tween FROM THE CURRENT INTERPOLATED POSE rather than from the
  * previous pose's resting values is what makes interruptions look right: a
@@ -237,6 +236,14 @@ interface VectorMarkProps {
   wideEyedFocus?: boolean;
   /** Pin a state instead of running the timers. Lab only. */
   force?: ForcedState | null;
+  /** Pin only the spatial rig while leaving the chosen face state intact. Lab only. */
+  forceRigMode?: WonderRigMode | null;
+  /** Play an isolated authored clip without registering it as live behaviour. Lab only. */
+  forceRigClip?: RigClip | null;
+  /** Search or other nearby interaction surface that should wake Wonder. */
+  attentionTargetRef?: React.RefObject<HTMLElement | null>;
+  /** Run the approved low-priority personality rhythm while Wonder is idly awake. */
+  ambient?: boolean;
   /** Rendered width. The page's default is the responsive class. */
   className?: string;
 }
@@ -248,11 +255,17 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
   blush = BLUSH_DEFAULT,
   wideEyedFocus = false,
   force = null,
+  forceRigMode = null,
+  forceRigClip = null,
+  attentionTargetRef,
+  ambient = false,
   className = "w-[76px] overflow-visible sm:w-[104px] md:w-[136px] aspect-[35/12]",
 }) => {
   const still = useReducedMotion();
 
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const rigRootRef = useRef<SVGGElement | null>(null);
+  const eyeLGroupRef = useRef<SVGGElement | null>(null);
+  const eyeRGroupRef = useRef<SVGGElement | null>(null);
   const eyeLRef = useRef<SVGPathElement | null>(null);
   const eyeRRef = useRef<SVGPathElement | null>(null);
   const mouthRef = useRef<SVGGElement | null>(null);
@@ -273,18 +286,25 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
   const alertRef = useRef(alert);
   const thinkingRef = useRef(thinking);
   const forceRef = useRef(force);
+  const forceRigModeRef = useRef(forceRigMode);
+  const forceRigClipRef = useRef(forceRigClip);
+  const ambientRef = useRef(ambient);
   const optsRef = useRef<FaceOptions>({ wideEyedFocus });
   alertRef.current = alert;
   thinkingRef.current = thinking;
   forceRef.current = force;
+  forceRigModeRef.current = forceRigMode;
+  forceRigClipRef.current = forceRigClip;
+  ambientRef.current = ambient;
   optsRef.current = { wideEyedFocus };
 
   /* The rest of the `FaceState`, owned by this component's timers. */
   const blinkRef = useRef(false);
   const satisfiedRef = useRef(false);
-  const satisfiedStartRef = useRef(0);
   const scanRef = useRef(1);
-  const sleepingRef = useRef(false);
+  const sleepingRef = useRef(true);
+  const proximityRef = useRef(false);
+  const dozeTimerRef = useRef<number | null>(null);
   const glanceRef = useRef(0);
   const pettedUntilRef = useRef(0); /* timestamp the pet releases, or 0 */
   const yawnUntilRef = useRef(0); /* timestamp the yawn ends, or 0 */
@@ -294,87 +314,89 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
      hold and the open together. */
   const blinkScaleRef = useRef(1);
 
-  /* ---- sleep: awake only AT THE FIELD ------------------------------------ *
+  /* ---- attention and sleep ----------------------------------------------- *
    *
-   * The owner's rule: "make it sleep unless someone is in the field, or their
-   * mouse is like, ontop or around the field", with tight bounds.
-   *
-   * So there are exactly two things that keep the mark awake, and general
-   * activity is not one of them. Reading the page, scrolling it, moving the
-   * pointer anywhere else: all of that is now sleep. That is the point. Sleep
-   * stops being an idle timeout and becomes the mark's RESTING state, which it
-   * has to be for "sleep unless" to mean anything.
-   *
-   *   1. `alert` - the field has focus. Handled in the loop, not here, because
-   *      it is already a prop.
-   *   2. the pointer is inside the field's box plus WAKE_PADDING_PX.
-   *
-   * The rectangle is re-read on every move rather than cached. It is one
-   * `getBoundingClientRect` per pointer event on a page whose layout can change
-   * under the pointer (the search panel opens downward and grows the box it is
-   * measuring), and a cached rectangle would leave a stale wake zone hanging in
-   * the air after the list opened.
+   * Wonder is asleep by default. Only a focused search field, a pointer at the
+   * supplied search surface, or a pointer near Wonder wakes him. General page
+   * activity does not. That keeps `w.w` as his real resting state instead of a
+   * rare timeout somebody has to wait around to discover.
    */
+  const clearDoze = useCallback(() => {
+    if (dozeTimerRef.current !== null) window.clearTimeout(dozeTimerRef.current);
+    dozeTimerRef.current = null;
+  }, []);
+
+  const wake = useCallback(() => {
+    clearDoze();
+    if (sleepingRef.current && shouldYawn(Math.random())) {
+      const now = performance.now();
+      yawnFromRef.current = now + YAWN_DELAY_MS;
+      yawnUntilRef.current = yawnFromRef.current + YAWN_TOTAL_MS;
+    }
+    sleepingRef.current = false;
+  }, [clearDoze]);
+
+  const scheduleDoze = useCallback(() => {
+    clearDoze();
+    if (alertRef.current || proximityRef.current) return;
+    dozeTimerRef.current = window.setTimeout(() => {
+      if (!alertRef.current && !proximityRef.current) {
+        sleepingRef.current = true;
+        glanceRef.current = 0;
+      }
+      dozeTimerRef.current = null;
+    }, TIMING.sleepAfter);
+  }, [clearDoze]);
+
   useEffect(() => {
     if (still) return;
 
-    let timer = 0;
-    const doze = () => {
-      sleepingRef.current = true;
-    };
-    /* Start awake, and stay awake noticeably longer than the ordinary idle
-       gap before the FIRST doze: the mark greeting the page is the front
-       door's first impression, and a visitor still reading the placeholder
-       should not watch it fall asleep mid-sentence. Every doze after a real
-       wake uses the ordinary gap; only the mount is special. */
-    const WAKE_GRACE = 8_000;
-    timer = window.setTimeout(doze, WAKE_GRACE);
-
     const onMove = (e: PointerEvent) => {
-      /* Any pointer motion is presence: the mark wakes for movement anywhere
-         on the page and dozes only once the pointer has genuinely stopped.
-         Hovering a card on the far side of the page is exactly the moment it
-         should be awake and watching. */
+      /* Read both rectangles live. Search results can change the target's
+         height, and a cached rectangle would leave an invisible wake zone. */
+      const markRect = svgRef.current?.getBoundingClientRect() ?? null;
+      const targetRect = attentionTargetRef?.current?.getBoundingClientRect() ?? null;
+      const nearby =
+        nearField(markRect, e.clientX, e.clientY, MARK_WAKE_PADDING_PX) ||
+        nearField(targetRect, e.clientX, e.clientY);
 
-      /* The glance. Sign of the pointer's offset from the mark's own centre,
-         dead-zoned so a pointer near or on the mark reads as being looked AT
-         rather than past. */
-      const svgRect = svgRef.current?.getBoundingClientRect() ?? null;
-      if (svgRect) {
-        const dx = e.clientX - (svgRect.left + svgRect.width / 2);
-        const threshold = Math.max(svgRect.width * 0.75, 90);
-        glanceRef.current = dx > threshold ? 1 : dx < -threshold ? -1 : 0;
+      if (nearby) {
+        proximityRef.current = true;
+        wake();
+
+        /* When the pointer is beside Wonder, the two W's pass their weight in
+           that direction. The dead zone keeps a pointer directly on him from
+           producing a nervous left-right twitch. */
+        if (markRect) {
+          const dx = e.clientX - (markRect.left + markRect.width / 2);
+          const threshold = Math.max(markRect.width * 0.42, 34);
+          glanceRef.current = dx > threshold ? 1 : dx < -threshold ? -1 : 0;
+        }
+        return;
       }
 
-      /* THE YAWN, and the reason it is rolled HERE rather than in the loop: it
-         belongs to the transition from asleep to awake, which happens exactly
-         once per wake. Rolling it per frame while awake would fire one every
-         few milliseconds; rolling it on this edge fires it on one wake in five,
-         which is what "rare" has to mean. */
-      if (sleepingRef.current && shouldYawn(Math.random())) {
-        const now = performance.now();
-        yawnFromRef.current = now + YAWN_DELAY_MS;
-        yawnUntilRef.current = yawnFromRef.current + YAWN_TOTAL_MS;
+      if (proximityRef.current) {
+        proximityRef.current = false;
+        glanceRef.current = 0;
+        scheduleDoze();
       }
-
-      sleepingRef.current = false;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(doze, TIMING.sleepAfter);
     };
 
-    /* `capture`, so a component that stops propagation between the field and
-       the window cannot make the mark narcoleptic. `passive`, because this
-       never calls preventDefault and the page scrolls over it. */
     window.addEventListener("pointermove", onMove, { passive: true, capture: true });
-
     return () => {
-      window.clearTimeout(timer);
       window.removeEventListener("pointermove", onMove, { capture: true });
-      sleepingRef.current = false;
-      yawnFromRef.current = 0;
-      yawnUntilRef.current = 0;
+      clearDoze();
+      proximityRef.current = false;
     };
-  }, [still]);
+  }, [attentionTargetRef, clearDoze, scheduleDoze, still, wake]);
+
+  /* Keyboard focus must wake Wonder even if no pointer ever moved. Once focus
+     leaves, the same short doze delay applies unless the pointer is still near. */
+  useEffect(() => {
+    if (still) return;
+    if (alert) wake();
+    else if (!proximityRef.current) scheduleDoze();
+  }, [alert, scheduleDoze, still, wake]);
 
   /* ---- petting: the stroke detector -------------------------------------- *
    *
@@ -506,7 +528,6 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
     if (still || !settled) return;
 
     satisfiedRef.current = true;
-    satisfiedStartRef.current = performance.now();
     const id = window.setTimeout(() => {
       satisfiedRef.current = false;
     }, TIMING.satisfiedHold);
@@ -523,6 +544,16 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
     let twL: Tween<Pose> = startTween<Pose>(null, POSES[REST_POSE], REST_POSE, now0, 0);
     let twR: Tween<Pose> = startTween<Pose>(null, POSES[REST_POSE], REST_POSE, now0, 0);
     let twM: Tween<MouthPose> = startTween<MouthPose>(null, MOUTH_POSES[REST_POSE], REST_POSE, now0, 0);
+
+    let rigSelection: WonderRigMode | RigClip = "sleeping";
+    let rigModeStarted = now0;
+    let rigBlendStarted = now0;
+    let rigFrom: WonderRigPose = sampleRigClip("sleeping", 0);
+    let rigPose: WonderRigPose = rigFrom;
+    /* The ambient clock advances only while personality is eligible. Search,
+       sleep and reactions pause it, so returning to idle resumes the approved
+       rhythm instead of jumping to a random action after time spent away. */
+    let ambientElapsed = 0;
 
     /* The two ends of the blink's colour shift, read from the RESOLVED theme
        rather than from hex constants, so retinting `src/index.css` retints the
@@ -652,6 +683,31 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
             yawning,
           };
 
+      const ambientEligible =
+        forceRef.current === null &&
+        forceRigClipRef.current === null &&
+        forceRigModeRef.current === null &&
+        ambientRef.current &&
+        wonderAmbientEligible(state);
+      if (ambientEligible) ambientElapsed += dt;
+
+      const nextRigSelection =
+        forceRigClipRef.current ??
+        forceRigModeRef.current ??
+        resolveWonderRigSelection(state, ambientElapsed, ambientRef.current && forceRef.current === null);
+      if (nextRigSelection !== rigSelection) {
+        rigFrom = rigPose;
+        rigSelection = nextRigSelection;
+        rigModeStarted = now;
+        rigBlendStarted = now;
+      }
+      const rigTarget =
+        typeof rigSelection === "string"
+          ? sampleRigClip(rigSelection, now - rigModeStarted)
+          : sampleRig(rigSelection, now - rigModeStarted);
+      const rigBlend = ease("inOutCubic", (now - rigBlendStarted) / RIG_TRANSITION_MS);
+      rigPose = lerpRigPose(rigFrom, rigTarget, rigBlend);
+
       const glyph = resolveEye(state, optsRef.current);
       const [nameL, nameR] = eyePosesFor(glyph, state.petted, state.yawning);
       const nameFace = facePoseFor(glyph, state.petted, state.yawning);
@@ -678,15 +734,25 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
       paint(eyeLRef.current, poseL, EYE_CX_L, elapsed, 0, damp);
       paint(eyeRRef.current, poseR, EYE_CX_R, elapsed, SLOSH_EYE_PHASE, damp);
 
-      /* The mouth scales about the BASELINE, so its foot stays welded to the
-         line a full stop sits on. Scaling about its own centre would drift that
-         foot below the baseline every time the mark reacted to anything. */
+      /* Paint the hierarchy after the shape paths. Root motion carries the
+         complete face; the eye and mouth nodes then add their small delayed
+         reactions in local space. Every spatial animation passes through the
+         same rig transform instead of competing CSS and SVG transforms. */
+      rigRootRef.current?.setAttribute("transform", rigTransform(rigPose.root, MOUTH_CX, BASELINE));
+      eyeLGroupRef.current?.setAttribute("transform", rigTransform(rigPose.leftEye, EYE_CX_L, BASELINE));
+      eyeRGroupRef.current?.setAttribute("transform", rigTransform(rigPose.rightEye, EYE_CX_R, BASELINE));
+
+      /* The expression scale and the mouth bone share one pivot. Combining
+         them before writing the attribute keeps the dot attached while Wonder
+         floats, yawns or bounces. */
       const m = mouthRef.current;
       if (m) {
-        m.setAttribute(
-          "transform",
-          `translate(${MOUTH_CX} ${BASELINE}) scale(${mouth.scale}) translate(${-MOUTH_CX} ${-BASELINE})`
-        );
+        const mouthRig = {
+          ...rigPose.mouth,
+          scaleX: rigPose.mouth.scaleX * mouth.scale,
+          scaleY: rigPose.mouth.scaleY * mouth.scale,
+        };
+        m.setAttribute("transform", rigTransform(mouthRig, MOUTH_CX, BASELINE));
       }
 
       /* The mouth OPENS. One rect, one channel: `mouthGeometry` turns `hollow`
@@ -700,9 +766,11 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
          own duration and not a fade between two states: it has to know it is a
          third of the way in, not merely that it is happening. */
       const yawnT =
-        yawning && yawnUntilRef.current > yawnFromRef.current
-          ? (now - yawnFromRef.current) / (yawnUntilRef.current - yawnFromRef.current)
-          : 0;
+        forced === "yawn"
+          ? Math.min(1, Math.max(0, (now - rigModeStarted) / YAWN_TOTAL_MS))
+          : yawning && yawnUntilRef.current > yawnFromRef.current
+            ? (now - yawnFromRef.current) / (yawnUntilRef.current - yawnFromRef.current)
+            : 0;
 
       const rect = mouthRectRef.current;
       if (rect) {
@@ -761,20 +829,6 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
         }
       }
 
-      /* Breath: a slow uniform scale on the whole mark, deliberately decoupled
-         from every expression above so the two never beat against each other.
-         Its origin is the baseline (see the wrapper's `transformOrigin`), so
-         the mark breathes without ever lifting off the line. */
-      const bump = satisfiedRef.current ? satisfiedBumpScale(now - satisfiedStartRef.current) : 0;
-      /* A yawn IS a breath, so the breath layer joins it: the whole mark
-         rises with the inhale and sinks through the exhale slump, a few
-         percent at most, riding the same envelope as the mouth so the two
-         can never disagree. Zero everywhere outside a yawn. */
-      const yawnBreath = yawnT > 0 && yawnT < 1 ? (yawnStretch(yawnT) - 1) * 0.05 : 0;
-      if (wrapperRef.current) {
-        wrapperRef.current.style.transform = `scale(${breathScale(elapsed) + bump + yawnBreath})`;
-      }
-
       raf = window.requestAnimationFrame(tick);
     };
 
@@ -801,69 +855,70 @@ export const VectorMark: React.FC<VectorMarkProps> = ({
       aria-label={SITE_NAME}
       className="ws-mark select-none pb-2"
     >
-      <div
-        ref={wrapperRef}
-        aria-hidden="true"
-        style={{
-          display: "inline-block",
-          /* The baseline, as a percentage of the canvas height. The breath
-             scales about the line the mark stands on, so its feet stay put. */
-          transformOrigin: `50% ${(BASELINE / CANVAS_H) * 100}%`,
-        }}
-      >
+      <div aria-hidden="true" style={{ display: "inline-block", position: "relative" }}>
         <svg ref={svgRef} viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`} aria-hidden="true" className={className}>
-          {/* BLUSH FIRST, so it sits behind the letters. A blush is under the
-              skin; drawn over the strokes it would read as a highlighter pen.
-              Starts at zero opacity and is only ever raised by the loop. */}
-          <g ref={blushRef} opacity={0} fill={BLUSH[blush]}>
-            {blushCentres().map(([cx, cy]) => (
-              <ellipse key={cx} cx={cx} cy={cy} rx={BLUSH_RX} ry={BLUSH_RY} />
-            ))}
+          <g ref={rigRootRef}>
+            {/* BLUSH FIRST, so it sits behind the letters. A blush is under the
+                skin; drawn over the strokes it would read as a highlighter pen.
+                Starts at zero opacity and is only ever raised by the loop. */}
+            <g ref={blushRef} opacity={0} fill={BLUSH[blush]}>
+              {blushCentres().map(([cx, cy]) => (
+                <ellipse key={cx} cx={cx} cy={cy} rx={BLUSH_RX} ry={BLUSH_RY} />
+              ))}
+            </g>
+
+            {/* Each W has its own bone. The path supplies expression geometry;
+                the containing group supplies local follow-through. */}
+            <g className="fill-none stroke-white" strokeWidth={STROKE} strokeLinecap="round" strokeLinejoin="round">
+              <g ref={eyeLGroupRef}>
+                <path ref={eyeLRef} d={restL} />
+              </g>
+              <g ref={eyeRGroupRef}>
+                <path ref={eyeRRef} d={restR} />
+              </g>
+            </g>
+
+            {/* The mouth is the fourth rig node. Its expression morph and its
+                local motion are composed onto this one group every frame. */}
+            <g ref={mouthRef}>
+              <rect
+                ref={mouthRectRef}
+                className={mouthTone === "accent" ? "fill-emerald-500 stroke-emerald-500" : "fill-white stroke-white"}
+                x={mouthGeometry(0).x}
+                y={mouthGeometry(0).y}
+                width={mouthGeometry(0).width}
+                height={mouthGeometry(0).height}
+                rx={mouthGeometry(0).rx}
+                fillOpacity={1}
+                strokeOpacity={0}
+                strokeWidth={mouthGeometry(0).strokeWidth}
+              />
+            </g>
+
+            {/* The underscores share the root because they are an expression
+                emitted by Wonder, not independent floating scenery. */}
+            <g stroke={BLUSH[blush]} strokeWidth={UNDERSCORE_STROKE} strokeLinecap="round">
+              <line ref={ruleLRef} x1={EYE_CX_L} x2={EYE_CX_L} y1={UNDERSCORE_Y} y2={UNDERSCORE_Y} opacity={0} />
+              <line ref={ruleRRef} x1={EYE_CX_R} x2={EYE_CX_R} y1={UNDERSCORE_Y} y2={UNDERSCORE_Y} opacity={0} />
+            </g>
           </g>
-
-          {/* Colour comes from the theme's own tokens rather than from hex
-              literals: `src/index.css` has no `tailwind.config` and remaps the
-              stock ramps in an `@theme` block, where `white` is the mark's
-              #e8edf3 and Index blue is deliberately kept on the `emerald-*`
-              names. Using the utilities means retinting the theme retints the
-              mark, which a baked-in hex would quietly refuse to do.
-
-              The blush and the zzz are the exception and take real values: they
-              are expression colours that belong to this module alone and have
-              no token, precisely so that nothing else on the site can reach for
-              them. */}
-          <g className="fill-none stroke-white" strokeWidth={STROKE} strokeLinecap="round" strokeLinejoin="round">
-            <path ref={eyeLRef} d={restL} />
-            <path ref={eyeRRef} d={restR} />
-          </g>
-
-          {/* One rect, and it is the only thing here that is not a letter. It
-              scales on the baseline, and on the petted face it trades its fill
-              for an outline in place. It never moves and it never grows. */}
-          <g ref={mouthRef}>
-            <rect
-              ref={mouthRectRef}
-              className={mouthTone === "accent" ? "fill-emerald-500 stroke-emerald-500" : "fill-white stroke-white"}
-              x={mouthGeometry(0).x}
-              y={mouthGeometry(0).y}
-              width={mouthGeometry(0).width}
-              height={mouthGeometry(0).height}
-              rx={mouthGeometry(0).rx}
-              fillOpacity={1}
-              strokeOpacity={0}
-              strokeWidth={mouthGeometry(0).strokeWidth}
-            />
-          </g>
-
-          {/* The underscores. Drawn AFTER the letters so the rule reads as
-              sitting in front of the page rather than tucked behind a foot, and
-              given round caps so a rule at 8% of its length is a dot rather
-              than a sliver. */}
-          <g stroke={BLUSH[blush]} strokeWidth={UNDERSCORE_STROKE} strokeLinecap="round">
-            <line ref={ruleLRef} x1={EYE_CX_L} x2={EYE_CX_L} y1={UNDERSCORE_Y} y2={UNDERSCORE_Y} opacity={0} />
-            <line ref={ruleRRef} x1={EYE_CX_R} x2={EYE_CX_R} y1={UNDERSCORE_Y} y2={UNDERSCORE_Y} opacity={0} />
-          </g>
-
+        </svg>
+        {/* Keep the floating glyphs inside an actual viewport, not SVG overflow
+            that mobile WebKit can clip when an ancestor has a drop shadow.
+            The face and its pointer target keep their original 35 by 12 box. */}
+        <svg
+          aria-hidden="true"
+          viewBox={`${ZZZ_VIEWPORT.x} ${ZZZ_VIEWPORT.y} ${ZZZ_VIEWPORT.width} ${ZZZ_VIEWPORT.height}`}
+          style={{
+            position: "absolute",
+            pointerEvents: "none",
+            left: 0,
+            top: `${ZZZ_VIEWPORT.y / CANVAS_H * 100}%`,
+            width: `${ZZZ_VIEWPORT.width / CANVAS_W * 100}%`,
+            height: `${ZZZ_VIEWPORT.height / CANVAS_H * 100}%`,
+            overflow: "visible",
+          }}
+        >
           {/* The zzz. Three text nodes at the origin, positioned entirely by
               their transform. They inherit the mark's own face from `.ws-mark`
               on the heading, so the z's are set in the same typeface as the

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { stageSeconds, totalSeconds } from "../../planner/time";
 import { estimate, maxHarvestWindow } from "../adapter";
-import { combineCycles, estimateTime, expectedCyclesToFill, optimalHarvestWindow, plantingOutcome, probabilityDoneWithin, roundsForConfidence, sustainedThroughput } from "../model";
+import { combineCycles, estimateTime, expectedCyclesToFill, fillCycleEstimate, optimalHarvestWindow, plantingOutcome, probabilityDoneWithin, roundsForConfidence, sustainedThroughput } from "../model";
 import { atLeastOnce, binomialAtLeast } from "../probability";
 import type { PlantingSpec } from "../types";
 
@@ -350,6 +350,16 @@ describe("expected cycles to fill a plot", () => {
     for (const p of [0.06, 0.2, 0.25, 0.3]) {
       expect(expectedCyclesToFill(1, p, 1)).toBeCloseTo(1 / p, 6);
     }
+  });
+
+  it("keeps the exact spread of a one-spot geometric wait", () => {
+    const fill = fillCycleEstimate(1, 0.3, 1);
+
+    expect(fill.expectedCycles).toBeCloseTo(1 / 0.3, 8);
+    expect(fill.varianceCycles2).toBeCloseTo((1 - 0.3) / (0.3 * 0.3), 8);
+    expect(fill.p50Cycles).toBe(2);
+    expect(fill.p90Cycles).toBe(7);
+    expect(fill.truncated).toBe(false);
   });
 
   it("gives the reported case about six cycles on two spots, and under two on eight", () => {

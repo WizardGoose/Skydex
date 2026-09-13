@@ -45,7 +45,7 @@ export const ago = (ms: number | null | undefined): string => {
 };
 
 export const SOURCE_LABEL: Record<IslandSource, string> = {
-  mod: "companion mod",
+  mod: "Skydex mod",
   api: "Hypixel API",
 };
 

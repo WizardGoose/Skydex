@@ -1,0 +1,271 @@
+.profile-inventory-preview {
+  container: profile-inventory / inline-size;
+}
+
+.profile-inventory-sections {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.profile-inventory-primary-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 41rem), 1fr));
+  min-width: 0;
+  align-items: start;
+  gap: 1rem;
+}
+
+.profile-inventory-primary-row > .profile-inventory-board + .profile-inventory-board {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.profile-inventory-primary-row .profile-inventory-container-card {
+  width: 100%;
+}
+
+.profile-inventory-board {
+  display: grid;
+  min-width: 0;
+  gap: 0.52rem;
+}
+
+.profile-inventory-board + .profile-inventory-board {
+  padding-top: 0.92rem;
+  border-top: 1px solid rgb(255 255 255 / 0.09);
+}
+
+.profile-inventory-board-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 0.08rem;
+}
+
+.profile-inventory-board-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.52rem;
+}
+
+.profile-inventory-board-title > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.profile-inventory-board-title h3 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--profile-label);
+  font-size: 0.75rem;
+  font-weight: 720;
+  letter-spacing: 0.075em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.profile-inventory-board-title small,
+.profile-inventory-board-head > strong {
+  color: var(--profile-muted);
+  font-size: 0.59rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.profile-inventory-board-head > strong {
+  flex: 0 0 auto;
+}
+
+.profile-inventory-board-icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.42rem;
+  background: rgb(3 7 11 / 0.36);
+}
+
+.profile-inventory-container-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.profile-inventory-container-title > span {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.profile-inventory-card-board--exact {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.profile-inventory-card-board--pages {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.profile-inventory-card-board--sets {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-inventory-card-board--bags {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.profile-inventory-card-board--bags > .is-open {
+  grid-column: 1 / -1;
+}
+
+.profile-inventory-card-board--bags > .is-open .profile-inventory-slot-grid {
+  width: max-content;
+  max-width: 100%;
+  grid-template-columns: repeat(9, minmax(2.45rem, 4rem));
+}
+
+.profile-inventory-container-card.is-empty .profile-slot-grid:empty {
+  display: none;
+}
+
+.profile-inventory-container-card.is-empty .profile-slot-surface-head {
+  border-bottom-color: transparent;
+}
+
+.profile-inventory-board--inventory .profile-inventory-container-card,
+.profile-inventory-board--personal_vault .profile-inventory-container-card {
+  width: max-content;
+  max-width: 100%;
+}
+
+.profile-inventory-board--inventory .profile-inventory-slot-grid,
+.profile-inventory-board--personal_vault .profile-inventory-slot-grid {
+  width: max-content;
+  max-width: 100%;
+  grid-template-columns: repeat(9, minmax(2.45rem, 4rem));
+}
+
+.profile-inventory-card-board--balanced {
+  display: block;
+  column-count: 3;
+  column-gap: 0.56rem;
+}
+
+.profile-inventory-card-board--balanced > .profile-inventory-item-set-card {
+  display: inline-grid;
+  width: 100%;
+  margin: 0 0 0.56rem;
+  break-inside: avoid;
+}
+
+.profile-inventory-item-set-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.profile-inventory-item-set-icon {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.profile-inventory-item-set-grid .profile-item-tile-count {
+  right: 0.28rem;
+  bottom: 0.28rem;
+  color: rgb(247 250 252 / 0.96);
+  font-size: 0.62rem;
+  font-weight: 720;
+}
+
+.profile-inventory-slot--hotbar {
+  margin-top: 0.34rem;
+}
+
+.profile-inventory-destination-state {
+  min-height: 4rem;
+  margin: 0;
+  padding: 0.9rem;
+  color: var(--profile-muted);
+  font-size: 0.67rem;
+  line-height: 1.45;
+}
+
+@container profile-inventory (max-width: 52rem) {
+  .profile-inventory-primary-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-inventory-primary-row > .profile-inventory-board + .profile-inventory-board {
+    padding-top: 0.92rem;
+    border-top: 1px solid rgb(255 255 255 / 0.09);
+  }
+
+  .profile-inventory-card-board--pages {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-inventory-card-board--bags,
+  .profile-inventory-card-board--sets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-inventory-card-board--balanced {
+    column-count: 2;
+  }
+}
+
+@container profile-inventory (max-width: 40rem) {
+  .profile-inventory-card-board--pages,
+  .profile-inventory-card-board--bags,
+  .profile-inventory-card-board--sets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-inventory-card-board--balanced {
+    column-count: 1;
+  }
+
+  .profile-inventory-board--inventory .profile-inventory-container-card,
+  .profile-inventory-board--personal_vault .profile-inventory-container-card,
+  .profile-inventory-board--inventory .profile-inventory-slot-grid,
+  .profile-inventory-board--personal_vault .profile-inventory-slot-grid,
+  .profile-inventory-card-board--bags > .is-open .profile-inventory-slot-grid {
+    width: 100%;
+  }
+
+  .profile-inventory-board--inventory .profile-inventory-slot-grid,
+  .profile-inventory-board--personal_vault .profile-inventory-slot-grid,
+  .profile-inventory-card-board--bags > .is-open .profile-inventory-slot-grid {
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .profile-inventory-board-head {
+    align-items: flex-start;
+  }
+
+  .profile-inventory-card-board--pages,
+  .profile-inventory-card-board--bags,
+  .profile-inventory-card-board--sets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-inventory-card-board--balanced {
+    column-count: 1;
+  }
+}

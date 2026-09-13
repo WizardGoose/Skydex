@@ -16,8 +16,8 @@
  * Nothing here is wired into the UI yet, by design.
  *
  * Start with `estimate` in `adapter.ts`; everything else is the machinery
- * underneath it. `constants.ts` carries the citation for every number, and
- * `docs/greenhouse-time-research.md` has the full research write-up.
+ * underneath it. `constants.ts` records the provenance and assumption status
+ * for every number.
  */
 
 export type { DemandSpec, PlantingOutcome, PlantingSpec, TimeEstimate } from "./types";
@@ -30,21 +30,25 @@ export { atLeastOnce, binomialAtLeast, clamp, logGamma, regularisedIncompleteBet
 export {
   combineCycles,
   expectedCyclesToFill,
+  fillCycleEstimate,
   estimateTime,
   expectedRounds,
   optimalHarvestWindow,
   plantingOutcome,
+  probabilityFilledWithin,
   probabilityDoneWithin,
   rollCyclesFor,
   roundsForConfidence,
   sustainedThroughput,
 } from "./model";
+export type { FillCycleEstimate } from "./model";
 
 export { cropSupport, isCropRequirement, isMechanicOnly, spawnChance } from "./spawnChance";
 
 export { estimate, maxHarvestWindow, toPlantingSpec } from "./adapter";
 
 export {
+  BASE_CROP_DECAY_DAYS,
   BASE_STAGE_SECONDS,
   BIOANALYSIS_MULTIPLIER,
   CONTENTION_MODEL,

@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useSearchParams } from "react-router-dom";
 import { BTN_QUIET, FOCUS } from "../../ui/kit";
-import { Wordmark } from "../../ui/Wordmark";
-import { useProfile, type GameMode } from "../../profile/useProfile";
+import { VectorMark } from "../../mark";
+import { useProfileType, type ProfileType } from "../../profile/profileType";
 import { useApiAccess, uuidForName } from "../../island/apiKey";
 import {
   SPAN_COLOURS,
@@ -146,76 +146,40 @@ const Md: React.FC<{ text: string; onNavigate?: () => void }> = ({ text, onNavig
   </ReactMarkdown>
 );
 
-/**
- * Which WORD the reader picked, when two words select the same mode.
- *
- * The Converter card sets `normal`, because that is what a converted profile
- * actually is here: it can use the Bazaar and the Auction House, and Hypixel's
- * API exposes nothing that tells one apart from a normal profile. So the mode
- * store cannot hold this choice; `normal` is all it will ever be able to say,
- * and asking it to remember "but they clicked the other one" would be asking
- * it to hold a distinction the API cannot make.
- *
- * Hence a key of its own, holding a label and nothing else. Reading it can
- * change which card looks selected and can change nothing else.
- *
- * Deliberately NOT exported, and that is the enforcement rather than a promise:
- * a value no other module can import is a value no calculation can branch on.
- */
-const FLAVOUR_KEY = "skydex.mode-flavour.v1";
-const CONVERTER = "converter";
+const MODE_LINE_IRONMAN = "pain :)";
+const MODE_LINE_NORMAL = "I have `green:money`!";
 
-const readFlavour = (): string | null => {
-  try {
-    return localStorage.getItem(FLAVOUR_KEY);
-  } catch {
-    return null;
-  }
+const PROFILE_TYPE_DETAILS: Record<ProfileType, string> = {
+  ironman: "No Bazaar, Auction House or trading. Skydex keeps recommendations to things you can gather, craft or earn.",
+  converter: "A former Ironman with market access. Skydex uses Normal calculations while keeping the identity you chose.",
+  normal: "Market access is available. Skydex can compare buying with crafting when prices are available.",
 };
-
-/** Null erases the key, so the two plain cards leave nothing behind. */
-const writeFlavour = (value: string | null): void => {
-  try {
-    if (value === null) localStorage.removeItem(FLAVOUR_KEY);
-    else localStorage.setItem(FLAVOUR_KEY, value);
-  } catch {
-    /* A browser refusing storage costs the joke label on the next visit and
-       nothing else, because nothing else ever reads this. */
-  }
-};
-
-const MODE_LINE_IRONMAN = "Self-sufficient: everything is gathered";
-const MODE_LINE_NORMAL = "Bazaar and Auction House allowed";
 
 const ModePicker: React.FC<{ block: Extract<TourBlock, { kind: "mode-picker" }> }> = ({ block }) => {
-  const { mode, setMode } = useProfile();
-  /* Read once, on mount. The reader's own last click is the only thing that
-     ever writes this, so there is nothing to stay in step with. */
-  const [flavour, setFlavour] = useState(readFlavour);
+  const { profileType, setProfileType } = useProfileType();
 
-  /* Each card carries the mode it sets, the label it leaves behind AND its
-     identity colour, so one click handler and one style rule serve all three,
-     and the two plain cards clear the label by saying null rather than by
-     remembering to.
+  /* Each card carries its displayed profile type and identity colour, so one
+     click handler and one style rule serve all three. The shared profile-type
+     hook keeps Converter's label separate from its Normal calculation mode.
 
      The tones are read off SPAN_COLOURS rather than written as hexes. Two of
      the three ARE theme variables in that table, so a copy would be a second
      author for a colour the palette already owns and would sit out the next
      retint. Naming the entry is also the honest statement of what these are:
      the tour's own palette, used again. */
-  const cards: { mode: GameMode; flavour: string | null; label: string; line: string; tone: string }[] = [
+  const cards: { profileType: ProfileType; label: string; line: string; detail: string; tone: string }[] = [
     {
-      mode: "ironman",
-      flavour: null,
+      profileType: "ironman",
       label: "Ironman",
       line: block.ironman ?? MODE_LINE_IRONMAN,
+      detail: PROFILE_TYPE_DETAILS.ironman,
       tone: SPAN_COLOURS.blue,
     },
     {
-      mode: "normal",
-      flavour: null,
+      profileType: "normal",
       label: "Normal",
       line: block.normal ?? MODE_LINE_NORMAL,
+      detail: PROFILE_TYPE_DETAILS.normal,
       tone: SPAN_COLOURS.green,
     },
   ];
@@ -223,60 +187,44 @@ const ModePicker: React.FC<{ block: Extract<TourBlock, { kind: "mode-picker" }> 
     /* Converter sits BETWEEN Ironman and Normal, because that is where a
        converted profile technically lives: born ironman, market access now. */
     cards.splice(1, 0, {
-      mode: "normal",
-      flavour: CONVERTER,
+      profileType: "converter",
       label: "Converter",
       line: block.converter,
+      detail: PROFILE_TYPE_DETAILS.converter,
       tone: SPAN_COLOURS.gold,
     });
   }
 
-  /* The joke card is lit only when it is on screen to be lit. A stored label
-     from a tour that no longer writes the attribute leaves Normal selected,
-     which is the truthful reading: the mode never stopped being normal. */
-  const converterOn = mode === "normal" && flavour === CONVERTER && block.converter !== null;
-
   return (
-    <div className={`grid gap-2 ${block.converter !== null ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-      {cards.map((card) => {
-        const on =
-          card.flavour === CONVERTER ? converterOn : mode === card.mode && !(card.mode === "normal" && converterOn);
+    <div className="rounded-md border border-white/12 bg-black/15" role="group" aria-label="Profile type">
+      {cards.map((card, index) => {
+        const on = profileType === card.profileType;
         return (
           <button
             key={card.label}
             type="button"
             aria-pressed={on}
-            onClick={() => {
-              setMode(card.mode);
-              writeFlavour(card.flavour);
-              setFlavour(card.flavour);
-            }}
-            className={`cursor-pointer rounded-md border p-3 text-left transition-colors ${FOCUS} ${
-              on ? "" : "border-white/12 bg-white/5 hover:border-white/20 hover:bg-white/8"
-            }`}
-            /* Selection is the card's own colour rather than one shared
-               emerald, so which mode is chosen reads from across the step
-               without looking at the words. Alpha comes from `color-mix`
-               because two of the three tones are theme variables, and a
-               variable cannot take the `#rrggbbaa` suffix a literal can. The
-               unselected branch stays on the neutral utilities: giving every
-               card a tinted resting state would leave nothing for the
-               selected one to say. */
-            style={
-              on
-                ? {
-                    borderColor: `color-mix(in srgb, ${card.tone} 55%, transparent)`,
-                    backgroundColor: `color-mix(in srgb, ${card.tone} 12%, transparent)`,
-                  }
-                : undefined
-            }
+            onClick={() => setProfileType(card.profileType)}
+            className={`relative grid w-full cursor-pointer gap-x-4 gap-y-1 px-3 py-2.5 text-left transition-colors sm:grid-cols-[9.5rem_minmax(0,1fr)] ${FOCUS} ${
+              index > 0 ? "border-t border-white/10" : ""
+            } ${on ? "bg-white/5" : "hover:bg-white/5"}`}
           >
-            {/* The title wears its colour whether or not the card is chosen:
-                the tone is the mode's identity, not a selection cue. */}
-            <div className="text-[13px] font-semibold" style={{ color: card.tone }}>
-              {card.label}
-            </div>
-            <div className="mt-0.5 text-[11px] leading-snug text-slate-300">{card.line}</div>
+            {on && (
+              <span
+                aria-hidden="true"
+                className="absolute bottom-2 left-0 top-2 w-0.5 rounded-r-full"
+                style={{ backgroundColor: card.tone }}
+              />
+            )}
+            <span>
+              <span className="block text-[13px] font-semibold" style={{ color: card.tone }}>
+                {card.label}
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-slate-300">
+                <Inline raw={card.line} />
+              </span>
+            </span>
+            <span className="text-[11px] leading-relaxed text-slate-400">{card.detail}</span>
           </button>
         );
       })}
@@ -288,10 +236,10 @@ const ModePicker: React.FC<{ block: Extract<TourBlock, { kind: "mode-picker" }> 
  * The signature line. Styled as a dotted line to sign rather than as a form
  * field, because that is the joke the authoring format exists to permit.
  *
- * A KNOWN name saves for real; the registry is deliberately tiny and
- * explicit. "username" writes the same Minecraft name the Settings page uses.
- * An unknown or missing name still renders and remembers nothing, which the
- * format doc says out loud.
+ * A KNOWN name saves for real; the registry is deliberately tiny and explicit.
+ * "username" writes the same Minecraft name the Settings page uses. An unknown
+ * or missing name still renders and remembers nothing, which the format doc says
+ * out loud.
  */
 /* The strokes line= can ask for, as whole literal utilities. */
 const LINE_CLASS: Record<InputLine, string> = {
@@ -432,9 +380,11 @@ export const TourStepView: React.FC<{
   /** Which step this is and of how many, for an authored [page] counter. */
   index?: number;
   count?: number;
+  /** The live tour lifts Wonder above the dialogue surface; previews may keep it inline. */
+  renderWordmark?: boolean;
   /** Called when a block navigates away or opens settings: the tour closes. */
   onLeave?: () => void;
-}> = ({ step, index = 0, count = 1, onLeave }) => (
+}> = ({ step, index = 0, count = 1, renderWordmark = true, onLeave }) => (
   <div className="space-y-4">
     {step.title && (
       <h3 className="text-[16px] text-slate-50" style={{ fontFamily: "var(--font-chrome)", fontWeight: 800 }}>
@@ -444,7 +394,16 @@ export const TourStepView: React.FC<{
     {step.blocks.map((block, i) => {
       switch (block.kind) {
         case "wordmark":
-          return <Wordmark key={i} size={38} />;
+          if (!renderWordmark) return null;
+          return (
+            <div key={i} className="flex justify-center [filter:drop-shadow(0_5px_18px_rgb(7_8_10/0.72))]" aria-label="Wonder">
+              <VectorMark
+                alert
+                thinking={false}
+                className="aspect-[35/12] w-[10rem] overflow-visible sm:w-[12rem]"
+              />
+            </div>
+          );
         case "mode-picker":
           return <ModePicker key={i} block={block} />;
         case "settings-button":

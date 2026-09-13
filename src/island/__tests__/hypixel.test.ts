@@ -3,9 +3,11 @@ import {
   apiFeed,
   chooseProfile,
   dash,
+  fetchProfileMembers,
   fetchProfiles,
   looksLikeUuid,
   parseProfiles,
+  readMuseumProfile,
   readSacks,
   shouldAutoRefresh,
   undash,
@@ -26,6 +28,21 @@ const UUID = "b876ec32e396476ba1158438d83c67d4";
 const DASHED = "b876ec32-e396-476b-a115-8438d83c67d4";
 
 const profilesPayload = (profiles: unknown[]) => ({ success: true, profiles });
+
+const gatewayPayload = (profiles: unknown[]) => {
+  const fetchedAt = Date.now();
+  return {
+    success: true,
+    uuid: UUID,
+    profileId: null,
+    fetchedAt,
+    resources: {
+      profiles: { fetchedAt, cache: "miss", data: profilesPayload(profiles) },
+      garden: null,
+      museum: null,
+    },
+  };
+};
 
 afterEach(() => resetHypixelTransportForTesting());
 
@@ -59,6 +76,29 @@ describe("readSacks", () => {
       sacks_counts: { GOOD: 12, NEGATIVE: -1, NOT_A_NUMBER: "lots", NULLISH: null, STRINGY: "34" },
     });
     expect(out).toStrictEqual({ GOOD: 12, STRINGY: 34 });
+  });
+});
+
+describe("readMuseumProfile", () => {
+  const profile = { value: 42, appraisal: true, items: {}, special: [] };
+
+  it("reads the current documented profile envelope", () => {
+    expect(readMuseumProfile({ success: true, profile }, UUID)).toBe(profile);
+  });
+
+  it("keeps supporting the member envelope and uuid normalisation", () => {
+    const member = { value: 84, items: {} };
+    expect(readMuseumProfile({ success: true, members: { [DASHED]: member } }, UUID)).toBe(member);
+  });
+
+  it("prefers the matching member when both envelopes are present", () => {
+    const member = { value: 126, items: {} };
+    expect(readMuseumProfile({ profile, members: { [UUID]: member } }, DASHED)).toBe(member);
+  });
+
+  it("returns null when Hypixel shared no Museum profile", () => {
+    expect(readMuseumProfile({ success: true }, UUID)).toBeNull();
+    expect(readMuseumProfile(null, UUID)).toBeNull();
   });
 });
 
@@ -233,21 +273,10 @@ describe("fetchProfiles wire format", () => {
 
     globalThis.fetch = ((url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(url), init });
-      const body = profilesPayload([
+      const body = gatewayPayload([
         { profile_id: "p1", cute_name: "Papaya", selected: true, members: { [UUID]: { sacks_counts: { OAK_LOG: 7 } } } },
       ]);
-      const fetchedAt = Date.now();
-      return Promise.resolve(Response.json({
-        success: true,
-        uuid: UUID,
-        profileId: null,
-        fetchedAt,
-        resources: {
-          profiles: { fetchedAt, cache: "miss", data: body },
-          garden: null,
-          museum: null,
-        },
-      }));
+      return Promise.resolve(Response.json(body));
     }) as typeof fetch;
 
     try {
@@ -305,6 +334,43 @@ describe("fetchProfiles wire format", () => {
       if (res.ok) return;
       expect(res.error.message).not.toContain(SECRET);
       expect(res.error.message).toBe("Skydex could not authenticate with Hypixel.");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+});
+
+describe("fetchProfileMembers shared profile fields", () => {
+  it("keeps Community Upgrades, bank activity, and co-op size on the selected profile", async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (() => Promise.resolve(Response.json(gatewayPayload([{
+      profile_id: "p1",
+      cute_name: "Pomegranate",
+      selected: true,
+      community_upgrades: { upgrade_states: [{ upgrade: "minion_slots", tier: 2 }] },
+      banking: {
+        balance: 12_345,
+        transactions: [{ timestamp: 100, action: "DEPOSIT", initiator_name: "Wizard", amount: 500 }],
+      },
+      members: {
+        [UUID]: { player_data: {} },
+        friend: { player_data: {} },
+      },
+    }])))) as typeof fetch;
+
+    try {
+      const result = await fetchProfileMembers({ uuid: UUID, name: "Steve" }, "test-key");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value[0]).toMatchObject({
+        profileId: "p1",
+        bankBalance: 12_345,
+        memberCount: 2,
+      });
+      expect(result.value[0].communityUpgrades).toMatchObject({ upgrade_states: [{ upgrade: "minion_slots", tier: 2 }] });
+      expect(result.value[0].bankTransactions).toEqual([
+        expect.objectContaining({ action: "DEPOSIT", initiator_name: "Wizard", amount: 500 }),
+      ]);
     } finally {
       globalThis.fetch = original;
     }

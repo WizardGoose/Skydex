@@ -4,7 +4,8 @@ import type { SavedLayout } from "../../types/layout";
 import { getGroundImagePath } from "../../types/greenhouse";
 import { useGreenhouseData } from "../../context";
 import { CropImage } from "../shared";
-import { WikiLink, wikiArticleUrl } from "../../../ui/WikiLink";
+import { WikiLink } from "../../../ui/WikiLink";
+import { wikiArticleUrl } from "../../../ui/wikiUrl";
 import {
   buildLayoutPreviewModel,
   buildLayoutPreviewStatus,
@@ -69,7 +70,8 @@ const RequirementList: React.FC<{
 export const DesignerLayoutPreview: React.FC<{
   layout: DesignerLayoutSnapshot;
   className?: string;
-}> = ({ layout, className = "" }) => {
+  compact?: boolean;
+}> = ({ layout, className = "", compact = false }) => {
   const { mutations, getCropDef, getMutationDef } = useGreenhouseData();
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
   const model = useMemo(
@@ -97,9 +99,9 @@ export const DesignerLayoutPreview: React.FC<{
   const cropName = (id: string) => getCropDef(id)?.name ?? getMutationDef(id)?.name ?? id;
 
   return (
-    <div className={`grid gap-5 md:grid-cols-[minmax(22rem,26rem)_minmax(0,1fr)] md:items-start ${className}`}>
+    <div className={`${compact ? "greenhouse-loadout-preview grid items-start gap-4" : "grid gap-5 md:grid-cols-[minmax(22rem,26rem)_minmax(0,1fr)] md:items-start"} ${className}`}>
       <div
-        className="relative aspect-square w-full overflow-hidden rounded-md border border-white/12 bg-black/30 p-1 shadow-inner"
+        className={`relative aspect-square w-full overflow-hidden rounded-md border border-white/12 bg-black/30 p-1 shadow-inner${compact ? " greenhouse-loadout-preview-grid" : ""}`}
         role="img"
         aria-label={`10 by 10 layout preview with ${layout.inputs.length} input crops and ${layout.targets.length} target mutations`}
       >
@@ -193,7 +195,7 @@ export const DesignerLayoutPreview: React.FC<{
             )}
           </div>
         </div>
-        <div className="grid min-h-36 gap-3 py-3 sm:grid-cols-[7rem_minmax(0,1fr)]" aria-live="polite">
+        <div className={`grid gap-3 py-3 sm:grid-cols-[7rem_minmax(0,1fr)]${compact ? " min-h-0" : " min-h-36"}`} aria-live="polite">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Mutation status</span>
           {hoveredTarget ? (
             <div data-preview-status-target={hoveredTarget.id} className="space-y-3">

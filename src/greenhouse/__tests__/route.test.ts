@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { GreenhouseHashRoute } from "../GreenhouseHashRoute";
 import {
   greenhouseHref,
+  greenhouseTargetFromLocation,
   legacyGreenhouseHref,
   parseGreenhouseHash,
 } from "../route";
@@ -34,9 +35,20 @@ describe("Greenhouse fragment routes", () => {
     );
   });
 
+  it("reads Planner targets from canonical fragment links and standard queries", () => {
+    expect(greenhouseTargetFromLocation("#planner?target=rose%20dragon")).toBe(
+      "rose dragon",
+    );
+    expect(greenhouseTargetFromLocation("#planner", "?target=rose_dragon_pet")).toBe(
+      "rose_dragon_pet",
+    );
+    expect(greenhouseTargetFromLocation("#solver?target=ignore-me")).toBeNull();
+    expect(greenhouseTargetFromLocation("#planner?target=%E0%A4%A")).toBeNull();
+  });
+
   it("maps only obsolete nested Greenhouse paths to their fragment equivalents", () => {
-    expect(legacyGreenhouseHref("/greenhouse/planner", "")).toBe(
-      "/greenhouse#planner",
+    expect(legacyGreenhouseHref("/greenhouse/planner", "?target=soggybud")).toBe(
+      "/greenhouse#planner?target=soggybud",
     );
     expect(legacyGreenhouseHref("/greenhouse/designer", "?layout=AbC_-09")).toBe(
       "/greenhouse#designer?layout=AbC_-09",
@@ -54,21 +66,21 @@ describe("GreenhouseHashRoute", () => {
     ["Designer", "/greenhouse#designer", "designer"],
     ["the first Designer payload", "/greenhouse#designer?layout=first", "designer"],
     ["the next Designer payload", "/greenhouse#designer?layout=second", "designer"],
-  ])("selects %s from the Router location on load or history restoration", (_name, entry, label) => {
-    const Page = ({ pageLabel }: { pageLabel: string }) => createElement("span", null, pageLabel);
+  ])("keeps the old %s link on the one greenhouse workspace", (_name, entry, label) => {
+    const Workspace = ({ focusTool }: { focusTool: string }) =>
+      createElement("section", { "data-greenhouse-workspace": "", "data-focus-tool": focusTool });
     const markup = renderToStaticMarkup(
       createElement(
         MemoryRouter,
         { initialEntries: [entry] },
         createElement(GreenhouseHashRoute, {
-          PlannerPage: () => createElement(Page, { pageLabel: "planner" }),
-          SolverPage: () => createElement(Page, { pageLabel: "solver" }),
-          DesignerPage: () => createElement(Page, { pageLabel: "designer" }),
+          Workspace,
         }),
       ),
     );
 
-    expect(markup).toContain(label);
+    expect(markup.match(/data-greenhouse-workspace/g)).toHaveLength(1);
+    expect(markup).toContain(`data-focus-tool="${label}"`);
   });
 
   it("uses the Router hash when internal navigation differs from the native hash", () => {
@@ -76,21 +88,44 @@ describe("GreenhouseHashRoute", () => {
     // without dispatching hashchange. The controller must follow the router's
     // location, not retain the prior native hash.
     vi.stubGlobal("window", { location: { hash: "#planner" } });
-    const Page = ({ label }: { label: string }) => createElement("span", null, label);
+    const Workspace = ({ focusTool }: { focusTool: string }) =>
+      createElement("span", { "data-focus-tool": focusTool }, focusTool);
 
     const markup = renderToStaticMarkup(
       createElement(
         MemoryRouter,
         { initialEntries: ["/greenhouse#solver"] },
         createElement(GreenhouseHashRoute, {
-          PlannerPage: () => createElement(Page, { label: "planner" }),
-          SolverPage: () => createElement(Page, { label: "solver" }),
-          DesignerPage: () => createElement(Page, { label: "designer" }),
+          Workspace,
         }),
       ),
     );
 
     expect(markup).toContain("solver");
-    expect(markup).not.toContain("planner");
+    expect(markup).toContain('data-focus-tool="solver"');
+  });
+
+  it("forwards a decoded target to the mounted workspace adapter", () => {
+    const Workspace = ({
+      focusTool,
+      linkedTarget,
+    }: {
+      focusTool: string;
+      linkedTarget: string | null;
+    }) => createElement("span", {
+      "data-focus-tool": focusTool,
+      "data-linked-target": linkedTarget ?? "",
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/greenhouse#planner?target=rose%5Fdragon%5Fpet"] },
+        createElement(GreenhouseHashRoute, { Workspace }),
+      ),
+    );
+
+    expect(markup).toContain('data-focus-tool="planner"');
+    expect(markup).toContain('data-linked-target="rose_dragon_pet"');
   });
 });

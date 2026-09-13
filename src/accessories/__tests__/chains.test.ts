@@ -224,7 +224,12 @@ describe("buildChainIndex with id edges", () => {
       { fromId: "SHADY_RING", toId: "SOME_UNKNOWN_ID" },
       { fromId: "SOME_UNKNOWN_ID", toId: "SEAL_OF_THE_FAMILY" },
     ]);
-    expect(chains).toStrictEqual({});
+    // The invalid supplied edges vanish; the catalogue's verified stable line
+    // remains independently of them.
+    expect(chains).toStrictEqual({
+      CROOKED_ARTIFACT: ["SHADY_RING"],
+      SEAL_OF_THE_FAMILY: ["CROOKED_ARTIFACT", "SHADY_RING"],
+    });
   });
 
   it("terminates on a cycle arriving through the id door", () => {
@@ -250,7 +255,10 @@ describe("buildChainIndex", () => {
     // One such name exists in the live data. Inventing an id for it would be
     // worse than losing the edge.
     const chains = buildChainIndex([{ from: CROOKED, to: "Some Item That Does Not Exist" }], catalogue);
-    expect(chains).toStrictEqual({});
+    expect(chains).toStrictEqual({
+      CROOKED_ARTIFACT: ["SHADY_RING"],
+      SEAL_OF_THE_FAMILY: ["CROOKED_ARTIFACT", "SHADY_RING"],
+    });
   });
 
   it("terminates on a cycle rather than hanging the page", () => {
@@ -263,5 +271,43 @@ describe("buildChainIndex", () => {
       catalogue
     );
     expect(Object.keys(chains).length).toBeGreaterThan(0);
+  });
+});
+
+describe("stable numeric progression families", () => {
+  const numericIndex: ItemIndex = {
+    master1: item("Master Skull - Tier 1", "MASTER_SKULL_TIER_1", "COMMON"),
+    master2: item("Master Skull - Tier 2", "MASTER_SKULL_TIER_2", "COMMON"),
+    master3: item("Master Skull - Tier 3", "MASTER_SKULL_TIER_3", "UNCOMMON"),
+    campfire1: item("Campfire Initiate Badge I", "CAMPFIRE_TALISMAN_1", "COMMON"),
+    campfire2: item("Campfire Initiate Badge II", "CAMPFIRE_TALISMAN_2", "COMMON"),
+  };
+  const numericCatalogue = buildAccessoryCatalogue(accessoriesFromIndex(numericIndex), numericIndex);
+
+  it("folds Master Skull and Campfire rungs without relying on wiki text", () => {
+    const chains = buildChainIndex([], numericCatalogue);
+    expect(chains.MASTER_SKULL_TIER_3).toEqual(["MASTER_SKULL_TIER_2", "MASTER_SKULL_TIER_1"]);
+    expect(chains.CAMPFIRE_TALISMAN_2).toEqual(["CAMPFIRE_TALISMAN_1"]);
+  });
+});
+
+describe("stable named state lines", () => {
+  const piggyIndex: ItemIndex = {
+    piggy: item("Piggy Bank", "PIGGY_BANK", "UNCOMMON"),
+    cracked: item("Cracked Piggy Bank", "CRACKED_PIGGY_BANK", "UNCOMMON"),
+    broken: item("Broken Piggy Bank", "BROKEN_PIGGY_BANK", "UNCOMMON"),
+  };
+  const piggyCatalogue = buildAccessoryCatalogue(accessoriesFromIndex(piggyIndex), piggyIndex);
+
+  it("treats cracked and broken Piggy Banks as states of one accessory", () => {
+    const chains = buildChainIndex([], piggyCatalogue);
+    expect(chains.BROKEN_PIGGY_BANK).toEqual(["CRACKED_PIGGY_BANK", "PIGGY_BANK"]);
+  });
+
+  it("does not list a cracked Piggy Bank as missing when the broken state is owned", () => {
+    const chains = buildChainIndex([], piggyCatalogue);
+    const sets = collapseOwned(["BROKEN_PIGGY_BANK"], piggyCatalogue, chains);
+    expect(sets.covered.has("CRACKED_PIGGY_BANK")).toBe(true);
+    expect(sets.covered.has("PIGGY_BANK")).toBe(true);
   });
 });

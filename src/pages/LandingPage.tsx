@@ -1,6 +1,6 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { ArrowRight, CircleUserRound, Gem, PackageSearch, Sprout } from "lucide-react";
 import { Bar, FOCUS, NUM } from "../ui/kit";
 import { usePlannerState } from "../greenhouse/planner/usePlannerState";
 import { gateStock, planProgress, progressPctLabel, snapshotRows } from "../greenhouse/planner/planEstimates";
@@ -8,29 +8,27 @@ import { useGreenhouseDataset } from "../greenhouse/data/datasetStore";
 import { useOwned } from "../inventory";
 import { formatDuration } from "../greenhouse/planner/time";
 import { UniversalSearch, useSiteIndex } from "../search";
+import { summarizeSearchCoverage } from "../search/coverage";
 import { pickSaying, prepareSayings } from "../sayings";
 import { VectorMark } from "../mark";
+import { ProfileLookupForm } from "../profile/ProfileLookupForm";
+import { legacyProfileRedirectTarget } from "../routeRedirect";
 
 /**
  * The front door.
  *
- * Centred mark, one field, and ONE small card under it. The first merge
- * went too far toward a dashboard; the corrected rule is that the mark sits
- * at the centre of the page, anything extra goes underneath the search bar,
- * and a massive continue dashboard makes no logical sense on a front
- * door. So the resume affordance is a single compact card
- * the width of the search field: the grind's name, how far through it you
- * are, the model's own time-left figure, and a door into the Planner, which
- * is where the full board lives.
+ * The mark and Universal Search remain the front door. Their composition now
+ * follows the Profile revamp's glass, type and colour language without copying
+ * Profile's split avatar layout. Wonder remains the front door: centred above
+ * the centred search field, with the compact toolkit index underneath.
  *
  * PLACEHOLDER
  * -----------
- * "What are we grinding?" is still the house line and still the first thing
- * most visits see. It is no longer the only thing: the field draws from
- * `src/sayings`, which crosses twenty-three sentence templates with the live
- * search index and produces several million distinct questions, all of them
- * grammatical by construction rather than by luck. The house line keeps four
- * times the weight of any other template, so the voice does not drift.
+ * The empty field is Wonder speaking, not a carousel of search-index nouns.
+ * `src/sayings` crosses four grammar-safe sentence families with Wonder's own
+ * vocabulary, plus a small set of recognisable signature lines. The result is
+ * more than a million complete sentences without ever guessing at agreement,
+ * articles, spacing, or punctuation.
  *
  * A saying is drawn once per visit and once per focus. It is never redrawn
  * while someone is typing, and that is structural rather than careful: a
@@ -40,26 +38,8 @@ import { VectorMark } from "../mark";
  * comes back, which is the moment they are looking at the empty field again.
  */
 
-/**
- * The placeholder's vocabulary, taken from the live search index.
- *
- * Two decks per visit and no more. `names` stays null for the whole of the
- * loading phase, which keeps its identity stable while the three sources land
- * one after another, so the deck is built exactly twice: once empty, and once
- * for real. Without that the field would draw a new question three times in
- * the first second, which is the sort of thing nobody can name but everybody
- * notices.
- *
- * Page names are dropped. They are excellent search results and poor sentence
- * subjects, and "Back to the Greenhouse Planner mines?" is the proof.
- */
-const useSayingDeck = (index: { key: string; name: string }[], loading: boolean) => {
-  const names = useMemo(
-    () => (loading ? null : index.filter((e) => !e.key.startsWith("site:")).map((e) => e.name)),
-    [loading, index]
-  );
-  return useMemo(() => prepareSayings(names ?? []), [names]);
-};
+/** Wonder's vocabulary is static, so the grammar deck is prepared once. */
+const WONDER_SAYINGS = prepareSayings();
 
 /**
  * The one card of the visitor's own data the page shows.
@@ -106,12 +86,22 @@ const useResumeCard = (): {
 };
 
 export const LandingPage: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const legacyProfileTarget = legacyProfileRedirectTarget(location);
   const { index, loading } = useSiteIndex();
-  const deck = useSayingDeck(index, loading);
+  const coverage = useMemo(() => summarizeSearchCoverage(index), [index]);
   const resume = useResumeCard();
+  const coverageTotal = coverage.items + coverage.greenhouse + coverage.shards;
+  const coverageAreas = [
+    { label: "Items", value: coverage.items, to: "/recipes", tone: "items", Icon: PackageSearch },
+    { label: "Greenhouse", value: coverage.greenhouse, to: "/greenhouse", tone: "greenhouse", Icon: Sprout },
+    { label: "Shards", value: coverage.shards, to: "/shards", tone: "shards", Icon: Gem },
+  ];
 
   const [alert, setAlert] = useState(false);
   const [thinking, setThinking] = useState(false);
+  const searchRef = useRef<HTMLDivElement | null>(null);
 
   /*
    * The one uncertain number in the whole saying pipeline, kept at the edge
@@ -123,8 +113,8 @@ export const LandingPage: React.FC = () => {
   const [focuses, setFocuses] = useState(0);
 
   const placeholder = useMemo(
-    () => pickSaying(deck, (visit + focuses * 0x9e3779b1) >>> 0),
-    [deck, visit, focuses]
+    () => pickSaying(WONDER_SAYINGS, (visit + focuses * 0x9e3779b1) >>> 0),
+    [visit, focuses]
   );
 
   /* Stable identities: the search reports these from an effect, so a new
@@ -137,56 +127,105 @@ export const LandingPage: React.FC = () => {
   }, []);
   const onBusyChange = useCallback((v: boolean) => setThinking(v), []);
 
+  if (legacyProfileTarget !== null) {
+    return <Navigate to={legacyProfileTarget} replace />;
+  }
+
   return (
-    /*
-     * `100dvh` minus the shell, never `h-screen`: on iOS the address bar
-     * changes the viewport height mid scroll and `vh` does not follow it,
-     * which is what makes a hero jump. Content sits a little above true
-     * centre, because the results list opens downwards and a field centred
-     * exactly would put eight rows of it against the bottom of a short
-     * window.
-     */
-    <div className="flex min-h-[calc(100dvh-12rem)] flex-col items-center justify-center px-1 pb-16 md:min-h-[calc(100dvh-11rem)] md:pb-24">
-      {/* A soft cast shadow grounds the mark on whatever backdrop is behind
-          it now that the photo shows sharp here. */}
-      <div className="[filter:drop-shadow(0_4px_18px_rgb(7_8_10/0.7))]">
-        <VectorMark alert={alert} thinking={thinking} />
-      </div>
+    <div className="sd-toolkit home-toolkit">
+      <section
+        className="home-toolkit-workspace"
+        aria-label="Skydex toolkit"
+      >
+        <div className="home-toolkit-wonder" aria-label="Skydex companion">
+          <VectorMark
+            alert={alert}
+            thinking={thinking}
+            attentionTargetRef={searchRef}
+            ambient
+            className="aspect-[35/12] w-[13rem] overflow-visible sm:w-[16rem] lg:w-[18rem]"
+          />
+        </div>
 
-      <div className="mt-7 w-full max-w-[34rem] md:mt-9">
-        <UniversalSearch
-          index={index}
-          indexLoading={loading}
-          placeholder={placeholder}
-          onFocusChange={onFocusChange}
-          onBusyChange={onBusyChange}
-          className="w-full"
-        />
-      </div>
+        <div ref={searchRef} className="home-toolkit-search">
+          <UniversalSearch
+            index={index}
+            indexLoading={loading}
+            placeholder={placeholder}
+            onFocusChange={onFocusChange}
+            onBusyChange={onBusyChange}
+            className="w-full"
+          />
+        </div>
 
-      {resume && (
-        <Link
-          to="/greenhouse#planner"
-          className={`group mt-5 flex w-full max-w-[34rem] flex-col gap-1.5 rounded-md border border-white/12 bg-gradient-to-b from-slate-900/55 to-slate-900/45 px-3.5 py-2.5 backdrop-blur-[18px] backdrop-saturate-[1.15] transition-colors hover:border-white/22 ${FOCUS}`}
-        >
-          <span className="flex items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-100">{resume.label}</span>
-            <span className={`shrink-0 text-[13px] ${NUM} text-emerald-300`}>{resume.pct}%</span>
-          </span>
-          <Bar done={resume.done} owned={resume.owned} total={resume.total} />
-          <span className="flex items-center gap-2 text-[11px] text-slate-500">
-            {resume.secondsLeft !== null && (
-              <span className={NUM}>
-                {resume.secondsLeft > 0 ? `~${formatDuration(resume.secondsLeft)} left` : "done"}
-              </span>
-            )}
-            <span className="ml-auto inline-flex items-center gap-1 transition-colors group-hover:text-emerald-300">
-              Continue in the Planner
-              <ArrowRight className="h-3 w-3" />
+        <section className="home-profile-viewer sd-toolkit-glass" aria-labelledby="home-profile-viewer-title">
+          <div className="home-profile-viewer-copy">
+            <span className="home-profile-viewer-icon" aria-hidden><CircleUserRound /></span>
+            <span>
+              <small>Profile Viewer</small>
+              <strong id="home-profile-viewer-title">View another player</strong>
             </span>
-          </span>
-        </Link>
-      )}
+          </div>
+          <ProfileLookupForm onSubmit={(player) => navigate(`/pv/${encodeURIComponent(player)}`)} compact />
+        </section>
+
+        {resume && (
+          <Link to="/greenhouse#planner" className={"home-toolkit-resume sd-toolkit-glass " + FOCUS}>
+            <span className="home-toolkit-eyebrow">Current grind</span>
+            <span className="home-toolkit-resume-title">
+              <strong>{resume.label}</strong>
+              <b className={NUM}>{resume.pct}%</b>
+            </span>
+            <Bar done={resume.done} owned={resume.owned} total={resume.total} />
+            <span className="home-toolkit-resume-meta">
+              {resume.secondsLeft !== null && (
+                <span className={NUM}>
+                  {resume.secondsLeft > 0 ? "~" + formatDuration(resume.secondsLeft) + " left" : "done"}
+                </span>
+              )}
+              <span>
+                Continue in the Planner
+                <ArrowRight aria-hidden />
+              </span>
+            </span>
+          </Link>
+        )}
+
+        <section className="home-toolkit-library sd-toolkit-glass" aria-label="Search coverage" aria-busy={loading}>
+          <header>
+            <div>
+              <span className="home-toolkit-eyebrow">Toolkit index</span>
+              <h2>Search coverage</h2>
+            </div>
+            <strong className={NUM}>
+              {loading ? "Indexing…" : coverageTotal.toLocaleString() + " searchable"}
+            </strong>
+          </header>
+
+          <div className="home-toolkit-areas">
+            {coverageAreas.map(({ label, value, to, tone, Icon }) => (
+              <Link
+                key={label}
+                to={to}
+                data-home-area={tone}
+                className={"home-toolkit-area " + FOCUS}
+              >
+                <span className="home-toolkit-area-icon" aria-hidden>
+                  <Icon />
+                </span>
+                <span className="home-toolkit-area-copy">
+                  <strong>{label}</strong>
+                  <small>Searchable entries</small>
+                </span>
+                <span className={"home-toolkit-area-count " + NUM}>
+                  {loading ? "…" : value.toLocaleString()}
+                </span>
+                <ArrowRight className="home-toolkit-area-arrow" aria-hidden />
+              </Link>
+            ))}
+          </div>
+        </section>
+      </section>
     </div>
   );
 };

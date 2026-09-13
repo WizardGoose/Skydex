@@ -13,7 +13,7 @@ import { effectiveRequirements, isUnplannable, specialFor, type SpecialRule } fr
  * once. For each mutation we ask the solver what a single optimal plot yields
  * and what it costs to sow, then walk the tree from the targets downwards:
  *
- *   plantings   = ceil(still needed / yield per plot)
+ *   plantings    = ceil(still needed / yield per plot)
  *   input demand = plantings x crops sown per plot
  *
  * Those inputs are the tier below, so the same step repeats until we reach
@@ -109,6 +109,12 @@ export interface SolverPlan {
   totalPlantings: number;
   depth: number;
 }
+
+/** Unmeasured or unplaceable fields leave an incomplete bill, not a zero bill. */
+export const hasUnresolvedPlanFields = (plan: SolverPlan): boolean =>
+  plan.pending.length > 0 || plan.unknown.length > 0 || plan.cycles.some((cycle) =>
+    cycle.produce.some((node) => node.need > 0 && node.plots === undefined)
+  );
 
 interface Dataset {
   crops: Record<string, CropDefinition>;

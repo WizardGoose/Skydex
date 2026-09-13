@@ -107,6 +107,56 @@ export function parseUpgradeEdges(title: string, wikitext: string): UpgradeEdge[
 export type ChainIndex = Record<string, string[]>;
 
 /**
+ * Upgrade lines whose relationship is encoded in stable Hypixel ids rather
+ * than the talisman/ring/artifact/relic suffix convention.
+ *
+ * The numeric prefixes are explicit allowlists. A generic trailing-number
+ * rule would collapse unrelated variants, while these four lines are actual
+ * ordered progressions. The named Shady line is the verified counterexample
+ * that originally required an id graph at all.
+ */
+const NUMERIC_CHAIN_PREFIXES = [
+  "MASTER_SKULL_TIER_",
+  "CAMPFIRE_TALISMAN_",
+  "SOUL_CAMPFIRE_TALISMAN_",
+  "CRUX_TALISMAN_",
+] as const;
+
+const STABLE_NAMED_CHAINS: readonly (readonly string[])[] = [
+  ["SHADY_RING", "CROOKED_ARTIFACT", "SEAL_OF_THE_FAMILY"],
+  ["PIGGY_BANK", "CRACKED_PIGGY_BANK", "BROKEN_PIGGY_BANK"],
+];
+
+export function stableIdUpgradeEdges(catalogue: AccessoryCatalogue): IdUpgradeEdge[] {
+  const edges: IdUpgradeEdge[] = [];
+
+  const connect = (ids: readonly string[]) => {
+    for (let i = 1; i < ids.length; i++) {
+      if (!catalogue.byId[ids[i - 1]] || !catalogue.byId[ids[i]]) continue;
+      edges.push({ fromId: ids[i - 1], toId: ids[i] });
+    }
+  };
+
+  for (const prefix of NUMERIC_CHAIN_PREFIXES) {
+    const ranked = catalogue.entries
+      .map((entry) => {
+        if (!entry.id.startsWith(prefix)) return null;
+        const rank = Number(entry.id.slice(prefix.length));
+        return Number.isSafeInteger(rank) && rank > 0 ? { id: entry.id, rank } : null;
+      })
+      .filter((entry): entry is { id: string; rank: number } => entry !== null)
+      .sort((left, right) => left.rank - right.rank || left.id.localeCompare(right.id));
+    for (let i = 1; i < ranked.length; i++) {
+      if (ranked[i].rank !== ranked[i - 1].rank + 1) continue;
+      edges.push({ fromId: ranked[i - 1].id, toId: ranked[i].id });
+    }
+  }
+
+  for (const chain of STABLE_NAMED_CHAINS) connect(chain);
+  return edges;
+}
+
+/**
  * Turn edges into "what does owning this cover".
  *
  * Edges arrive by display name because that is how the wiki writes them, and
@@ -161,6 +211,8 @@ export function buildChainIndex(
     if (!catalogue.byId[edge.fromId] || !catalogue.byId[edge.toId]) continue;
     link(edge.fromId, edge.toId);
   }
+
+  for (const edge of stableIdUpgradeEdges(catalogue)) link(edge.fromId, edge.toId);
 
   /*
    * The id-stem ladder, kept as a supplement.

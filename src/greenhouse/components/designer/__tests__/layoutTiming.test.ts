@@ -253,9 +253,7 @@ describe("the whole trip, planner numbers to wire body", () => {
     expect(Object.prototype.hasOwnProperty.call(built.body.cells[2], "seconds")).toBe(false);
   });
 
-  it("derives the unique crop count from the layout it is pricing", () => {
-    // Three crop types in the plot rather than the one being priced, so the
-    // estimate for the Cocoa Beans moves when its neighbours change.
+  it("keeps one greenhouse-wide clock when a field's crop mix changes", () => {
     const alone: LayoutItem[] = [{ position: [0, 0], size: 1, name: "Cocoa Beans", isMutation: false }];
     const crowded: LayoutItem[] = [
       ...alone,
@@ -263,9 +261,11 @@ describe("the whole trip, planner numbers to wire body", () => {
       { position: [0, 2], size: 1, name: "Melon", isMutation: false },
     ];
 
-    const one = attachSeconds(alone, data, { ...SETTINGS, uniqueCrops: uniqueCropsIn(alone) });
-    const three = attachSeconds(crowded, data, { ...SETTINGS, uniqueCrops: uniqueCropsIn(crowded) });
+    const one = attachSeconds(alone, data, { ...SETTINGS, uniqueCrops: 3 });
+    const three = attachSeconds(crowded, data, { ...SETTINGS, uniqueCrops: 3 });
+    const fullGreenhouse = attachSeconds(alone, data, { ...SETTINGS, uniqueCrops: 12 });
 
-    expect(three[0].seconds as number).toBeLessThan(one[0].seconds as number);
+    expect(three[0].seconds).toBe(one[0].seconds);
+    expect(fullGreenhouse[0].seconds as number).toBeLessThan(one[0].seconds as number);
   });
 });

@@ -1,28 +1,13 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * Unique crops, in one place, as a stated input rather than an authority.
+ * The greenhouse-wide unique-crop count, in one place.
  *
- * "How many distinct crops are standing in your greenhouse" had two homes. The
- * planner DERIVES it per plot from the solver's own answer - `uniqueCropsFor`
- * reads the crop keys straight off the plot economy - and the solver page
- * separately persisted a slider under `skyshards-unique-crops` and treated that
- * as the truth. Two homes for one fact is how two pages come to print different
- * growth times for the same greenhouse.
- *
- * The derived figure wins, and it already does: `stageSecondsFor` overrides the
- * settings value with the measured one wherever a solve exists, so nothing
- * downstream of a plan reads this at all. What is left over is genuinely a
- * different question, and it is worth being exact about why this store still
- * exists rather than being deleted outright:
- *
- *   derived   what a SOLVED plot plants. Known only after the solver answers.
- *   this      what the player says is standing in their greenhouse right now.
- *             It is an INPUT to the solve request, sent as `unique_crops`, so
- *             it has to exist before there is any plan to derive it from.
- *
- * So this is the pre-plan estimate, not a competing copy of the post-plan
- * measurement. It is never consulted where a derived figure is available.
+ * Hypixel applies this bonus across every Greenhouse plot. A solved field only
+ * describes one layout, so counting its crop keys is not evidence for this
+ * value and used to make otherwise identical fields run on different clocks.
+ * This stated count is therefore the timing authority for every field, layout
+ * preview and mod countdown until the site can read the complete Greenhouse.
  *
  * STORAGE. The legacy key is read once, as a seed, and never written again.
  * That is the whole of the demotion: the old key is frozen exactly as the last

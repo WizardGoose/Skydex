@@ -59,8 +59,12 @@ export interface ResourceItem {
   name?: string;
   /** Rarity tier, e.g. "EPIC". Hypixel states it for nearly every item. */
   tier?: string;
+  /** Hypixel item category. */
+  category?: string;
   /** Present on skull items. `signature` also rides along and is not used. */
   skin?: { value?: string } | null;
+  /** Exact model id used by Hypixel's official SkyBlock resource pack. */
+  item_model?: string;
 }
 
 /** What is worth remembering about one item. Every field is optional. */
@@ -75,6 +79,10 @@ export interface ResourceEntry {
    * module, so the resource is the only place their rarity is stated.
    */
   t?: string;
+  /** Exact official-pack model id, e.g. `hypixel_skyblock:item/...`. */
+  m?: string;
+  /** Hypixel's item category, used to organise item-heavy Profile surfaces. */
+  c?: string;
 }
 
 export type ResourceIndex = Record<string, ResourceEntry>;
@@ -99,12 +107,18 @@ export type ResourceIndex = Record<string, ResourceEntry>;
 // at its v5, v7 and v9), verified on the built page: a v4 snapshot with
 // `t: "unobtainable"` entries still in it. This bump is one edit with the
 // rule already in place, which closes the window.
-export const RESOURCE_CACHE_KEY = "skydex.items.resource.v5";
+// v6: Hypixel now states `item_model` for custom-model items. Keeping that
+// exact path lets the official pack resolve icons without guessing from a
+// display name, so the reduced cache gains `m` in the same key bump.
+export const RESOURCE_CACHE_KEY = "skydex.items.resource.v8";
 const STALE_RESOURCE_KEYS = [
   "skydex.items.resource.v1",
   "skydex.items.resource.v2",
   "skydex.items.resource.v3",
   "skydex.items.resource.v4",
+  "skydex.items.resource.v5",
+  "skydex.items.resource.v6",
+  "skydex.items.resource.v7",
 ];
 
 /** Same freshness as the item index. Names and textures change when the game does. */
@@ -119,7 +133,10 @@ const RESOURCE_URL = "https://api.hypixel.net/v2/resources/skyblock/items";
  * characters, a section sign and one of the 22 formatting letters, and no wiki
  * title contains either half.
  */
-const stripColour = (s: string): string => s.replace(/§[0-9a-fk-orA-FK-OR]/g, "").trim();
+const stripColour = (s: string): string => s
+  .replace(/§[0-9a-fk-or]/gi, "")
+  .replace(/%{1,2}[a-z_]+%%/gi, "")
+  .trim();
 
 /**
  * Reduce the raw resource to the map above.
@@ -151,7 +168,15 @@ export const buildResourceIndex = (items: readonly ResourceItem[]): ResourceInde
     // a real item's real tier, so it is not a tier this map will ever serve.
     if (typeof item.tier === "string" && item.tier && item.tier !== "UNOBTAINABLE") entry.t = item.tier.toLowerCase();
 
-    if (entry.n || entry.h || entry.t) index[id] = entry;
+    if (typeof item.item_model === "string" && item.item_model.trim()) {
+      entry.m = item.item_model.trim();
+    }
+
+    if (typeof item.category === "string" && item.category.trim()) {
+      entry.c = item.category.trim().toUpperCase();
+    }
+
+    if (entry.n || entry.h || entry.t || entry.m || entry.c) index[id] = entry;
   }
 
   return index;
@@ -331,7 +356,7 @@ const tierNameIndex = (): Map<string, string> => {
   tierByFoldedName = new Map();
   for (const entry of Object.values(index)) {
     if (!entry.n || !entry.t) continue;
-    const key = foldName(entry.n);
+    const key = foldName(stripColour(entry.n));
     if (!tierByFoldedName.has(key)) tierByFoldedName.set(key, entry.t);
   }
   return tierByFoldedName;
@@ -344,10 +369,19 @@ const tierNameIndex = (): Map<string, string> => {
  * means the caller keeps whatever it had, so this map can only ever add a rung
  * and never take one away.
  */
-export const resourceNameFor = (id?: string | null): string | null => entryFor(id)?.n ?? null;
+export const resourceNameFor = (id?: string | null): string | null => {
+  const name = entryFor(id)?.n;
+  return name ? stripColour(name) || null : null;
+};
 
 /** The texture hash for an id, or null when it has none. */
 export const resourceHashFor = (id?: string | null): string | null => entryFor(id)?.h ?? null;
+
+/** Exact model path for the official Hypixel pack, or null when none is stated. */
+export const resourceItemModelFor = (id?: string | null): string | null => entryFor(id)?.m ?? null;
+
+/** Hypixel's category for an item id, or null when the resource does not state one. */
+export const resourceCategoryFor = (id?: string | null): string | null => entryFor(id)?.c ?? null;
 
 /**
  * Whether the resource has anything at all on this id.
@@ -365,6 +399,20 @@ export const resourceHashFor = (id?: string | null): string | null => entryFor(i
  * ever lists them, they resolve on the next daily refresh with no code change.
  */
 export const resourceHasId = (id?: string | null): boolean => entryFor(id) !== null;
+
+/** Resolve catalogue slugs and exact display names to a real Hypixel identity. */
+export const resourceIdFor = (idOrName?: string | null): string | null => {
+  const raw = (idOrName ?? "").trim();
+  if (!raw) return null;
+  hydrate();
+  for (const key of [raw, raw.toUpperCase(), raw.replace(/[\s-]+/g, "_").toUpperCase()]) {
+    if (index[key]) return key;
+  }
+  const name = foldName(stripColour(raw));
+  const matches = Object.entries(index).filter(([id, entry]) => foldName(stripColour(entry.n ?? prettify(id))) === name);
+  // A display name shared by variants cannot identify the exact item.
+  return matches.length === 1 ? matches[0][0] : null;
+};
 
 /**
  * The rarity tier for an id or a display name, lower-cased, or null.

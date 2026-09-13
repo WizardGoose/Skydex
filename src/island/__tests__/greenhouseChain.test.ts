@@ -158,7 +158,7 @@ describe("precedence: a typed tier still wins", () => {
 });
 
 /**
- * The state a real account was actually observed in.
+ * The state this regression test covers.
  *
  * A key can be present while no garden pull has ever succeeded, because the
  * pull is only invoked where something subscribes to the store. Nothing is

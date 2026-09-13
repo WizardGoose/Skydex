@@ -1,0 +1,87 @@
+/* Shared geometry for the target, calculation and requirements work areas. */
+@media (min-width: 900px) {
+  :root:has(.utility-workbench) { --sd-col: clamp(10rem, calc(40vw - 20rem), var(--sd-player)); }
+  .profile-shell:has(.utility-workbench) .profile-character-model { width: 96%; height: min(80vh, calc(var(--sd-col) * 1.85)); min-height: 0; }
+}
+.profile-workspace .utility-workbench {
+  --utility-workspace-height: max(36rem, calc(100dvh - var(--sd-chrome-h) - 9.5rem));
+  display: grid;
+  grid-template-columns: minmax(16rem, .76fr) minmax(24rem, 1.58fr) minmax(19rem, .86fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: var(--utility-workspace-height);
+  box-sizing: content-box;
+  min-width: 0;
+  align-items: stretch;
+  gap: 0;
+}
+.profile-workspace .utility-workbench > .utility-workbench-zone {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  grid-column: auto;
+  border-top: 0;
+  border-left: 0;
+}
+.profile-workspace .utility-workbench > .utility-workbench-zone + .utility-workbench-zone {
+  border-left: 1px solid var(--profile-border);
+}
+.utility-workbench :is(.utility-scroll, .utility-target-list) {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+.utility-workbench .utility-scroll:focus-visible {
+  outline: 1px solid var(--profile-accent);
+  outline-offset: -2px;
+}
+.profile-workspace .utility-workbench > .utility-rail-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  padding: 0;
+}
+.utility-rail-split > * { min-height: 0; min-width: 0; }
+.utility-rail-split > * + * { border-top: 1px solid var(--profile-border); }
+@container profile-workspace (max-width: 64rem) {
+  .profile-workspace .utility-workbench {
+    height: auto;
+    grid-template-columns: minmax(15rem, .8fr) minmax(23rem, 1.6fr);
+    grid-template-rows: var(--utility-workspace-height) 36rem;
+  }
+  .profile-workspace .utility-workbench > .utility-workbench-zone:last-child {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--profile-border);
+  }
+}
+@container profile-workspace (min-width: 40rem) and (max-width: 64rem) {
+  .profile-workspace .utility-workbench > .utility-support-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .utility-workbench .utility-support-rail > * + * {
+    border-top: 0;
+    border-left: 1px solid var(--profile-border);
+  }
+}
+@container profile-workspace (max-width: 40rem) {
+  .profile-workspace .utility-workbench {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 32rem var(--utility-workspace-height) 36rem;
+  }
+  .profile-workspace .utility-workbench > .utility-workbench-zone + .utility-workbench-zone {
+    border-left: 0;
+    border-top: 1px solid var(--profile-border);
+  }
+}
+@container profile-workspace (min-width: 30rem) and (max-width: 64rem) {
+  .profile-workspace .utility-workbench > :is(.greenhouse-support, .shards-plan-details, .recipes-requirements) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .profile-workspace .utility-workbench > .utility-rail-split:is(.greenhouse-support, .shards-plan-details, .recipes-requirements) > * + * {
+    border-top: 0;
+    border-left: 1px solid var(--profile-border);
+  }
+}

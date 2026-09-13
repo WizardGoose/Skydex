@@ -1,6 +1,7 @@
 import { petLevel } from "./petValue";
 import { titleCase } from "./helpers";
 import { recombDisplayTier } from "../ui/kit";
+import { hashFromSkinValue } from "../accessories/headHashes";
 import type { PetData, RawItem } from "./types";
 
 /**
@@ -18,10 +19,11 @@ import type { PetData, RawItem } from "./types";
  *   - names come off the item's own display tag, with the game's colour codes
  *     stripped, falling back to the id in title case. An item with neither is
  *     dropped rather than drawn as a mystery tile claiming to be something.
- *   - slot positions are NOT reconstructed. The decoder drops empty slots
- *     before this module ever sees the list (see simplifyItems), so which of
- *     the four armor pieces is missing is genuinely unknowable from this data,
- *     and drawing four positional cells would be a guess wearing a grid.
+ *   - slot positions are NOT reconstructed for worn armour. The decoder drops
+ *     empty slots before this module ever sees that list (see simplifyItems),
+ *     so which of the four pieces is missing is genuinely unknowable there.
+ *     Wardrobe sets are different: their numbered set keys and four nullable
+ *     piece positions are preserved by parseMemberLoadouts.
  */
 
 /** The slot-grid item shape, restated structurally so ui/ stays import-free of networth/. */
@@ -29,7 +31,9 @@ export interface GearItem {
   id: string;
   name: string;
   count: number;
-  extra?: { ench?: Record<string, number>; recomb?: boolean };
+  extra?: { ench?: Record<string, number>; recomb?: boolean; skin?: string };
+  /** Verbatim display lore, including Minecraft colour codes and blank lines. */
+  lore?: string[];
 }
 
 /**
@@ -41,6 +45,48 @@ export const recombTier = recombDisplayTier;
 
 /** Minecraft's section-sign formatting codes, which raw display names carry. */
 const stripCodes = (value: string): string => value.replace(/§[0-9a-fk-or]/gi, "");
+
+const GEAR_RARITY_LINE = /^(?:[^A-Z0-9]+)?(VERY SPECIAL|SPECIAL|DIVINE|MYTHIC|LEGENDARY|EPIC|RARE|UNCOMMON|COMMON|ULTIMATE|SUPREME)\b/i;
+
+const recordValue = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+
+/** The texture property on this exact stack, when it is a custom head. */
+export const stackTextureHash = (raw: RawItem): string | null => {
+  const skull = recordValue(raw.tag?.SkullOwner ?? raw.tag?.skullOwner);
+  const properties = recordValue(skull?.Properties ?? skull?.properties);
+  const textures = properties?.textures;
+  if (!Array.isArray(textures)) return null;
+  for (const texture of textures) {
+    const entry = recordValue(texture);
+    const value = entry?.Value ?? entry?.value;
+    if (typeof value !== "string" || !value) continue;
+    const hash = hashFromSkinValue(value);
+    if (hash) return hash;
+  }
+  return null;
+};
+
+/**
+ * Read the displayed rarity from an item's own final lore line.
+ *
+ * This intentionally lives beside generic gear parsing rather than the
+ * accessory-bag parser. Armour, equipment, weapons, and milestone-upgraded
+ * items use different type suffixes, but the rarity token itself is stable.
+ * The live item is authoritative; catalog rarity is only a fallback.
+ */
+export const tierFromGearLore = (lore: readonly string[] | null | undefined): string | null => {
+  if (!lore?.length) return null;
+  for (let index = lore.length - 1; index >= 0; index -= 1) {
+    const line = stripCodes(lore[index] ?? "").trim();
+    if (!line) continue;
+    const match = GEAR_RARITY_LINE.exec(line);
+    if (match) return match[1].toUpperCase().replace(/\s+/g, "_");
+  }
+  return null;
+};
 
 /**
  * One decoded stack, as a slot. Null when the entry carries nothing we can
@@ -73,12 +119,18 @@ export const rawToGearItem = (raw: RawItem): GearItem | null => {
   // rarity in game.
   const upgrades = raw.tag?.ExtraAttributes?.rarity_upgrades;
   const recomb = typeof upgrades === "number" && upgrades >= 1;
+  const skin = stackTextureHash(raw);
 
   const item: GearItem = { id: id || name.toUpperCase().replace(/\s+/g, "_"), name, count };
-  if ((ench && Object.keys(ench).length > 0) || recomb) {
+  const lore = raw.tag?.display?.Lore;
+  if (Array.isArray(lore) && lore.length > 0 && lore.every((line) => typeof line === "string")) {
+    item.lore = [...lore];
+  }
+  if ((ench && Object.keys(ench).length > 0) || recomb || skin) {
     item.extra = {};
     if (ench && Object.keys(ench).length > 0) item.extra.ench = ench;
     if (recomb) item.extra.recomb = true;
+    if (skin) item.extra.skin = skin;
   }
   return item;
 };
@@ -101,10 +153,82 @@ export const gearItems = (list: unknown[] | undefined): GearItem[] => {
  */
 export const armorItems = (list: unknown[] | undefined): GearItem[] => gearItems(list).reverse();
 
+/** The states a visible wardrobe set can honestly occupy. */
+export type GearWardrobeState = "occupied" | "unlocked-empty" | "locked" | "private";
+
+/** Presentation-ready wardrobe input, shared by armour and equipment. */
+export interface GearSetView {
+  /** Hypixel's one-based wardrobe set id. */
+  id: number;
+  pieces: readonly (GearItem | null)[];
+}
+
+export interface GearWardrobeSlot {
+  /** Null is the single private/unavailable marker, not a guessed set id. */
+  id: number | null;
+  state: GearWardrobeState;
+  pieces: readonly (GearItem | null)[];
+}
+
+export interface GearWardrobeRow {
+  slots: readonly GearWardrobeSlot[];
+}
+
+const emptyWardrobePieces = (): readonly (GearItem | null)[] => [null, null, null, null];
+
+/**
+ * Keep wardrobe columns coherent while retaining the API's state distinctions.
+ *
+ * The API exposes one-based set keys. A set key with no decoded pieces is an
+ * unlocked-empty set; a missing key between 1 and the largest exposed key is a
+ * locked slot. A null/private marker is returned only when the caller knows the
+ * profile section was not shared. No capacity beyond the largest exposed key
+ * is invented.
+ */
+export const buildWardrobeRows = (
+  sets: readonly GearSetView[],
+  options: { available?: boolean; capacity?: number | null; columns?: number } = {}
+): GearWardrobeRow[] => {
+  const columns = Number.isInteger(options.columns) && (options.columns ?? 0) > 0 ? options.columns! : 9;
+  if (options.available === false) {
+    return [{ slots: [{ id: null, state: "private", pieces: emptyWardrobePieces() }] }];
+  }
+
+  const byId = new Map<number, GearSetView>();
+  for (const set of sets) {
+    if (Number.isInteger(set.id) && set.id >= 1) byId.set(set.id, set);
+  }
+  const ids = [...byId.keys()].sort((a, b) => a - b);
+  const largestExposedId = ids.at(-1) ?? 0;
+  const capacity = options.capacity === null
+    ? largestExposedId
+    : Math.max(largestExposedId, options.capacity ?? largestExposedId);
+  if (capacity < 1) return [];
+
+  const slots: GearWardrobeSlot[] = [];
+  for (let id = 1; id <= capacity; id++) {
+    const set = byId.get(id);
+    const pieces = set ? Array.from({ length: 4 }, (_, index) => set.pieces[index] ?? null) : emptyWardrobePieces();
+    slots.push({
+      id,
+      state: set ? (pieces.some((piece) => piece !== null) ? "occupied" : "unlocked-empty") : "locked",
+      pieces,
+    });
+  }
+
+  const rows: GearWardrobeRow[] = [];
+  for (let start = 0; start < slots.length; start += columns) {
+    rows.push({ slots: slots.slice(start, start + columns) });
+  }
+  return rows;
+};
+
 /** One pet, as the pet grid draws it. */
 export interface PetTile {
   /** Stable within one profile: pets carry a uuid, and the fallback includes exp so two identical pets stay apart. */
   key: string;
+  /** The real pet uuid when the payload states one; null for the fallback key. */
+  uuid: string | null;
   name: string;
   /**
    * The wiki's name for the pet's picture. The wiki files pets under
@@ -141,6 +265,7 @@ export const petTiles = (pets: unknown[] | undefined): PetTile[] => {
     const { level } = petLevel(pet);
     const name = titleCase(pet.type);
     out.push({
+      uuid: typeof pet.uuid === "string" && pet.uuid ? pet.uuid : null,
       key: typeof pet.uuid === "string" && pet.uuid ? pet.uuid : `${pet.tier}_${pet.type}_${pet.exp ?? 0}`,
       name,
       iconName: `${name} Pet`,

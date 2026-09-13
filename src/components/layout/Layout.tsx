@@ -1,47 +1,18 @@
-import React, { Suspense, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Navigation } from "./Navigation";
 import { SettingsOverlay } from "./SettingsOverlay";
 import { WelcomeTour } from "./WelcomeTour";
-import { AttributionNotice } from "./AttributionNotice";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { X } from "lucide-react";
 import { FOCUS } from "../../ui/kit";
-import { BACKDROP_UPDATED_EVENT, loadBackdropUrl } from "../../ui/backdrop";
-
-/*
- * The markup pin, discovered rather than imported.
- *
- * That tool is a local working aid, not part of the released project, so
- * `src/dev-local/` is gitignored and a clone of this repository does not
- * contain it. A static `import` of a file that is not on disk fails the build,
- * which would make the clone unbuildable for everyone else.
- *
- * `import.meta.glob` is resolved at build time against what is actually there:
- * it yields the module's loader when the folder is present and an empty object
- * when it is not, so the same source builds either way. Present, the pin is a
- * lazily loaded chunk mounted only under `import.meta.env.DEV`, which is what
- * the static import did. Absent, the constant is null and nothing renders and
- * nothing is fetched.
- *
- * The loader is read positionally rather than by key because the glob matches
- * at most one file, so the value is the whole answer and no assumption about
- * the shape of the generated key has to be correct.
- *
- * The `import.meta.env.DEV` test wraps the lookup rather than only the render,
- * and that placement is the point. `pnpm run deploy` builds on the maintainer's
- * own machine, which is the one machine where this folder does exist, so a
- * discovery that ran unconditionally would emit the tool as a real chunk into
- * the artifact that gets published. Vite replaces the flag with `false` in a
- * production build, which makes this branch unreachable and drops the glob and
- * its import with it, so the published site carries no copy of the tool whether
- * or not the folder was present when it was built.
- */
-const DevMarkup = import.meta.env.DEV
-  ? (() => {
-      const loader = Object.values(import.meta.glob("../../dev-local/DevMarkup.tsx"))[0] as (() => Promise<{ default: React.ComponentType }>) | undefined;
-      return loader ? React.lazy(loader) : null;
-    })()
-  : null;
+import {
+  applyBackdropPreferences,
+  BACKDROP_PREFERENCES_UPDATED_EVENT,
+  BACKDROP_UPDATED_EVENT,
+  clearAppliedBackdropPreferences,
+  loadBackdropUrl,
+} from "../../ui/backdrop";
 
 /**
  * The shell.
@@ -71,20 +42,58 @@ const DevMarkup = import.meta.env.DEV
  * legible, still out of the way.
  */
 const attributionLink = `text-slate-200 underline decoration-slate-600 underline-offset-2 rounded-sm transition-colors hover:text-emerald-300 hover:decoration-emerald-400/70 ${FOCUS}`;
+const FOOTER_DISMISSED_KEY = "skydex.footer.dismissed.v1";
+
+const footerStartsVisible = (): boolean => {
+  try {
+    return localStorage.getItem(FOOTER_DISMISSED_KEY) !== "true";
+  } catch {
+    return true;
+  }
+};
 
 export const Layout: React.FC = () => {
   const location = useLocation();
+  const [footerVisible, setFooterVisible] = useState(footerStartsVisible);
+  const [rememberFooterDismissal, setRememberFooterDismissal] = useState(false);
+
+  const hideFooter = () => {
+    if (rememberFooterDismissal) {
+      try {
+        localStorage.setItem(FOOTER_DISMISSED_KEY, "true");
+      } catch {
+        // The current visit can still honour the dismissal without storage.
+      }
+    }
+    setFooterVisible(false);
+  };
+
+  const showFooter = () => {
+    try {
+      localStorage.removeItem(FOOTER_DISMISSED_KEY);
+    } catch {
+      // The footer can still reopen when browser storage is unavailable.
+    }
+    setRememberFooterDismissal(false);
+    setFooterVisible(true);
+  };
 
   /*
-   * The sharp channel (the glass re-vamp). The Profile page is the one page
-   * with something to STAND in the sharp left strip of the backdrop, namely
-   * the 3D player, so it is the one route that gets a full-bleed main: its own
-   * layout puts the player at the viewport's left edge, which a centred shell
-   * would pull inboard. The `.sd-channel` class itself (which opens
-   * `--sd-split`) is toggled on <html> by IslandPage, and only once a profile
-   * is actually loaded: the import pitch has nothing to stand in a channel.
+   * The sharp channel (the glass re-vamp). Profile puts the 3D player in its
+   * left strip; Storage puts its container picker there. Both therefore need a
+   * full-bleed main so the rail reaches the viewport edge instead of being
+   * pulled inside the centred shell. The route surface toggles `.sd-channel`
+   * on <html> when it has content for that strip.
    */
-  const channel = location.pathname === "/island" || location.pathname.startsWith("/island/");
+  const channel =
+    location.pathname === "/profile" ||
+    location.pathname.startsWith("/profile/") ||
+    location.pathname === "/pv" ||
+    location.pathname.startsWith("/pv/") ||
+    location.pathname === "/storage" ||
+    location.pathname.startsWith("/storage/") ||
+    location.pathname === "/island" ||
+    location.pathname.startsWith("/island/");
 
   /*
    * The dashboard runs WITHOUT the curtain: the backdrop shows sharp, and
@@ -101,7 +110,7 @@ export const Layout: React.FC = () => {
    * viewport, so these routes escape the centred shell the way the channel
    * does. Pages outside every section (about, legal) keep the shell.
    */
-  const SPLIT_PREFIXES = ["/fusion", "/items", "/forge", "/greenhouse", "/recipes", "/shards", "/fusion-lines"];
+  const SPLIT_PREFIXES = ["/fusion", "/recipes", "/crafting", "/items", "/forge", "/greenhouse", "/shard-recipes", "/shards", "/fusion-lines"];
   const split = SPLIT_PREFIXES.some((m) => location.pathname === m || location.pathname.startsWith(`${m}/`));
 
   /*
@@ -112,7 +121,7 @@ export const Layout: React.FC = () => {
   useEffect(() => {
     let url: string | null = null;
     let live = true;
-    const apply = async () => {
+    const applyImage = async () => {
       const next = await loadBackdropUrl();
       if (!live) {
         if (next) URL.revokeObjectURL(next);
@@ -123,25 +132,29 @@ export const Layout: React.FC = () => {
       if (next) document.documentElement.style.setProperty("--sd-bg", `url("${next}")`);
       else document.documentElement.style.removeProperty("--sd-bg");
     };
-    void apply();
-    window.addEventListener(BACKDROP_UPDATED_EVENT, apply);
+    const applyPreferences = () => applyBackdropPreferences();
+    applyPreferences();
+    void applyImage();
+    window.addEventListener(BACKDROP_UPDATED_EVENT, applyImage);
+    window.addEventListener(BACKDROP_PREFERENCES_UPDATED_EVENT, applyPreferences);
     return () => {
       live = false;
-      window.removeEventListener(BACKDROP_UPDATED_EVENT, apply);
+      window.removeEventListener(BACKDROP_UPDATED_EVENT, applyImage);
+      window.removeEventListener(BACKDROP_PREFERENCES_UPDATED_EVENT, applyPreferences);
       if (url) URL.revokeObjectURL(url);
       document.documentElement.style.removeProperty("--sd-bg");
+      clearAppliedBackdropPreferences();
     };
   }, []);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col">
+    <div className={`flex min-h-[100dvh] flex-col${curtainless ? " sd-home-shell" : ""}`}>
       {/* The ground has a sharp render and an explicitly blurred copy. The
           copy is clipped to the frost region, so the effect is real even in
           engines which cannot sample a sibling through backdrop-filter. */}
       <div className="sd-backdrop" aria-hidden>
         <div className="sd-backdrop__img" />
         <div className="sd-backdrop__frost" />
-        <div className="sd-backdrop__bar-frost" />
         <div className="sd-backdrop__scrim" />
       </div>
       {!curtainless && <div className="sd-curtain" aria-hidden />}
@@ -150,76 +163,102 @@ export const Layout: React.FC = () => {
         <Navigation />
         <main className={channel || split ? "flex flex-1 flex-col" : "flex-1 px-3 py-3 sm:px-4"}>
           {channel || split ? (
-            <ErrorBoundary>
+            <ErrorBoundary key={location.pathname} route={location.pathname + location.search}>
               <Outlet key={location.pathname} />
             </ErrorBoundary>
           ) : (
             <div className="mx-auto w-full max-w-screen-2xl">
-              <ErrorBoundary>
+              <ErrorBoundary key={location.pathname} route={location.pathname + location.search}>
                 <Outlet key={location.pathname} />
               </ErrorBoundary>
             </div>
           )}
         </main>
 
-      <footer className="sd-footer border-t border-white/10 px-3 py-2 sm:px-4">
-        <div className="mx-auto w-full max-w-screen-2xl">
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <p className="max-w-[120ch] text-[11px] leading-snug text-slate-300">
-              NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT
-              <br />
-              SKYDEX IS NOT AFFILIATED WITH OR ENDORSED BY HYPIXEL.
-            </p>
-            <details className="basis-full">
-              <summary className={`w-fit cursor-pointer rounded-sm text-[10px] leading-snug text-slate-500 transition-colors marker:text-slate-500 hover:text-sky-300 ${FOCUS}`}>
-                <span>Skydex Project Credits</span>
-                <span aria-hidden="true"> · </span>
-                <span>Thank you to everyone who helped make Skydex possible.</span>
-              </summary>
-              <p className="mt-1 max-w-[120ch] text-[11px] leading-snug text-slate-300">
-                Item, recipe and mutation data and all item images are loaded live from the{" "}
-                <a href="https://hypixelskyblock.minecraft.wiki" target="_blank" rel="noopener noreferrer" className={attributionLink}>
-                  Hypixel SkyBlock Wiki
-                </a>
-                , licensed{" "}
-                <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" target="_blank" rel="noopener noreferrer" className={attributionLink}>
-                  CC BY-NC-SA 3.0
-                </a>
-                . Prices from the public Hypixel API. Fusion calculator and greenhouse solver forked from{" "}
-                <a href="https://github.com/Campionnn/SkyShards" target="_blank" rel="noopener noreferrer" className={attributionLink}>
-                  SkyShards
-                </a>{" "}
-                by Campion and xKapy. Product and interface inspiration from{" "}
-                <a href="https://cupcake.shiiyu.moe" target="_blank" rel="noopener noreferrer" className={attributionLink}>
-                  SkyCrypt
-                </a>{" "}
-                and{" "}
-                <a href="https://github.com/meowdding/SkyOcean" target="_blank" rel="noopener noreferrer" className={attributionLink}>
-                  SkyOcean
-                </a>
-                . Thanks to{" "}
-                <a href="https://mc-heads.net" target="_blank" rel="noopener noreferrer" className={attributionLink}>
-                  MCHeads
-                </a>{" "}
-                for providing Minecraft avatars.
-              </p>
-            </details>
+        <footer
+          className="sd-footer sd-toolkit px-3 py-2 sm:px-4"
+          aria-label="Skydex sources, credits and Minecraft notice"
+        >
+          {footerVisible && (
+            <div className="sd-footer-bar mx-auto w-full max-w-screen-2xl">
+              <div className="sd-footer-copy">
+                <p className="sd-footer-source">
+                  Item, recipe and mutation data and all item images are loaded live from the{" "}
+                  <a href="https://hypixelskyblock.minecraft.wiki" target="_blank" rel="noopener noreferrer" className={attributionLink}>
+                    Hypixel SkyBlock Wiki
+                  </a>
+                  , licensed{" "}
+                  <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/" target="_blank" rel="noopener noreferrer" className={attributionLink}>
+                    CC BY-NC-SA 3.0
+                  </a>
+                  . Prices from the public Hypixel API.
+                </p>
+
+                <details className="sd-footer-credits">
+                  <summary className={`rounded-sm ${FOCUS}`}>
+                    <span>Skydex Project Credits</span>
+                  </summary>
+                  <div className="sd-footer-credit-copy">
+                    <p>Thank you to everyone who helped make Skydex possible.</p>
+                    <p>
+                      Fusion calculator and greenhouse solver forked from{" "}
+                      <a href="https://github.com/Campionnn/SkyShards" target="_blank" rel="noopener noreferrer" className={attributionLink}>
+                        SkyShards
+                      </a>{" "}
+                      by Campion and xKapy. Product and interface inspiration from{" "}
+                      <a href="https://cupcake.shiiyu.moe" target="_blank" rel="noopener noreferrer" className={attributionLink}>
+                        SkyCrypt
+                      </a>{" "}
+                      and{" "}
+                      <a href="https://github.com/meowdding/SkyOcean" target="_blank" rel="noopener noreferrer" className={attributionLink}>
+                        SkyOcean
+                      </a>
+                      . Thanks to{" "}
+                      <a href="https://mc-heads.net" target="_blank" rel="noopener noreferrer" className={attributionLink}>
+                        MCHeads
+                      </a>{" "}
+                      for providing Minecraft avatars.
+                    </p>
+                  </div>
+                </details>
+              </div>
+
+              <div className="sd-footer-controls">
+                <label className="sd-footer-remember">
+                  <input
+                    type="checkbox"
+                    checked={rememberFooterDismissal}
+                    onChange={(event) => setRememberFooterDismissal(event.target.checked)}
+                  />
+                  <span>Don&rsquo;t show details again</span>
+                </label>
+                <button
+                  type="button"
+                  className={`sd-footer-hide ${FOCUS}`}
+                  onClick={hideFooter}
+                  aria-label={rememberFooterDismissal ? "Collapse footer details and remember this choice" : "Collapse footer details"}
+                  title={rememberFooterDismissal ? "Keep footer details collapsed" : "Collapse footer details for this visit"}
+                >
+                  <X aria-hidden />
+                </button>
+              </div>
+            </div>
+          )}
+          <div className="sd-footer-required mx-auto w-full max-w-screen-2xl">
+            {!footerVisible && (
+              <button type="button" className={`sd-footer-show ${FOCUS}`} onClick={showFooter}>
+                Sources: Hypixel Wiki · CC BY-NC-SA 3.0
+              </button>
+            )}
+            <span className="sd-footer-disclaimer">
+              NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
+            </span>
           </div>
-        </div>
-      </footer>
+        </footer>
       </div>
 
       <SettingsOverlay />
       <WelcomeTour />
-      <AttributionNotice />
-      {/* Dev builds only, and only when src/dev-local/ is present on this
-          machine: the markup pin for pointing at elements. Statically
-          eliminated from production. */}
-      {import.meta.env.DEV && DevMarkup && (
-        <Suspense fallback={null}>
-          <DevMarkup />
-        </Suspense>
-      )}
     </div>
   );
 };

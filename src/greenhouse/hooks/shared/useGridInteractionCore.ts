@@ -8,6 +8,7 @@ import {
   type CellWithOffset,
   type BasePlacement,
 } from "../../utilities";
+import { gridLineCells } from "./gridPaint";
 
 export interface DragState {
   placementId: string;
@@ -124,30 +125,33 @@ export function useGridInteractionCore<TPlacement extends BasePlacement, TSelect
     offsetY: number,
     mode: "place" | "remove"
   ) => {
-    const { lastCell, lastPlacedPosition, lastPlacedSize } = paintDataRef.current;
-    
-    // Only act if we moved to a new cell
-    if (lastCell && lastCell[0] === cell[0] && lastCell[1] === cell[1]) {
-      return;
-    }
-    
-    if (mode === "place" && selectedItem) {
-      const size = getSelectedItemSize();
-      const adjustedPos = getAdjustedPosition(cell, offsetX, offsetY, size);
-      
-      if (adjustedPos && !doPlacementsOverlap(adjustedPos, size, lastPlacedPosition ?? [-100, -100], lastPlacedSize)) {
-        const placedPos = onAddPlacement(cell, offsetX, offsetY);
-        if (placedPos) {
-          paintDataRef.current = { lastCell: cell, lastPlacedPosition: placedPos, lastPlacedSize: size };
-        } else {
-          paintDataRef.current = { ...paintDataRef.current, lastCell: cell };
+    const start = paintDataRef.current.lastCell;
+    if (start && start[0] === cell[0] && start[1] === cell[1]) return;
+
+    const path = start ? gridLineCells(start, cell).slice(1) : [cell];
+    for (const nextCell of path) {
+      const { lastPlacedPosition, lastPlacedSize } = paintDataRef.current;
+      // The live pointer offset belongs only to the final cell. Intermediate
+      // cells use their centre, so a fast sweep cannot bias every 2x2 plant to
+      // one side of the path.
+      const finalCell = nextCell[0] === cell[0] && nextCell[1] === cell[1];
+      const nextOffsetX = finalCell ? offsetX : 0.5;
+      const nextOffsetY = finalCell ? offsetY : 0.5;
+
+      if (mode === "place" && selectedItem) {
+        const size = getSelectedItemSize();
+        const adjustedPos = getAdjustedPosition(nextCell, nextOffsetX, nextOffsetY, size);
+        if (adjustedPos && !doPlacementsOverlap(adjustedPos, size, lastPlacedPosition ?? [-100, -100], lastPlacedSize)) {
+          const placedPos = onAddPlacement(nextCell, nextOffsetX, nextOffsetY);
+          if (placedPos) {
+            paintDataRef.current = { lastCell: nextCell, lastPlacedPosition: placedPos, lastPlacedSize: size };
+            continue;
+          }
         }
-      } else {
-        paintDataRef.current = { ...paintDataRef.current, lastCell: cell };
+      } else if (mode === "remove") {
+        onRemovePlacement(nextCell);
       }
-    } else if (mode === "remove") {
-      onRemovePlacement(cell);
-      paintDataRef.current = { ...paintDataRef.current, lastCell: cell };
+      paintDataRef.current = { ...paintDataRef.current, lastCell: nextCell };
     }
   }, [selectedItem, getAdjustedPosition, onAddPlacement, onRemovePlacement, getSelectedItemSize]);
 

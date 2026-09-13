@@ -113,16 +113,26 @@ describe("parseTour", () => {
 describe("the shipped tour.md", () => {
   const steps = parseTour(shipped);
 
-  it("parses to at least one step with no empties", () => {
-    expect(steps.length).toBeGreaterThan(0);
+  it("ships only Wonder's username introduction, with no empty steps", () => {
+    expect(steps).toHaveLength(1);
     for (const step of steps) expect(step.blocks.length).toBeGreaterThan(0);
+
+    expect(steps[0].blocks.some((block) => block.kind === "input" && block.name === "username")).toBe(true);
+    expect(steps.every((step) => step.blocks.some((block) => block.kind === "wordmark"))).toBe(true);
   });
 
-  it("still carries the mode choice somewhere", () => {
-    /* The one interactive promise the tour makes to the rest of the site:
-       Ironman/Normal is chosen during onboarding. Moving it is fine;
-       deleting it should be a decision, not a typo. */
-    expect(steps.some((s) => s.blocks.some((b) => b.kind === "mode-picker"))).toBe(true);
+  it("leaves profile-type selection out of the introduction", () => {
+    expect(steps.some((s) => s.blocks.some((b) => b.kind === "mode-picker"))).toBe(false);
+  });
+
+  it("finishes from the introduction without pagination or a skip confirmation", () => {
+    expect(steps[0]).toMatchObject({
+      hiddenPage: true,
+      pageInFooter: false,
+      nextLabel: "Okay, Wonder",
+      skip: { label: "Skip" },
+    });
+    expect(steps[0].skip?.confirm).toBeFalsy();
   });
 });
 
@@ -415,8 +425,17 @@ describe("inputRule", () => {
     expect(inputRule({ name: "guestbook", pattern: null })).toBeNull();
   });
 
-  it("still honours a pattern an author writes on an unbound line", () => {
-    expect(inputRule({ name: "guestbook", pattern: "[A-Za-z0-9-]+" })).toBe("[A-Za-z0-9-]+");
+  it("leaves the apikey binding unchecked, unlike the other binding", () => {
+    /* Deliberate, and the one place the two bindings differ on rules: a key of
+       the wrong shape is Hypixel's to refuse. Inventing a format here would
+       reject a perfectly good key the day Hypixel changes one character of it,
+       and the reader would have no way to argue. */
+    expect(inputRule({ name: "apikey", pattern: null })).toBeNull();
+  });
+
+  it("still honours a pattern an author writes on the apikey line", () => {
+    /* No built-in rule is not the same as no rule allowed. */
+    expect(inputRule({ name: "apikey", pattern: "[A-Za-z0-9-]+" })).toBe("[A-Za-z0-9-]+");
   });
 });
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { NUM, PANEL, SectionHead } from "../../ui/kit";
 import { AccessoryTile } from "./AccessoryTile";
@@ -39,10 +39,10 @@ const TileGrid: React.FC<{
 /**
  * One status band.
  *
- * `collapsed` is only ever used by Owned, and it is closed by default because
- * the page exists to show what you lack. `<details>` rather than a piece of
- * state: it opens without JavaScript, it is keyboard operable for free, and
- * browser find-in-page can reach inside it.
+ * Every section uses the same disclosure. `collapsed` only chooses the initial
+ * state, normally closed for Owned because the page exists to show what is
+ * still missing. A mixture of fixed panels and collapsible panels made the
+ * page's interaction grammar unpredictable.
  *
  * An empty band still renders, with `empty` explaining why it is empty. A
  * section that silently disappears when it has nothing in it makes "you are not
@@ -54,7 +54,6 @@ export const AccessorySection: React.FC<{
   /** Shown in place of the grid when there is nothing here. */
   empty: React.ReactNode;
   /** Sits next to the count in the heading. One short line at most. */
-  note?: string;
   collapsed?: boolean;
   /**
    * id -> which door is open on that tile right now. Computed once by the
@@ -66,10 +65,10 @@ export const AccessorySection: React.FC<{
   recombed?: ReadonlySet<string>;
   /** Rift sections only: mark rift-transferable tiles, which stand in both areas. */
   markTransferable?: boolean;
-}> = ({ title, entries, empty, note, collapsed = false, actionable, recombed, markTransferable }) => {
+}> = ({ title, entries, empty, collapsed = false, actionable, recombed, markTransferable }) => {
+  const [expanded, setExpanded] = useState(!collapsed);
   const count = (
     <span className="flex items-center gap-2">
-      {note && <span className="hidden text-[10px] text-slate-500 sm:block">{note}</span>}
       <span className={`text-[11px] ${NUM} text-slate-300`}>{entries.length.toLocaleString()}</span>
     </span>
   );
@@ -81,17 +80,12 @@ export const AccessorySection: React.FC<{
       <TileGrid entries={entries} actionable={actionable} recombed={recombed} markTransferable={markTransferable} />
     );
 
-  if (!collapsed) {
-    return (
-      <section className={PANEL}>
-        <SectionHead title={title} right={count} />
-        {body}
-      </section>
-    );
-  }
-
   return (
-    <details className={`group ${PANEL}`}>
+    <details
+      className={`group ${PANEL}`}
+      open={expanded}
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+    >
       <summary className="cursor-pointer list-none">
         <SectionHead
           title={title}

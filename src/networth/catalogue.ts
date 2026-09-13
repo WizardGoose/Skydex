@@ -12,7 +12,7 @@ import type { Catalogue, CatalogueEntry } from "./types";
  *
  * `GET /v2/resources/skyblock/items` is keyless and answers with
  * `Access-Control-Allow-Origin: *`, so this costs the visitor no key and us no
- * backend. It is about 5 MB on the wire and about 0.8 MB once the nine fields
+ * backend. It is about 5 MB on the wire and remains small once the fields
  * below are kept, which is the difference between something that can sit in
  * localStorage next to the prices and something that cannot.
  *
@@ -23,7 +23,7 @@ import type { Catalogue, CatalogueEntry } from "./types";
 const ITEMS_URL = "https://api.hypixel.net/v2/resources/skyblock/items";
 
 /** A NEW key. See the note on `PRICES_KEY`; nothing existing is touched. */
-export const CATALOGUE_KEY = "skydex.networth.items.v1";
+export const CATALOGUE_KEY = "skydex.networth.items.v3";
 
 export const CATALOGUE_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -40,7 +40,7 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
 /**
- * Keep nine fields and drop about sixty.
+ * Keep ten fields and drop about sixty.
  *
  * The list is exactly what the handlers read, nothing kept "in case". An entry
  * that would be empty after trimming is still kept under its id, because
@@ -60,6 +60,34 @@ export const trimCatalogue = (payload: unknown): Catalogue | null => {
     if (typeof raw.tier === "string") entry.tier = raw.tier;
     if (typeof raw.soulbound === "string") entry.soulbound = raw.soulbound;
     if (typeof raw.museum === "boolean") entry.museum = raw.museum;
+    if (isObject(raw.stats)) {
+      const stats = Object.fromEntries(Object.entries(raw.stats).filter((value): value is [string, number] => (
+        typeof value[1] === "number" && Number.isFinite(value[1])
+      )));
+      if (Object.keys(stats).length > 0) entry.stats = stats;
+    }
+    if (isObject(raw.museum_data)) {
+      const museumData: NonNullable<CatalogueEntry["museum_data"]> = {};
+      const donationXp = raw.museum_data.donation_xp;
+      if (typeof donationXp === "number" && Number.isFinite(donationXp) && donationXp >= 0) {
+        museumData.donation_xp = donationXp;
+      }
+      if (typeof raw.museum_data.category === "string") museumData.category = raw.museum_data.category;
+      if (typeof raw.museum_data.game_stage === "string") museumData.game_stage = raw.museum_data.game_stage;
+      if (isObject(raw.museum_data.armor_set_donation_xp)) {
+        const setXp = Object.fromEntries(Object.entries(raw.museum_data.armor_set_donation_xp)
+          .filter((entry): entry is [string, number] => (
+            typeof entry[1] === "number" && Number.isFinite(entry[1]) && entry[1] >= 0
+          )));
+        if (Object.keys(setXp).length > 0) museumData.armor_set_donation_xp = setXp;
+      }
+      if (Array.isArray(raw.museum_data.mapped_item_ids)) {
+        const mappedIds = raw.museum_data.mapped_item_ids
+          .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+        if (mappedIds.length > 0) museumData.mapped_item_ids = mappedIds;
+      }
+      if (Object.keys(museumData).length > 0) entry.museum_data = museumData;
+    }
     if (Array.isArray(raw.upgrade_costs)) entry.upgrade_costs = raw.upgrade_costs as CatalogueEntry["upgrade_costs"];
     if (Array.isArray(raw.gemstone_slots)) entry.gemstone_slots = raw.gemstone_slots as CatalogueEntry["gemstone_slots"];
     if (isObject(raw.prestige)) entry.prestige = raw.prestige as CatalogueEntry["prestige"];
@@ -143,6 +171,18 @@ export const loadCatalogue = async (force = false): Promise<Catalogue> => {
 export const hasCatalogue = (): boolean => snapshot !== null;
 
 export const catalogueFetchedAt = (): number | null => snapshot?.fetchedAt ?? null;
+
+/**
+ * The last catalogue already available to this browser session or on disk.
+ *
+ * Unlike `loadCatalogue`, this never starts a network request. Profile cache
+ * hydration uses it so a page refresh can paint the last good profile before
+ * independently refreshing this much larger, keyless resource.
+ */
+export const cachedCatalogue = (): CatalogueSnapshot | null => {
+  if (!snapshot) snapshot = readCachedCatalogue();
+  return snapshot;
+};
 
 /** Test seam. Sets the in-memory copy without touching the network or disk. */
 export const setCatalogueForTesting = (catalogue: Catalogue, fetchedAt = Date.now()): void => {

@@ -1,5 +1,5 @@
 import { readNbtBlob } from "../nbt/blob";
-import { readInventoryItems, type NbtItem } from "../nbt/items";
+import { readInventoryItems, stripColourCodes, type NbtItem } from "../nbt/items";
 import type { AccessoryCatalogue } from "./catalogue";
 import { EMPTY_CHAINS, type ChainIndex } from "./chains";
 
@@ -108,6 +108,10 @@ export interface OwnedBag {
    * set above.
    */
   tiers: Map<string, string>;
+  /** The one unambiguous enrichment observed for an id. */
+  enrichments: Map<string, string>;
+  /** Duplicate ids that carried conflicting enrichments, deliberately omitted from the aggregate. */
+  ambiguousEnrichments: Set<string>;
 }
 
 /**
@@ -142,10 +146,18 @@ export function bagFromItems(items: readonly NbtItem[]): OwnedBag {
   const ids: string[] = [];
   const recombobulated = new Set<string>();
   const tiers = new Map<string, string>();
+  const enrichmentValues = new Map<string, Set<string>>();
   for (const item of items) {
     if (item.id === null) continue;
     ids.push(item.id);
     if (item.rarityUpgrades !== null && item.rarityUpgrades > 0) recombobulated.add(item.id);
+
+    const enrichment = item.enrichment?.trim().toLowerCase();
+    if (enrichment) {
+      const values = enrichmentValues.get(item.id) ?? new Set<string>();
+      values.add(enrichment);
+      enrichmentValues.set(item.id, values);
+    }
 
     const tier = tierFromLore(item.lore);
     if (tier !== null) {
@@ -155,7 +167,59 @@ export function bagFromItems(items: readonly NbtItem[]): OwnedBag {
       }
     }
   }
-  return { ids, recombobulated, tiers };
+  const enrichments = new Map<string, string>();
+  const ambiguousEnrichments = new Set<string>();
+  for (const [id, values] of enrichmentValues) {
+    if (values.size === 1) enrichments.set(id, [...values][0]);
+    else ambiguousEnrichments.add(id);
+  }
+  return { ids, recombobulated, tiers, enrichments, ambiguousEnrichments };
+}
+
+/**
+ * Recover the same ownership facts from the shared parsed-profile snapshot.
+ *
+ * `parseMemberItemsWithLayouts` has already decoded `talisman_bag` into the
+ * prismarine-style objects used by networth and the Inventory tab. Re-reading
+ * the profile just to decode the same blob again is both wasteful and, when a
+ * refresh is temporarily unavailable, exactly how the Accessories page can
+ * lose a perfectly good last-known bag while the rest of Profile stays live.
+ *
+ * An empty input is a known empty bag. Callers decide whether the source was
+ * actually shared before invoking this function, so it never turns an absent
+ * Inventory API field into an ownership claim.
+ */
+export function bagFromParsedItems(items: readonly unknown[]): OwnedBag {
+  const projected: NbtItem[] = [];
+
+  for (let slot = 0; slot < items.length; slot += 1) {
+    const raw = items[slot];
+    if (!isObject(raw)) continue;
+    const tag = isObject(raw.tag) ? raw.tag : null;
+    const extra = tag && isObject(tag.ExtraAttributes) ? tag.ExtraAttributes : null;
+    const display = tag && isObject(tag.display) ? tag.display : null;
+    const lore = Array.isArray(display?.Lore)
+      ? display.Lore.filter((line): line is string => typeof line === "string").map(stripColourCodes)
+      : null;
+    const rarityUpgrades = extra && typeof extra.rarity_upgrades === "number" && Number.isFinite(extra.rarity_upgrades)
+      ? extra.rarity_upgrades
+      : null;
+
+    projected.push({
+      slot,
+      id: extra && typeof extra.id === "string" ? extra.id : null,
+      count: 1,
+      name: null,
+      lore,
+      enchantments: null,
+      reforge: null,
+      rarityUpgrades,
+      enrichment: extra && typeof extra.talisman_enrichment === "string" ? extra.talisman_enrichment : null,
+      uuid: null,
+    });
+  }
+
+  return bagFromItems(projected);
 }
 
 /**

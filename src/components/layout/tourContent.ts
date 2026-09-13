@@ -33,8 +33,9 @@
  *                             the choice is a label and never a number
  *       [settings-button]   an "Open Settings" button
  *       [input]             a signature-line text input
- *                             name= a known binding saves for real. "username"
- *                             saves the Minecraft name Settings uses. An
+ *                             name= a known binding saves for real, and the
+ *                             registry contains "username", which saves the
+ *                             Minecraft name Settings uses. An
  *                             unknown or missing name is just for fun and
  *                             saves nowhere
  *                             placeholder= the ghost text. The browser draws

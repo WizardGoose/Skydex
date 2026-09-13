@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RARITY_UNKNOWN, blockingLine, matchesQuery, openRequirementLines, rarityClass, roman } from "../display";
+import { RARITY_UNKNOWN, blockingLine, matchesQuery, openRequirementLines, rarityClass, readinessSummary, roman } from "../display";
 import {
   ACTIONABLE_ORDER,
   ACTIONABLE_TILE,
@@ -18,6 +18,8 @@ const view = (over: Partial<AccessoryView> & { id: string }): AccessoryView => (
   familyRank: null,
   itemId: null,
   craftable: false,
+  recipe: null,
+  recipeYields: 1,
   unlocks: null,
   requirements: [],
   checked: [],
@@ -28,10 +30,13 @@ const view = (over: Partial<AccessoryView> & { id: string }): AccessoryView => (
   attainability: "unknownReach",
   status: "missing",
   source: "wiki",
+  acquisition: { category: "needsReview", detail: null, alternatives: [], evidence: "fallback" },
+  readiness: { kind: "unknown", label: "Acquisition route still needs review." },
   blockedBy: null,
   coveredByFamily: false,
   foldedBehind: null,
   foldedHigher: [],
+  ownedPrerequisite: null,
   eventKey: null,
   ...over,
 });
@@ -134,6 +139,23 @@ describe("openRequirementLines", () => {
     });
     // No trailing space, which a naive join would leave behind.
     expect(openRequirementLines(entry)[0].label).toBe("Melody Hair");
+  });
+});
+
+describe("readinessSummary", () => {
+  it("keeps an owned upgrade base without the unmeasured-material disclaimer", () => {
+    expect(readinessSummary(view({
+      id: "blood-donor-ring",
+      readiness: { kind: "nextUpgrade", label: "Owns Blood Donor Talisman; remaining materials are not measured." },
+      ownedPrerequisite: { id: "BLOOD_DONOR_TALISMAN", name: "Blood Donor Talisman", tier: "COMMON" },
+    }))).toBe("Owns Blood Donor Talisman");
+  });
+
+  it("states the missing measurement in three words", () => {
+    expect(readinessSummary(view({
+      id: "craftable",
+      readiness: { kind: "materialsUnknown", label: "Recipe known; complete material holdings are not measured." },
+    }))).toBe("Materials not checked");
   });
 });
 

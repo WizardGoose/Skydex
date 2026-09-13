@@ -1,0 +1,17 @@
+.shards-acquisition-guide { display: grid; gap: .5rem; min-width: 0; color: #b7c3ce; font-size: 12px; line-height: 1.5; }
+.profile-info-popover > .shards-acquisition-guide { margin-top: .65rem; }
+.shards-acquisition-step { display: flex; align-items: center; gap: .65rem; min-width: 0; }
+.shards-acquisition-step + .shards-acquisition-step { border-top: 1px solid rgb(255 255 255 / .08); padding-top: .5rem; }
+.shards-acquisition-step > :is(img, span:has(img)) { flex-shrink: 0; }
+.shards-acquisition-step p { margin: 0; min-width: 0; }
+.shards-acquisition-step.is-fusion { display: grid; gap: .4rem; }
+.shards-acquisition-step-label { display: flex; align-items: center; gap: .4rem; color: #c9a2df; font-size: 11px; font-weight: 650; }
+.shards-acquisition-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .5rem; }
+.shards-acquisition-pair > span { padding: .45rem .5rem; border: 1px solid rgb(255 255 255 / .12); border-radius: .25rem; }
+.shards-calculator-sources.utility-info { display: none; }
+@media (max-width: 820px), (hover: none), (pointer: coarse) {
+  .shards-calculator-sources.utility-info { display: inline-flex; margin-left: .35rem; vertical-align: middle; }
+  .shards-calculator-sources > button { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.25rem; height: 1.25rem; padding: 0; border: 0; background: transparent; color: var(--profile-muted); }
+  .shards-calculator-sources > button::before { position: absolute; inset: -.375rem; content: ""; }
+  .shards-calculator-sources > button:is(:hover, :focus-visible, [aria-expanded="true"]) { color: var(--profile-text); }
+}

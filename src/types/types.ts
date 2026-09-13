@@ -1,4 +1,6 @@
 import React from "react";
+import type { HuntingEquipment } from "../shards/huntingEquipment";
+import type { AcquisitionEstimate } from "../shards/huntingModel";
 
 export interface Shard {
   id: string;
@@ -9,6 +11,7 @@ export interface Shard {
   fuse_amount: number;
   internal_id: string;
   rate: number;
+  acquisition?: AcquisitionEstimate;
 }
 
 export type Shards = {
@@ -69,9 +72,14 @@ export type RecipeTree =
     };
 
 export interface CalculationParams {
+  huntingEquipment?: HuntingEquipment;
+  /** Saved hunting set contribution, replaced when a fishing set is used. */
+  hunterEquipmentFortune?: number;
   customRates: { [shardId: string]: number };
   hunterFortune: number;
   excludeChameleon: boolean;
+  /** Exclude recipes consuming these ingredients, including nested recipes. */
+  excludedFusionInputs?: string[];
   frogBonus: boolean;
   newtLevel: number;
   salamanderLevel: number;
@@ -104,6 +112,7 @@ export interface CalculationResult {
 
 export interface ShardWithKey extends Shard {
   key: string;
+  canFuse?: boolean;
 }
 
 export interface ShardWithDirectInfo extends ShardWithKey {
@@ -181,6 +190,7 @@ export interface ShardAutocompleteProps {
   placeholder?: string;
   className?: string;
   searchMode?: "enhanced" | "name-only";
+  showBrowseButton?: boolean;
 }
 
 export interface SuggestionItemProps {

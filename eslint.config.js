@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { globalIgnores } from 'eslint/config'
 
 export default tseslint.config([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', '.vite', '.jspace', 'prototypes', 'src/dev-local', 'mod/build', 'mod/.gradle']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

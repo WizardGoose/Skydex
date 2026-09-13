@@ -57,11 +57,12 @@ export const fnv1a = (s: string): string => {
  *   YIELD first, higher wins - it is the solve's own objective, and more
  *   spots is fewer rounds for the same demand.
  *
- *   UNIQUE CROPS next, fewer wins - the growth-speed formula slows with crop
- *   variety, so a plot growing the same yield from fewer kinds is a faster
- *   clock (`stageSecondsFor` reads exactly this count).
+ *   TOTAL CROPS next, fewer wins - a cheaper field to sow and fewer placements
+ *   for the player, all else equal.
  *
- *   TOTAL CROPS last, fewer wins - a cheaper sowing bill, all else equal.
+ *   UNIQUE CROPS last, fewer wins - not a speed change (that bonus is shared
+ *   across the greenhouse), but a simpler field when yield and sowing count
+ *   are otherwise identical.
  *
  * Ties are NOT better: on equality the stored answer stands, which is what
  * makes the store stable rather than flapping between equivalent plots.
@@ -77,11 +78,11 @@ export const betterEconomy = (prev: PlotEconomy | null | undefined, next: PlotEc
 
   if (next.yield !== prev.yield) return next.yield > prev.yield;
 
-  const uniq = (e: PlotEconomy) => Object.keys(e.crops).length;
-  if (uniq(next) !== uniq(prev)) return uniq(next) < uniq(prev);
-
   const bill = (e: PlotEconomy) => Object.values(e.crops).reduce((s, n) => s + n, 0);
-  return bill(next) < bill(prev);
+  if (bill(next) !== bill(prev)) return bill(next) < bill(prev);
+
+  const uniq = (e: PlotEconomy) => Object.keys(e.crops).length;
+  return uniq(next) < uniq(prev);
 };
 
 interface StoredEconomies {

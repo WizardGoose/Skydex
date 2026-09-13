@@ -1,4 +1,11 @@
-import { estimate, expectedCyclesToFill, rollCyclesFor, type BioanalysisTier, type EstimateResult } from "../timeModel";
+import {
+  BASE_CROP_DECAY_DAYS,
+  estimate,
+  expectedCyclesToFill,
+  rollCyclesFor,
+  type BioanalysisTier,
+  type EstimateResult,
+} from "../timeModel";
 import type { CropDefinition, MutationDefinition } from "../types/greenhouse";
 import { needSplit } from "./needSplit";
 import type { PlotEconomy, SolverPlan, SolverPlanNode } from "./solverPlan";
@@ -77,6 +84,8 @@ export interface PlantingBreakdown {
    * declines to print rather than dressing up.
    */
   cyclesToFill: number;
+  /** 90th-percentile roll count for the same persistent spawn spots. */
+  p90CyclesToFill?: number;
 }
 
 /** One mutation's honest cost, in the shape the UI reads. */
@@ -88,6 +97,8 @@ export interface NodeEstimate {
   spawnChance: number;
   /** True when the mutation never rolls and its time is not a chance result. */
   mechanicOnly: boolean;
+  /** Whether the visible clock stops within one standing sowing or spans harvest rounds. */
+  completionMode: EstimateResult["completion"]["mode"];
 
   /** Leave the planting this many growth cycles before harvesting. */
   harvestWindow: number;
@@ -138,11 +149,31 @@ export interface PlanEstimates {
 }
 
 /**
+ * Expected wall-clock time left, expressed in the greenhouse's own cycle unit.
+ *
+ * `cyclesToFill` deliberately becomes Infinity when one sowing cannot hold the
+ * whole demand. That is useful for explaining a small one-sowing field, but it
+ * is not a useful headline for larger jobs: their complete expected duration is
+ * still known. This converts that duration back through the exact stage clock
+ * the estimate used, so every field can show one comparable cycle count.
+ */
+export const expectedGrowthCyclesLeft = (
+  estimate: Pick<NodeEstimate, "expectedSecondsLeft" | "breakdown"> | null | undefined,
+): number | null => {
+  if (!estimate) return null;
+  const seconds = estimate.expectedSecondsLeft;
+  const secondsPerCycle = estimate.breakdown.stageSeconds;
+  if (!Number.isFinite(seconds) || !Number.isFinite(secondsPerCycle) || seconds < 0 || secondsPerCycle <= 0) return null;
+  if (seconds === 0) return 0;
+  return Math.max(1, Math.round(seconds / secondsPerCycle));
+};
+
+/**
  * Growth stages and decay of everything a mutation needs adjacent.
  *
- * Inputs grow in parallel so only the slowest sets the wait, and any input
- * that is itself a mutation carries its own decay clock, which caps how long
- * the planting can be left standing.
+ * Inputs grow in parallel so only the slowest sets the wait. Mutation inputs
+ * carry their individual decay clocks; base crops share the cited 72-hour
+ * clock. Either can cap how long the planting remains reusable.
  *
  * THIS IS THE LEAD-IN, and it is deliberately charged for every input.
  *
@@ -156,15 +187,14 @@ export interface PlanEstimates {
  * does not say. The three trivia lines that come closest contradict each other,
  * and Fertilized Jerryseed is a live counterexample: it is planted and grows
  * into a Jerryflower like any crop. Charging the stages is the reading that can
- * only overstate, so it stands until a playtest settles it. Reasoning, quotes
- * and the playtest are in `docs/greenhouse-time-research.md` §5.5 and §10.10.
+ * only overstate, so it stands until a playtest settles it.
  */
 const inputsOf = (mutation: MutationDefinition, data: Dataset) =>
   (mutation.requirements ?? []).map((req) => {
     const def = data.mutations[req.crop] ?? data.crops[req.crop];
     return {
       growth_stages: def?.growth_stages ?? 0,
-      decay: data.mutations[req.crop]?.decay ?? 0,
+      decay: data.mutations[req.crop]?.decay ?? (data.crops[req.crop] ? BASE_CROP_DECAY_DAYS.value : 0),
       // Carried for the breakdown only. The model reads the two fields above
       // and never this one; `InputFacts` is unchanged.
       name: def?.name ?? req.crop,
@@ -172,20 +202,17 @@ const inputsOf = (mutation: MutationDefinition, data: Dataset) =>
   });
 
 /**
- * Unique crop types on this mutation's plot.
+ * Seconds per growth stage for the player's greenhouse.
  *
- * The solver already says exactly what a plot plants, and that count feeds the
- * growth-speed formula, so it is measured rather than guessed. Falls back to
- * the settings value when no solve is available.
+ * The unique-crop bonus is shared across every Greenhouse plot. A field's
+ * solver economy therefore cannot override it with the crops in that one
+ * layout. Keep the economy argument for the existing estimate call sites, but
+ * price every field with the same greenhouse-wide settings value.
  */
-export const uniqueCropsFor = (economy: PlotEconomy | null | undefined): number | undefined =>
-  economy ? Object.keys(economy.crops).length : undefined;
-
-/** Seconds per growth stage on one mutation's plot. */
-export const stageSecondsFor = (economy: PlotEconomy | null | undefined, settings: EstimateSettings): number => {
-  const unique = uniqueCropsFor(economy);
-  return stageSeconds(unique === undefined ? settings : { ...settings, uniqueCrops: unique });
-};
+export const stageSecondsFor = (
+  _economy: PlotEconomy | null | undefined,
+  settings: EstimateSettings,
+): number => stageSeconds(settings);
 
 /**
  * The honest estimate for one plan row.
@@ -267,6 +294,7 @@ export const nodeEstimate = (
       // The model's own survival sum, over the spot count the plot was actually
       // sized to and the chance the estimate was actually priced at.
       cyclesToFill: expectedCyclesToFill(spots, result.spawnChance, node.need),
+      p90CyclesToFill: result.completion.p90RollCycles ?? undefined,
     },
     spawnChance: result.spawnChance,
     mechanicOnly: result.mechanicOnly,
@@ -274,15 +302,16 @@ export const nodeEstimate = (
     maxWindow: result.maxWindow,
     windowCappedByDecay: Number.isFinite(result.maxWindow) && result.harvestWindow >= result.maxWindow,
     plantingSeconds: result.plantingSeconds,
-    expectedSeconds: result.expectedSeconds,
-    p90Seconds: result.p90Seconds,
-    varianceSeconds2: result.varianceSeconds2,
-    expectedSecondsLeft: result.expectedSeconds * fractionLeft,
-    p90SecondsLeft: result.p90Seconds * fractionLeft,
+    completionMode: result.completion.mode,
+    expectedSeconds: result.completion.expectedSeconds,
+    p90Seconds: result.completion.p90Seconds,
+    varianceSeconds2: result.completion.varianceSeconds2,
+    expectedSecondsLeft: result.completion.expectedSeconds * fractionLeft,
+    p90SecondsLeft: result.completion.p90Seconds * fractionLeft,
     // Scaling a duration by a constant fraction scales its variance by the
     // square. The "left" figures already treat the remainder as that constant
     // fraction of the whole, so the variance follows the same reading.
-    varianceSeconds2Left: result.varianceSeconds2 * fractionLeft * fractionLeft,
+    varianceSeconds2Left: result.completion.varianceSeconds2 * fractionLeft * fractionLeft,
     deterministicSeconds: result.deterministicSeconds,
   };
 };
@@ -846,7 +875,7 @@ export const plantingBreakdownLabel = (b: PlantingBreakdown, mutationName: strin
 /**
  * The plot's size, and the wait that size buys.
  *
- * "2 spots, about 6 cycles for both to fill."
+ * "2 spawn spots, about 6 growth cycles for both to fill."
  *
  * This is the sentence that makes a minimal plot defensible rather than stingy.
  * Sizing to one spot per unit is the cheapest possible answer in crops and in
@@ -861,9 +890,9 @@ export const fillLabel = (b: PlantingBreakdown): string | null => {
   if (!Number.isFinite(b.cyclesToFill) || b.cyclesToFill <= 0 || b.spots <= 0) return null;
 
   const cycles = Math.max(1, Math.round(b.cyclesToFill));
-  const spots = `${b.spots} ${b.spots === 1 ? "spot" : "spots"}`;
+  const spots = `${b.spots} spawn ${b.spots === 1 ? "spot" : "spots"}`;
   const fill = b.spots === 1 ? "to fill it" : b.spots === 2 ? "for both to fill" : "to fill them";
-  return `${spots}, about ${cycles} ${cycles === 1 ? "cycle" : "cycles"} ${fill}`;
+  return `${spots} · about ${cycles} growth ${cycles === 1 ? "cycle" : "cycles"} ${fill}`;
 };
 
 /**

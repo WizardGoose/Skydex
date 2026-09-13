@@ -6,6 +6,8 @@ import {
   buildResourceIndex,
   resourceHashFor,
   resourceHeadSrcFor,
+  resourceItemModelFor,
+  resourceCategoryFor,
   resourceNameFor,
   subscribeItemResource,
 } from "../itemResource";
@@ -99,6 +101,28 @@ describe("buildResourceIndex", () => {
     expect(index.SNOW_GLOBE).toEqual({ h: HASH });
   });
 
+  it("keeps Hypixel's exact item model even when the name needs no entry", () => {
+    const model = "hypixel_skyblock:item/island_relevant/foraging_3/accessories/lumberjack/lumberjack_talisman";
+    const index = buildResourceIndex([
+      { id: "LUMBERJACK_TALISMAN", name: "Lumberjack Talisman", item_model: model },
+    ]);
+
+    expect(index.LUMBERJACK_TALISMAN).toEqual({ m: model });
+  });
+
+  it("keeps Hypixel categories for item-heavy Profile organisation", () => {
+    const index = buildResourceIndex([
+      { id: "MUSEUM_SWORD", name: "Museum Sword", category: "SWORD" },
+      { id: "ORDINARY_SWORD", name: "Ordinary Sword" },
+    ]);
+
+    expect(index.MUSEUM_SWORD).toEqual({ c: "SWORD" });
+    expect(index.ORDINARY_SWORD).toBeUndefined();
+    __setItemResourceForTests(index);
+    expect(resourceCategoryFor("MUSEUM_SWORD")).toBe("SWORD");
+    expect(resourceCategoryFor("ORDINARY_SWORD")).toBeNull();
+  });
+
   it("invents no hash out of a value that does not carry one", () => {
     const index = buildResourceIndex([
       { id: "A", name: "Alpha Item", skin: { value: "not base64 at all !!!" } },
@@ -138,6 +162,13 @@ describe("reading the store", () => {
     expect(resourceNameFor("LOTUS_SILVER")).toBeNull();
     expect(resourceHashFor("LOTUS_SILVER")).toBeNull();
     expect(resourceHeadSrcFor("LOTUS_SILVER")).toBeUndefined();
+    expect(resourceItemModelFor("LOTUS_SILVER")).toBeNull();
+  });
+
+  it("serves the exact Hypixel item model once adopted", () => {
+    const model = "hypixel_skyblock:item/island_relevant/foraging_3/accessories/lumberjack/lumberjack_talisman";
+    adoptResourceItems([{ id: "LUMBERJACK_TALISMAN", name: "Lumberjack Talisman", item_model: model }]);
+    expect(resourceItemModelFor("lumberjack_talisman")).toBe(model);
   });
 
   it("answers with Hypixel's name once it has", () => {
@@ -165,7 +196,7 @@ describe("reading the store", () => {
       { id: "GOOD", name: "Good Head", skin: { value: skinValue(HASH) } },
       { id: "PLAIN", name: "Plain Item" },
     ]);
-    expect(resourceHeadSrcFor("GOOD")).toBe(`https://mc-heads.net/avatar/${HASH}/64`);
+    expect(resourceHeadSrcFor("GOOD")).toBe(`https://mc-heads.net/head/${HASH}/64`);
     expect(resourceHeadSrcFor("PLAIN")).toBeUndefined();
   });
 

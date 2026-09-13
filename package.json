@@ -1,7 +1,7 @@
 {
-  "name": "wizardsky",
+  "name": "skydex",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -17,12 +17,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "check": "tsx tools/solver-plan.ts",
-    "data:wiki": "node tools/wiki-dump.mjs greenhouse-bundle",
-    "data:sync": "node tools/wiki-dump.mjs greenhouse-bundle && node tools/wiki-to-dataset.mjs --write && node tools/wiki-crosscheck.mjs && node tools/build-solver-precompute.mjs",
     "data:check": "node tools/wiki-to-dataset.mjs && node tools/wiki-crosscheck.mjs",
     "data:precompute": "node tools/build-solver-precompute.mjs",
     "data:precompute:check": "node tools/build-solver-precompute.mjs --check",
-    "data:modules": "node tools/dump-datasets.mjs",
     "data:economies": "tsx tools/solver-plan.ts --fresh",
     "verify:recipes": "node tools/build-recipes.mjs",
     "bench": "tsx tools/solver-bench.mts",

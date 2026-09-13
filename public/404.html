@@ -31,14 +31,14 @@
        * still in the address bar. That address is the only copy of their
        * intent, so it is stashed and then restored once the real app is up.
        *
-       * The read half is src/components/AppWithRedirect.tsx, and the two only
+       * The read half is src/staticRouteRestore.ts, and the two only
        * work as a pair. The contract between them, exactly:
        *
        *   key    sessionStorage["pathToRedirect"]
        *   value  window.location.pathname + search + hash, verbatim
        *
        * Verbatim matters in both directions. The value is not encoded, not
-       * trimmed, decoded, or re-encoded before AppWithRedirect hands it to
+       * trimmed, decoded, or re-encoded before the startup handoff passes it to
        * history.replaceState. The fragment is part of the payload contract.
        */
       (function () {

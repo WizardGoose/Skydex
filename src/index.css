@@ -1,4 +1,5 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "./";
 
 /* =========================================================================
    Theme tokens
@@ -78,7 +79,7 @@
    ========================================================================= */
 
 @theme {
-  --font-sans: "Space Grotesk", "Minecraft", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Montserrat", "Minecraft", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Minecraft", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* The mark's face, and nothing else's. ADLaM Display is used at one size in
@@ -88,10 +89,9 @@
      for the licence, and NOTICE.md for the full record. */
   --font-mark: "ADLaM Display", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 
-  /* The chrome face, from the glass re-vamp: Montserrat
-     ExtraBold carries the wordmark, the masthead tabs and page display
-     headings, and deliberately nothing else: a display weight stops reading
-     as chrome the moment body copy is set in it. */
+  /* The chrome face uses the same Montserrat family as the interface. Weight
+     still distinguishes the wordmark, masthead tabs and page headings from
+     body copy, so chrome remains a hierarchy rather than a second typeface. */
   --font-chrome: "Montserrat", "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 
   /* --- Obsidian ink (replaces slate) ------------------------------------ */
@@ -522,10 +522,11 @@
 /* The three text faces, self-hosted.
    =========================================================================
 
-   Space Grotesk carries body and headings, JetBrains Mono the figures and
-   micro-labels, Montserrat the wordmark and masthead. All three are Google
-   fonts under the SIL Open Font License, which permits bundling and
-   self-hosting; NOTICE.md records the copyright and licence for each.
+   Montserrat carries the interface and chrome, JetBrains Mono the figures and
+   micro-labels, and Space Grotesk remains the alternate/fallback face. All
+   three are Google fonts under the SIL Open Font License, which permits
+   bundling and self-hosting; NOTICE.md records the copyright and licence for
+   each.
 
    These arrived as an `@import url("https://fonts.googleapis.com/...")` on the
    first line of this file, and the reason that had to go is the same reason
@@ -593,7 +594,7 @@
 @font-face {
   font-family: "Montserrat";
   src: url("/fonts/montserrat-latin-var.woff2") format("woff2");
-  font-weight: 600 800;
+  font-weight: 400 800;
   font-style: normal;
   font-display: swap;
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F,
@@ -603,7 +604,7 @@
 @font-face {
   font-family: "Montserrat";
   src: url("/fonts/montserrat-latin-ext-var.woff2") format("woff2");
-  font-weight: 600 800;
+  font-weight: 400 800;
   font-style: normal;
   font-display: swap;
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
@@ -616,7 +617,7 @@
    This face exists for one job: the in-game symbols that appear inside perk
    and description text - the SkyBlock stat icons (U+2741 flower, U+272A star,
    U+2694 crossed swords and friends), the Minecraft private-use glyphs, and
-   the box-drawing used by the fusion-line diagrams. Space Grotesk and JetBrains
+   the box-drawing used by the fusion-line diagrams. Montserrat and JetBrains
    Mono have none of those, which is why it sits second in `--font-sans` and
    `--font-mono`.
 
@@ -624,7 +625,7 @@
    affordable. The file is 5.3 MB, and without a range the browser treats it as
    a candidate for ANY character the primary face has not painted yet. During
    the swap period on a cold visit that is all of them, so a landing page of
-   plain Latin text pulled 5.3 MB to render words Space Grotesk was already
+   plain Latin text pulled 5.3 MB to render words Montserrat was already
    fetching. Bounded to the symbol blocks, a page with no in-game glyphs never
    requests it at all.
 
@@ -759,9 +760,9 @@ body {
   }
 }
 
-/* Space Grotesk has real character at large sizes and gets muddy if you let
-   it letterspace loose at small ones. Headings pull tight, mono micro-labels
-   push wide, and nothing in between drifts. */
+/* Montserrat's wide geometry benefits from a restrained heading measure.
+   Headings pull tight, mono micro-labels push wide, and nothing in between
+   drifts. */
 h1,
 h2,
 h3 {
@@ -1052,7 +1053,7 @@ main > * {
      .sd-curtain   ONE sheet of frosted glass, floor to ceiling, from
                    --sd-split to the right margin. #13161D tint over a true
                    filtered background copy
-     .sd-bar       the masthead. shared ground 58% -> 46%, 2px stroke
+     .sd-bar       the masthead. shared ground 58% -> 46%, framed glass edge
 
    There is one sheet and content sits ON it. Nothing nests a second
    backdrop-filter inside the curtain: the backdrop such a card would sample is
@@ -1060,10 +1061,11 @@ main > * {
    filter pass and returns something indistinguishable from a flat tint.
    .sd-panel is tint only, for content that needs to lift off the glass.
 
-   THE TINT IS 55% -> 45%: the measured
-   minimum where small slate-300 text clears WCAG AA on the curtain's worst
-   pixel (4.56:1 against the moon bloom; the drawing's own 20% -> 10% measured
-   2.54:1 there and stays recorded in the bench as the look it trades away).
+   THE CURTAIN TINT IS 55% THROUGHOUT: the measured minimum where small
+   slate-300 text clears WCAG AA on the curtain's worst pixel (4.56:1 against
+   the moon bloom; the drawing's own 20% -> 10% measured 2.54:1 there and stays
+   recorded in the bench as the look it trades away). Keeping that material
+   uniform means long pages retain glass instead of fading into transparency.
 
    The split is 0 by default, because most pages are all curtain. A page
    that owns a sharp channel (Profile: the player stands in it) gets
@@ -1080,7 +1082,7 @@ main > * {
   /* A deliberate, modest lift from the bench values: the art remains part of
      the page, while sticky chrome and text-bearing glass hold their hierarchy
      over its brightest details. */
-  --sd-bar-h: 68px;
+  --sd-bar-h: 52px;
 
   /* The second strip, carrying the current section's tools. Held as a token
      because two different things have to agree on it: the strip draws itself
@@ -1147,6 +1149,12 @@ main > * {
      mock's 8.4vw, which parked the logo a third of the way into the column
      on a wide monitor; the brand belongs near the page's edge. */
   --sd-gutter: clamp(1.25rem, 3.2vw, 3.75rem);
+
+  /* Tool pages use two edge-anchored sheets. The rail is wider than the old
+     player-derived column so dense indexes stay readable, while a bounded gap
+     between the sheets preserves a clean run of the chosen backdrop. */
+  --sd-tool-rail: clamp(22rem, 28vw, 35rem);
+  --sd-tool-gap: clamp(1.25rem, 2.5vw, 3rem);
 }
 
 /* The sharp channel, opted into by the page that has something to stand in it.
@@ -1155,6 +1163,14 @@ main > * {
    is what keeps the first tab exactly above it at every window shape. */
 .sd-channel {
   --sd-split: var(--sd-col);
+}
+
+/* SplitPage owns tool-page geometry. Its rail is the left sheet; the global
+   curtain begins after the image break and is the right sheet. The masthead
+   uses that same start coordinate so tabs and results stay aligned. */
+:root:has(.sd-split-page) {
+  --sd-col: calc(var(--sd-tool-rail) + var(--sd-tool-gap));
+  --sd-split: calc(var(--sd-tool-rail) + var(--sd-tool-gap));
 }
 
 /* The sections that carry a tools strip say so by rendering `.sd-tools`, and
@@ -1189,6 +1205,11 @@ main > * {
   :root {
     --sd-col: 0px;
   }
+
+  :root:has(.sd-split-page) {
+    --sd-col: 0px;
+    --sd-split: 0px;
+  }
 }
 
 .sd-backdrop {
@@ -1209,7 +1230,7 @@ main > * {
      about the ground stays exactly as designed. */
   background-image: var(--sd-bg, url("/bg/hub.jpg"));
   background-size: cover;
-  background-position: center center;
+  background-position: var(--sd-bg-position-x, center) var(--sd-bg-position-y, center);
   background-repeat: no-repeat;
 }
 
@@ -1223,25 +1244,10 @@ main > * {
   clip-path: inset(32px 32px 32px calc(var(--sd-split) + 32px));
   background-image: var(--sd-bg, url("/bg/hub.jpg"));
   background-size: cover;
-  background-position: center center;
+  background-position: var(--sd-bg-position-x, center) var(--sd-bg-position-y, center);
   background-repeat: no-repeat;
   filter: blur(var(--sd-frost-image-blur));
   transform: scale(1.025);
-}
-
-/* A separate, stronger blur source for the masthead. It covers the entire
-   bar, including the sharp character channel, rather than relying on
-   backdrop-filter to sample sibling layers. */
-.sd-backdrop__bar-frost {
-  position: absolute;
-  inset: -32px;
-  clip-path: inset(32px 32px calc(100% - var(--sd-bar-h) - 32px) 32px);
-  background-image: var(--sd-bg, url("/bg/hub.jpg"));
-  background-size: cover;
-  background-position: center center;
-  background-repeat: no-repeat;
-  filter: blur(var(--sd-bar-image-blur));
-  transform: scale(1.035);
 }
 
 .sd-backdrop__scrim {
@@ -1250,23 +1256,43 @@ main > * {
   background-color: rgb(var(--sd-ground-rgb, 7 8 10) / var(--sd-scrim));
 }
 
-/* The filter belongs on the sticky compositor itself. A filtered child inside
-   a z-indexed sticky parent can inherit that parent as its backdrop root, so
-   it sees only the parent's own empty layer and leaves scrolling page content
-   sharp. On the sticky parent, the sampled backdrop is the page underneath. */
+/* Shared chrome must not sample route content. The old live backdrop-filter
+   picked up Profile's curtain at the lower edge of the blur kernel, so the
+   same masthead rendered grey on Profile and near-black on Home. The sticky
+   bar now owns one directly filtered copy of the configured backdrop and one
+   fixed ink wash. Its material is therefore identical on every route, while
+   still hiding content that scrolls beneath it. */
 .sd-masthead-frost {
-  /* Chromium only composites backdrop filters reliably when the element
-     paints. This near-transparent coat keeps the original tint intact while
-     making the live content underneath a guaranteed filter input. */
-  background-color: rgb(var(--sd-ground-rgb, 7 8 10) / 0.025);
-  will-change: backdrop-filter;
-  /* The actual filter declaration lives in public/theme.css so Vite cannot
-     rewrite it to a WebKit-only property in production. */
+  isolation: isolate;
+  overflow: hidden;
+  background-color: var(--sd-ground, #07080a);
+}
+
+.sd-masthead-frost::before {
+  position: absolute;
+  z-index: 0;
+  top: -32px;
+  right: -32px;
+  left: -32px;
+  height: calc(100vh + 64px);
+  background-image:
+    linear-gradient(
+      rgb(var(--sd-ground-rgb, 7 8 10) / var(--sd-bar-scrim, 0.74)),
+      rgb(var(--sd-ground-rgb, 7 8 10) / var(--sd-bar-scrim, 0.74))
+    ),
+    var(--sd-bg, url("/bg/hub.jpg"));
+  background-position:
+    center,
+    var(--sd-bg-position-x, center) var(--sd-bg-position-y, center);
+  background-repeat: no-repeat;
+  background-size: auto, cover;
+  content: "";
+  filter: blur(var(--sd-bar-image-blur, 24px));
 }
 
 .sd-bar {
-  /* Tint only. The dedicated masthead compositor immediately below this
-     layer owns the single live-content blur pass. */
+  /* Tint only. The route-independent filtered ground immediately below this
+     layer owns the masthead's single blur pass. */
   background-image: linear-gradient(
     180deg,
     rgb(var(--sd-ground-rgb, 7 8 10) / var(--sd-bar-top)) 0%,
@@ -1289,7 +1315,7 @@ main > * {
   background-image: linear-gradient(
     180deg,
     rgb(var(--sd-glass-rgb, 19 22 29) / var(--sd-panel-top)) 0%,
-    rgb(var(--sd-glass-rgb, 19 22 29) / var(--sd-panel-bottom)) 100%
+    rgb(var(--sd-glass-rgb, 19 22 29) / var(--sd-panel-top)) 100%
   );
   /* Tint only. The directly filtered background copy owns the page frost;
      another backdrop pass here can replace it with the original sharp scene. */
@@ -1325,17 +1351,19 @@ main > * {
   border: 1px solid rgb(232 237 243 / 0.12);
 }
 
-/* The footer is outside the fixed curtain's page-content region, so it needs
-   its own single glass pass. This is shared shell chrome, not a Shards-only
-   card; fixing it here keeps every route visually consistent. */
+/* The masthead and footer are the two edges of the same shell. The footer
+   samples the page behind it directly, but its tint and cyan hairline use the
+   exact masthead recipe so changing the backdrop never turns it into a second
+   unrelated bar. */
 .sd-footer {
   background-image: linear-gradient(
     180deg,
-    rgb(var(--sd-glass-rgb, 19 22 29) / var(--sd-panel-top, 0.55)) 0%,
-    rgb(var(--sd-glass-rgb, 19 22 29) / var(--sd-panel-bottom, 0.45)) 100%
+    rgb(var(--sd-ground-rgb, 7 8 10) / var(--sd-bar-top)) 0%,
+    rgb(var(--sd-ground-rgb, 7 8 10) / var(--sd-bar-bottom)) 100%
   );
-  backdrop-filter: blur(var(--sd-frost-image-blur, 26px)) saturate(115%);
-  -webkit-backdrop-filter: blur(var(--sd-frost-image-blur, 26px)) saturate(115%);
+  border-top: 2px solid var(--sd-bar-stroke);
+  backdrop-filter: blur(var(--sd-bar-content-blur, 28px)) saturate(125%);
+  -webkit-backdrop-filter: blur(var(--sd-bar-content-blur, 28px)) saturate(125%);
 }
 
 /* Designer notifications stay in the requested top-right corner. On very
@@ -1360,6 +1388,290 @@ main > * {
     rgb(19 22 29 / 0.3) 100%
   );
   border: 1px solid rgb(232 237 243 / 0.1);
+}
+
+/* The left half samples the sharp backdrop directly, so one bounded blur pass
+   lives on the sticky rail. Its hard right edge mirrors the curtain's hard
+   left edge; the space between them stays deliberately empty. */
+@media (min-width: 900px) {
+  .sd-split-rail {
+    background-image: linear-gradient(
+      180deg,
+      rgb(var(--sd-glass-rgb, 19 22 29) / var(--sd-panel-top)) 0%,
+      rgb(var(--sd-glass-rgb, 19 22 29) / var(--sd-panel-top)) 100%
+    );
+    backdrop-filter: blur(var(--sd-frost-image-blur)) saturate(112%);
+    -webkit-backdrop-filter: blur(var(--sd-frost-image-blur)) saturate(112%);
+    border-right: 1px solid rgb(232 237 243 / 0.1);
+  }
+}
+
+/* The source acknowledgement is one compact shell strip. Provenance and its
+   project credits stay together on the left; dismissal stays at the far edge. */
+.sd-footer-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sd-footer-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.sd-footer-source {
+  min-width: 0;
+  margin: 0;
+  color: rgb(196 208 220 / 0.82);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
+.sd-footer-disclaimer {
+  color: rgb(196 208 220 / 0.88);
+  font-size: 0.61rem;
+  font-weight: 400;
+}
+
+.sd-footer-required {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.24rem 0.68rem;
+  margin-top: 0.38rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.sd-footer-required:first-child {
+  margin-top: 0;
+}
+
+.sd-footer-show {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgb(196 208 220 / 0.88);
+  font-size: 0.61rem;
+  font-weight: 400;
+  text-decoration: underline;
+  text-decoration-color: rgb(100 116 139 / 0.8);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.sd-footer-show:hover {
+  color: #9be9fc;
+  text-decoration-color: rgb(56 199 244 / 0.72);
+}
+
+.sd-footer-credits {
+  position: relative;
+  min-width: 0;
+  justify-self: start;
+}
+
+.sd-footer-credits > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.25rem 0.15rem;
+  color: #70defb;
+  cursor: pointer;
+  font-size: 0.66rem;
+  font-weight: 650;
+  list-style: none;
+  white-space: nowrap;
+  transition: color 150ms ease;
+}
+
+.sd-footer-credits > summary::-webkit-details-marker {
+  display: none;
+}
+
+.sd-footer-credits > summary::before {
+  width: 0;
+  height: 0;
+  border-top: 0.22rem solid transparent;
+  border-bottom: 0.22rem solid transparent;
+  border-left: 0.32rem solid currentColor;
+  content: "";
+  opacity: 0.72;
+  transform-origin: 42% 50%;
+  transition: transform 150ms ease;
+}
+
+.sd-footer-credits[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.sd-footer-credits > summary:hover {
+  color: var(--profile-text);
+}
+
+.sd-footer-credit-copy {
+  position: absolute;
+  right: auto;
+  bottom: calc(100% + 0.72rem);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  width: min(25rem, calc(100vw - 2rem));
+  gap: 0.55rem;
+  padding: 0.72rem 0.78rem;
+  border: 1px solid rgb(112 222 251 / 0.2);
+  border-radius: 0.58rem;
+  background: rgb(4 9 15 / 0.94);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 0.8rem 2rem rgb(0 0 0 / 0.42);
+  color: var(--profile-muted);
+  font-size: 0.66rem;
+  line-height: 1.55;
+  backdrop-filter: blur(16px) saturate(92%);
+  -webkit-backdrop-filter: blur(16px) saturate(92%);
+}
+
+.sd-footer-credit-copy::after {
+  position: absolute;
+  right: auto;
+  bottom: -0.28rem;
+  left: 1rem;
+  width: 0.52rem;
+  height: 0.52rem;
+  border-right: 1px solid rgb(112 222 251 / 0.2);
+  border-bottom: 1px solid rgb(112 222 251 / 0.2);
+  background: rgb(4 9 15 / 0.94);
+  content: "";
+  transform: rotate(45deg);
+}
+
+.sd-footer-credit-copy p {
+  margin: 0;
+}
+
+.sd-footer-credit-copy p:first-child {
+  color: var(--profile-text);
+  font-weight: 650;
+}
+
+.sd-footer-controls,
+.sd-footer-remember {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sd-footer-controls {
+  justify-self: end;
+  gap: 0.48rem;
+  padding-left: 0.72rem;
+  border-left: 1px solid rgb(255 255 255 / 0.1);
+}
+
+/* The local Profile review launcher is absent from production. Lift that
+   review-only control above the strip so the real right edge remains usable. */
+body:has(.sd-footer--dev-preview) .profile-launcher {
+  bottom: 4.25rem;
+}
+
+.sd-footer-hide {
+  display: grid;
+  flex: none;
+  width: 1.72rem;
+  height: 1.72rem;
+  place-items: center;
+  border: 1px solid rgb(112 222 251 / 0.2);
+  border-radius: 0.38rem;
+  background: rgb(112 222 251 / 0.04);
+  color: #70defb;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.sd-footer-hide:hover {
+  border-color: rgb(112 222 251 / 0.46);
+  background: rgb(112 222 251 / 0.1);
+  color: #b7efff;
+}
+
+.sd-footer-hide svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  stroke-width: 1.8;
+}
+
+.sd-footer-remember {
+  position: relative;
+  gap: 0.42rem;
+  color: rgb(196 208 220 / 0.86);
+  cursor: pointer;
+  font-size: 0.64rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sd-footer-remember > input {
+  flex: none;
+  margin: 0;
+}
+
+@media (max-width: 56rem) {
+  .sd-footer-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 0.38rem;
+  }
+
+}
+
+@media (max-width: 32rem) {
+  .sd-footer-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "source source"
+      "credits controls";
+    gap: 0.35rem 0.55rem;
+  }
+
+  .sd-footer-copy {
+    display: contents;
+  }
+
+  .sd-footer-source {
+    grid-area: source;
+  }
+
+  .sd-footer-credits {
+    grid-area: credits;
+    align-self: center;
+  }
+
+  .sd-footer-source,
+  .sd-footer-credits > summary,
+  .sd-footer-credit-copy,
+  .sd-footer-remember {
+    font-size: 0.61rem;
+  }
+
+  .sd-footer-controls {
+    grid-area: controls;
+    align-self: center;
+    justify-self: end;
+    gap: 0.38rem;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  body:has(.sd-footer--dev-preview) .profile-launcher {
+    bottom: 7.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-footer-credits > summary::before,
+  .sd-footer-hide {
+    transition: none;
+  }
 }
 
 /* The top edge a piece of glass catches the light on. Without it glass reads
@@ -1401,6 +1713,7 @@ main > * {
     background-color: rgb(14 16 20 / 0.92);
   }
   .sd-panel,
+  .sd-split-rail,
   .sd-footer,
   .sd-glass {
     background-image: none;
@@ -1411,7 +1724,7 @@ main > * {
 @media (prefers-reduced-transparency: reduce) {
   .sd-backdrop__img,
   .sd-backdrop__frost,
-  .sd-backdrop__bar-frost {
+  .sd-masthead-frost::before {
     display: none;
   }
   .sd-backdrop__scrim {
@@ -1422,6 +1735,7 @@ main > * {
   .sd-bar,
   .sd-curtain,
   .sd-panel,
+  .sd-split-rail,
   .sd-footer,
   .sd-glass {
     backdrop-filter: none;
@@ -1433,6 +1747,7 @@ main > * {
   }
   .sd-curtain,
   .sd-panel,
+  .sd-split-rail,
   .sd-footer,
   .sd-glass {
     background-color: var(--color-slate-900);
@@ -1490,7 +1805,7 @@ input[type="range"]:focus-visible {
 }
 
 /* One icon family, one stroke weight. lucide defaults to 2, which is heavy
-   at 16px next to Space Grotesk. Set here rather than passed as a prop so it
+   at 16px next to Montserrat. Set here rather than passed as a prop so it
    cannot drift per call site. */
 .ws-glyph > svg {
   stroke-width: 1.75;
@@ -1523,16 +1838,10 @@ input[type="range"]:focus-visible {
    The mark
    =========================================================================
 
-   The "W.W" on the landing page. It is typography rather than an
-   illustration, and as of the kaomoji rewrite it is typography twice over:
-   the expressions are glyph swaps, so the typeface itself is the animation.
-   The two W's are the eyes and the full stop is the mouth.
-
-   Everything else about it lives in `pages/LandingPage.tsx` and `mark/face.ts`,
-   because the states are driven by React and by a table of per-glyph metrics
-   measured out of this font. There is nothing left for CSS to hold except the
-   family, and a rule here that only some states used would be a rule that
-   silently fought the ones that did not.
+   Wonder's live W.W face on the landing page. The two vector W's are his eyes
+   and the full stop is his mouth. Shape, state and spatial motion live together
+   under `src/mark`; CSS only supplies the matching face so emitted z's keep the
+   same typographic identity as the rig.
    ========================================================================= */
 
 .ws-mark {
@@ -1665,45 +1974,61 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 
-/* Scrollbars everywhere, not just where .scrollbar-dark was remembered.
-   .scrollbar-dark is kept because the greenhouse module names it explicitly,
-   but it now resolves to the same values rather than a second scheme. */
+/* Shared quiet rails for the page, panels and detached overlays. */
+:root {
+  --sd-scrollbar-thumb: #414b56;
+  --sd-scrollbar-hover: #71808f;
+  --sd-scrollbar-track: #0b0f14;
+}
 * {
-  scrollbar-width: thin;
-  scrollbar-color: #59677c transparent;
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--sd-scrollbar-thumb) var(--sd-scrollbar-track) !important; }
 }
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--sd-scrollbar-track);
+  border-radius: 999px;
+  margin-block: 3px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #59677c;
+  min-height: 32px;
+  border: 1px solid transparent;
+  background: var(--sd-scrollbar-thumb);
+  background-clip: padding-box;
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #8797ad;
+  background-color: var(--sd-scrollbar-hover);
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+@supports selector(::-webkit-scrollbar) {
+  /* Use the shared custom rail instead of Chromium's native arrow buttons. */
+  * { scrollbar-width: auto !important; scrollbar-color: auto !important; }
+}
 
 .scrollbar-dark {
   scrollbar-width: thin;
-  scrollbar-color: #59677c transparent;
+  scrollbar-color: var(--sd-scrollbar-thumb) var(--sd-scrollbar-track);
 }
 
 /*
  * The document rail is a navigation control, not a one-pixel blue edge.
  * Give only the outer scrollbar a stable dark trough and a 10px hit area;
- * nested lists keep the compact transparent-track treatment above.
+ * nested lists keep the compact rails above.
  */
 html {
   scrollbar-gutter: stable;
   scrollbar-width: auto;
-  scrollbar-color: #59677c #0b0d11;
+  scrollbar-color: var(--sd-scrollbar-thumb) var(--sd-scrollbar-track);
 }
 
 html::-webkit-scrollbar {
@@ -1711,18 +2036,18 @@ html::-webkit-scrollbar {
 }
 
 html::-webkit-scrollbar-track {
-  background: #0b0d11;
+  background: var(--sd-scrollbar-track);
 }
 
 html::-webkit-scrollbar-thumb {
   min-height: 40px;
-  border: 2px solid #0b0d11;
-  background: #59677c;
+  border: 2px solid var(--sd-scrollbar-track);
+  background: var(--sd-scrollbar-thumb);
   background-clip: padding-box;
 }
 
 html::-webkit-scrollbar-thumb:hover {
-  background: #8797ad;
+  background: var(--sd-scrollbar-hover);
   background-clip: padding-box;
 }
 
@@ -1750,5 +2075,774 @@ html::-webkit-scrollbar-thumb:hover {
   input[type="range"]::-webkit-slider-thumb:hover {
     transition: none;
     transform: none;
+  }
+}
+
+/* Planner progress only invalidates the row being changed. Keep the large
+   route strip and sibling rows out of that layout pass, especially on slow
+   integrated CPUs. Off-screen route cards are materialized when scrolled to. */
+.sd-route-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 12rem;
+}
+
+.sd-planner-row {
+  contain: layout style;
+}
+
+/* Long local catalogues retain their complete keyboard/search surface while
+   Chromium defers layout and paint for rows outside their scroll viewport. */
+.sd-crafting-catalog-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 2rem;
+}
+
+.sd-shard-rate-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 10rem;
+}
+
+/* Item-cell metadata is part of the sprite, not a pill laid over it. The site
+   typeface and weight provide the contrast; an outlined Minecraft glyph does
+   not belong on these Profile surfaces. */
+.profile-item-overlay-text {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-sans, "Montserrat", ui-sans-serif, system-ui, sans-serif);
+  font-weight: 720;
+  text-shadow: none;
+}
+
+/* One rarity variable for every composed Profile surface. Components can keep
+   their own geometry while sharing the same in-game colour signal. */
+[data-profile-rarity="common"], [data-profile-item-tier="common"] { --profile-rarity-color: #f0f0f0; }
+[data-profile-rarity="uncommon"], [data-profile-item-tier="uncommon"] { --profile-rarity-color: #55ff55; }
+[data-profile-rarity="rare"], [data-profile-item-tier="rare"] { --profile-rarity-color: #5555ff; }
+[data-profile-rarity="epic"], [data-profile-item-tier="epic"] { --profile-rarity-color: #aa00aa; }
+[data-profile-rarity="legendary"], [data-profile-item-tier="legendary"] { --profile-rarity-color: #ffaa00; }
+[data-profile-rarity="mythic"], [data-profile-item-tier="mythic"] { --profile-rarity-color: #ff55ff; }
+[data-profile-rarity="divine"], [data-profile-item-tier="divine"] { --profile-rarity-color: #55ffff; }
+[data-profile-rarity="special"], [data-profile-item-tier="special"],
+[data-profile-rarity="very-special"], [data-profile-item-tier="very-special"] { --profile-rarity-color: #ff5555; }
+[data-profile-rarity="supreme"], [data-profile-item-tier="supreme"] { --profile-rarity-color: #aa0000; }
+
+/* Shared item reading surface. Interaction and positioning remain owned by
+   ItemTooltip; these rules only bring its visual shell into the Skydex glass
+   language while keeping Minecraft's rarity and lore colours intact. */
+.sd-item-tooltip {
+  --sd-item-tooltip-accent: var(--color-rarity-common);
+  position: relative;
+  isolation: isolate;
+  border-color: color-mix(in srgb, var(--sd-item-tooltip-accent) 58%, #263240);
+  border-radius: 0.5rem;
+  background: rgb(3 10 20 / 0.975);
+  box-shadow: none;
+  backdrop-filter: blur(14px) saturate(112%);
+}
+
+.sd-item-tooltip::before {
+  position: absolute;
+  z-index: 2;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--sd-item-tooltip-accent);
+  content: "";
+  pointer-events: none;
+}
+
+.sd-item-tooltip__header {
+  border-color: color-mix(in srgb, var(--sd-item-tooltip-accent) 26%, #253142);
+  background: color-mix(in srgb, var(--sd-item-tooltip-accent) 8%, rgb(4 12 24 / 0.98));
+}
+
+.sd-item-tooltip__icon {
+  border: 1px solid color-mix(in srgb, var(--sd-item-tooltip-accent) 30%, #39424d);
+  border-radius: 0.48rem;
+  background: rgb(0 0 0 / 0.24);
+  box-shadow: none;
+}
+
+.sd-item-tooltip__name {
+  text-shadow: none;
+}
+
+.sd-item-tooltip[data-identity-color="true"] .sd-item-tooltip__name,
+.sd-item-tooltip[data-identity-color="true"] .sd-item-tooltip__type {
+  color: var(--sd-item-tooltip-accent);
+}
+
+.sd-item-tooltip__type {
+  opacity: 0.9;
+}
+
+.sd-item-tooltip__body {
+  background: rgb(2 7 15 / 0.34);
+}
+
+.sd-item-tooltip__attributes,
+.sd-item-tooltip__stats {
+  padding: 0.12rem 0;
+  border: 0;
+  background: transparent;
+}
+
+.sd-item-tooltip__section,
+.sd-item-tooltip__values {
+  padding-top: 0.48rem;
+  border-top: 1px solid color-mix(in srgb, var(--sd-item-tooltip-accent) 16%, rgb(255 255 255 / 0.065));
+}
+
+.sd-item-tooltip__footer {
+  border-color: color-mix(in srgb, var(--sd-item-tooltip-accent) 18%, rgb(255 255 255 / 0.075));
+  background: color-mix(in srgb, var(--sd-item-tooltip-accent) 3%, rgb(1 6 12 / 0.72));
+}
+
+.sd-item-tooltip-layer {
+  scrollbar-color: color-mix(in srgb, var(--sd-item-tooltip-accent, #7ddfff) 62%, #273545) rgb(1 5 10 / 0.86);
+  scrollbar-width: thin;
+}
+
+.sd-item-tooltip__meta-row + .sd-item-tooltip__meta-row {
+  padding-top: 0.12rem;
+}
+
+.sd-item-tooltip ::selection {
+  color: #f7fbff;
+  background: color-mix(in srgb, var(--sd-item-tooltip-accent) 58%, #15415d);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .sd-item-tooltip {
+    background: rgb(5 9 14 / 0.985);
+  }
+}
+
+/* =========================================================================
+   Shared Profile-derived toolkit
+
+   Profile established the product's production UI grammar: a sharp scene,
+   one bounded content channel, compact uppercase labels, restrained glass and
+   SkyBlock colour as information. Home is the first non-Profile consumer.
+   These tokens deliberately live outside dev-local so later pages can reuse
+   the same system without importing the Profile review surface.
+   ========================================================================= */
+
+.sd-toolkit {
+  --profile-accent: var(--color-sky-400, #38c7f4);
+  --profile-accent-strong: var(--color-sky-500, #00b3f0);
+  --profile-gold: var(--color-rarity-legendary, #ffb531);
+  --profile-rift: var(--color-stat-dark-purple, #cf7ff0);
+  --profile-text: var(--color-slate-100, #edf3f8);
+  --profile-muted: #acbac8;
+  --profile-label: #c4d0dc;
+  --profile-border: rgb(255 255 255 / 0.13);
+  --profile-surface: rgb(8 12 18 / 0.56);
+  color: var(--profile-text);
+  font-family: var(--font-sans, "Montserrat", ui-sans-serif, system-ui, sans-serif);
+}
+
+.sd-toolkit-glass {
+  border: 1px solid var(--profile-border);
+  background: var(--profile-surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.065);
+  backdrop-filter: blur(16px) saturate(92%);
+  -webkit-backdrop-filter: blur(16px) saturate(92%);
+}
+
+/* Profile keeps its scene sharp under an ink wash. Home uses the same ground,
+   centred around Wonder rather than dividing the scene into avatar columns. */
+.sd-home-shell .sd-backdrop__frost,
+:root:has(.profile-view-root) .sd-backdrop__frost {
+  display: none;
+}
+
+.sd-home-shell .sd-backdrop__scrim,
+:root:has(.profile-view-root) .sd-backdrop__scrim {
+  background:
+    radial-gradient(ellipse at 50% 44%, rgb(3 5 8 / 0.22) 0%, rgb(3 5 8 / 0.58) 62%, rgb(3 5 8 / 0.8) 100%),
+    linear-gradient(180deg, rgb(3 5 8 / 0.18), rgb(3 5 8 / 0.7));
+}
+
+.home-toolkit {
+  display: flex;
+  width: 100%;
+  min-height: calc(100dvh - var(--sd-bar-h) - 5.25rem);
+  margin: 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1rem, 3.4vw, 3.4rem);
+}
+
+.home-toolkit-wonder {
+  position: relative;
+  z-index: 1;
+  justify-self: center;
+  margin-bottom: clamp(0.65rem, 1.6vw, 1.15rem);
+  filter: drop-shadow(0 1.35rem 1.6rem rgb(0 0 0 / 0.48));
+  transition: margin 260ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.home-toolkit-workspace {
+  display: grid;
+  width: min(100%, 54rem);
+  min-width: 0;
+  align-content: center;
+  gap: 0.72rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-toolkit-wonder {
+    animation: none;
+    transition: none;
+  }
+}
+
+.home-toolkit-library > header > div {
+  min-width: 0;
+}
+
+.home-toolkit-eyebrow {
+  display: block;
+  color: var(--profile-label);
+  font-size: 0.72rem;
+  font-weight: 680;
+  letter-spacing: 0.085em;
+  text-transform: uppercase;
+}
+
+.home-toolkit-library h2 {
+  margin: 0.16rem 0 0;
+  color: #70defb;
+  font-size: 1rem;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+
+.home-toolkit-library > header > strong {
+  flex: none;
+  color: rgb(176 188 200 / 0.74);
+  font-size: 0.6rem;
+  font-weight: 560;
+  letter-spacing: 0.035em;
+}
+
+.home-toolkit-search {
+  position: relative;
+  z-index: 5;
+}
+
+.home-toolkit-search .ws-search-pill {
+  min-height: 3.35rem;
+  border-radius: 0.62rem;
+  border-color: rgb(56 199 244 / 0.28);
+  background: rgb(4 9 15 / 0.76);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.055);
+}
+
+.home-toolkit-search .ws-search-pill:hover {
+  border-color: rgb(56 199 244 / 0.44);
+}
+
+.home-toolkit-search .ws-search-pill:focus {
+  border-color: rgb(56 199 244 / 0.68);
+}
+
+.home-toolkit-search .ws-panel {
+  border-color: rgb(56 199 244 / 0.24);
+  border-radius: 0.62rem;
+  background: rgb(3 8 14 / 0.975);
+}
+
+.profile-lookup-form {
+  display: flex;
+  min-width: 0;
+  min-height: 3rem;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.36rem 0.42rem 0.36rem 0.7rem;
+  border: 1px solid rgb(56 199 244 / 0.28);
+  border-radius: 0.58rem;
+  background: rgb(3 8 14 / 0.72);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.profile-lookup-form:focus-within {
+  border-color: rgb(56 199 244 / 0.68);
+  background: rgb(3 8 14 / 0.9);
+}
+
+.profile-lookup-form > svg {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  color: #70defb;
+}
+
+.profile-lookup-form input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--profile-text, #edf3f8);
+  font-size: 0.76rem;
+}
+
+.profile-lookup-form input::placeholder {
+  color: rgb(172 186 200 / 0.72);
+}
+
+.profile-lookup-form button {
+  display: inline-flex;
+  min-height: 2.15rem;
+  flex: none;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.68rem;
+  border: 1px solid rgb(56 199 244 / 0.32);
+  border-radius: 0.42rem;
+  background: rgb(56 199 244 / 0.1);
+  color: #9be9fc;
+  font-size: 0.67rem;
+  font-weight: 720;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.profile-lookup-form button:hover:not(:disabled) {
+  border-color: rgb(56 199 244 / 0.55);
+  background: rgb(56 199 244 / 0.17);
+}
+
+.profile-lookup-form button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.profile-lookup-form button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.profile-lookup-form button svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+.profile-lookup-form.is-icon-only button {
+  width: 1.82rem;
+  justify-content: center;
+  padding: 0;
+}
+
+.profile-lookup-form.is-compact {
+  min-height: 2.55rem;
+}
+
+.profile-lookup-form.is-compact button {
+  min-height: 1.82rem;
+}
+
+.home-profile-viewer {
+  display: grid;
+  grid-template-columns: minmax(0, 0.74fr) minmax(18rem, 1.26fr);
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.62rem 0.7rem;
+  border-radius: 0.65rem;
+}
+
+.home-profile-viewer-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.58rem;
+}
+
+.home-profile-viewer-copy > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.home-profile-viewer-copy small {
+  color: #70defb;
+  font-size: 0.58rem;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-profile-viewer-copy strong {
+  overflow: hidden;
+  color: rgb(218 227 235 / 0.92);
+  font-size: 0.72rem;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-profile-viewer-icon {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  flex: none;
+  place-items: center;
+  border: 1px solid rgb(56 199 244 / 0.36);
+  border-radius: 0.45rem;
+  background: rgb(56 199 244 / 0.09);
+  color: #70defb;
+}
+
+.home-profile-viewer-icon svg {
+  width: 1.08rem;
+  height: 1.08rem;
+}
+
+/* Settings is a window over the current page, but it speaks the same compact
+   Profile/WebKit language as the rest of the refreshed site. Its neutral veil
+   dims the route without blurring it or painting a colour bloom behind the
+   settings surface. */
+.settings-overlay {
+  background: rgb(1 4 8 / 0.94);
+}
+
+.settings-shell {
+  isolation: isolate;
+  border: 1px solid rgb(112 222 251 / 0.22);
+  border-radius: 0.72rem;
+  background:
+    linear-gradient(180deg, rgb(10 16 23 / 0.96), rgb(4 8 13 / 0.965)),
+    rgb(4 8 13 / 0.96);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.075),
+    0 1.6rem 5.5rem rgb(0 0 0 / 0.68);
+}
+
+.settings-shell::before {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0.72rem;
+  left: 0.72rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(112 222 251 / 0.64), transparent);
+  content: "";
+  pointer-events: none;
+}
+
+.settings-shell-close {
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(4 9 15 / 0.72);
+}
+
+.profile-settings-page {
+  display: grid;
+  width: min(100%, 58rem);
+  margin: 0 auto;
+  gap: 0.62rem;
+  padding: clamp(0.9rem, 2.3vw, 1.45rem);
+}
+
+.profile-settings-hero {
+  position: relative;
+  min-width: 0;
+  padding: 0.15rem 3.2rem 0.85rem 0.12rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.profile-settings-hero::after {
+  position: absolute;
+  right: 62%;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: linear-gradient(90deg, var(--profile-accent), transparent);
+  content: "";
+}
+
+.profile-settings-eyebrow {
+  display: block;
+  margin-bottom: 0.18rem;
+  color: var(--profile-label);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.profile-settings-hero h1 {
+  margin: 0;
+  color: #70defb;
+  font-family: var(--font-chrome);
+  font-size: clamp(1.25rem, 2.2vw, 1.55rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+
+.profile-settings-hero p {
+  max-width: 48rem;
+  margin: 0.42rem 0 0;
+  color: var(--profile-muted);
+  font-size: 0.73rem;
+  line-height: 1.55;
+}
+
+.profile-settings-page > .ws-panel,
+.profile-settings-page > section > .ws-panel {
+  overflow: hidden;
+  border-color: rgb(255 255 255 / 0.105);
+  background: linear-gradient(180deg, rgb(11 17 24 / 0.56), rgb(5 10 16 / 0.42));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.045);
+}
+
+.profile-settings-page > .ws-panel > :first-child,
+.profile-settings-page > section > .ws-panel > :first-child {
+  min-height: 2.28rem;
+  background: linear-gradient(90deg, rgb(112 222 251 / 0.035), transparent 56%);
+}
+
+.profile-settings-page > .ws-panel > :first-child > span:first-child,
+.profile-settings-page > section > .ws-panel > :first-child > span:first-child {
+  color: rgb(218 231 240 / 0.94);
+}
+
+.home-toolkit-library {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 0.65rem;
+}
+
+.home-toolkit-library > header {
+  display: flex;
+  min-width: 0;
+  min-height: 4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.72rem 0.82rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.085);
+}
+
+.home-toolkit-library > header > strong {
+  text-transform: uppercase;
+}
+
+.home-toolkit-areas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  gap: 0.48rem;
+  padding: 0.72rem;
+  background: rgb(2 5 9 / 0.12);
+}
+
+.home-toolkit-area {
+  --home-area-accent: var(--profile-accent);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.58rem;
+  border: 1px solid rgb(255 255 255 / 0.075);
+  border-radius: 0.48rem;
+  background: rgb(3 7 11 / 0.3);
+  color: inherit;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.home-toolkit-area[data-home-area="greenhouse"] {
+  --home-area-accent: #69d68c;
+}
+
+.home-toolkit-area[data-home-area="shards"] {
+  --home-area-accent: #cf7ff0;
+}
+
+.home-toolkit-area:hover {
+  border-color: color-mix(in srgb, var(--home-area-accent) 44%, transparent);
+  background: color-mix(in srgb, var(--home-area-accent) 7%, rgb(3 7 11 / 0.34));
+  transform: translateY(-1px);
+}
+
+.home-toolkit-area-icon {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--home-area-accent) 38%, rgb(255 255 255 / 0.08));
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--home-area-accent) 9%, rgb(1 5 9 / 0.7));
+  color: var(--home-area-accent);
+}
+
+.home-toolkit-area-icon svg {
+  width: 1.08rem;
+  height: 1.08rem;
+  stroke-width: 1.8;
+}
+
+.home-toolkit-area-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.home-toolkit-area-copy strong,
+.home-toolkit-area-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-toolkit-area-copy strong {
+  color: rgb(218 227 235 / 0.9);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.home-toolkit-area-copy small {
+  color: var(--profile-muted);
+  font-size: 0.57rem;
+}
+
+.home-toolkit-area-count {
+  color: var(--home-area-accent);
+  font-size: 0.72rem;
+}
+
+.home-toolkit-area-arrow {
+  display: none;
+  width: 0.78rem;
+  height: 0.78rem;
+  color: var(--profile-muted);
+}
+
+.home-toolkit-resume {
+  display: grid;
+  gap: 0.48rem;
+  padding: 0.72rem 0.78rem;
+  border-radius: 0.65rem;
+  color: inherit;
+}
+
+.home-toolkit-resume-title,
+.home-toolkit-resume-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.home-toolkit-resume-title strong {
+  overflow: hidden;
+  color: rgb(218 227 235 / 0.92);
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-toolkit-resume-title b {
+  flex: none;
+  color: #69d68c;
+  font-size: 0.7rem;
+}
+
+.home-toolkit-resume-meta {
+  color: var(--profile-muted);
+  font-size: 0.58rem;
+}
+
+.home-toolkit-resume-meta > span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.home-toolkit-resume-meta svg {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+@media (max-width: 64rem) {
+  .home-toolkit-areas {
+    grid-template-columns: 1fr;
+  }
+
+  .home-toolkit-area-arrow {
+    display: block;
+  }
+}
+
+@media (max-width: 48rem) {
+  .home-toolkit {
+    padding: 1.15rem 0 1rem;
+  }
+
+  .home-toolkit-workspace {
+    padding: 0;
+  }
+
+  .home-profile-viewer {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-overlay {
+    align-items: flex-start;
+    padding: 0;
+  }
+
+  .settings-shell {
+    min-height: 100dvh;
+    max-height: 100dvh;
+    border-width: 0;
+    border-radius: 0;
+  }
+
+  .profile-settings-page {
+    gap: 0.55rem;
+    padding: 0.72rem;
+  }
+
+  .profile-settings-hero {
+    padding-top: 0.25rem;
+  }
+}
+
+@media (max-width: 34rem) {
+  .profile-lookup-form button span {
+    display: none;
+  }
+}
+
+@media (max-width: 30rem) {
+  .home-toolkit-library > header {
+    align-items: flex-start;
+  }
+
+  .home-toolkit-library > header > strong {
+    padding-top: 0.2rem;
+  }
+
+  .home-toolkit-area {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .sd-toolkit-glass,
+  .home-toolkit-search .ws-search-pill,
+  .settings-overlay,
+  .settings-shell {
+    background: rgb(8 12 18 / 0.94);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }

@@ -1,0 +1,519 @@
+.profile-skills-detail {
+  --profile-skill-accent: #50d0f3;
+
+  min-width: 0;
+  overflow: visible;
+  border-radius: 0.65rem;
+}
+
+.profile-skills-detail[data-profile-skill="foraging"] { --profile-skill-accent: #70db94; }
+.profile-skills-detail[data-profile-skill="farming"] { --profile-skill-accent: #f1bd51; }
+.profile-skills-detail[data-profile-skill="fishing"] { --profile-skill-accent: #52c6eb; }
+.profile-skills-detail[data-profile-skill="enchanting"] { --profile-skill-accent: #d780eb; }
+.profile-skills-detail[data-profile-skill="hunting"] { --profile-skill-accent: #e28a62; }
+
+.profile-skill-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.075);
+  border-radius: 0.65rem 0.65rem 0 0;
+  background: rgb(3 8 13 / 0.34);
+}
+
+.profile-skill-tabs button {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 3.3rem;
+  grid-template-columns: 1.7rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.44rem 0.5rem;
+  border: 0;
+  border-left: 1px solid rgb(255 255 255 / 0.065);
+  outline: 0;
+  background: transparent;
+  color: rgb(166 182 195 / 0.72);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.profile-skill-tabs button:first-child {
+  border-left: 0;
+}
+
+.profile-skill-tabs button::after {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0;
+  left: 0.5rem;
+  height: 2px;
+  background: var(--profile-skill-accent);
+  content: "";
+  opacity: 0;
+  transform: scaleX(0.35);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.profile-skill-tabs button:hover,
+.profile-skill-tabs button:focus-visible,
+.profile-skill-tabs button.is-active {
+  background: rgb(255 255 255 / 0.035);
+  color: #eef4f8;
+}
+
+.profile-skill-tabs button:focus-visible {
+  box-shadow: inset 0 0 0 1px rgb(56 199 244 / 0.6);
+}
+
+.profile-skill-tabs button.is-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.profile-skill-tabs button > span:first-child {
+  display: grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  place-items: center;
+}
+
+.profile-skill-tabs button > span:nth-child(2) {
+  overflow: hidden;
+  font-size: 0.61rem;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-skill-tabs button > small {
+  color: color-mix(in srgb, var(--profile-skill-accent) 82%, white 8%);
+  font-size: 0.55rem;
+  font-weight: 720;
+}
+
+.profile-skill-panel {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.075);
+  border-top: 0;
+  border-radius: 0 0 0.65rem 0.65rem;
+  background: rgb(3 8 13 / 0.22);
+}
+
+.profile-skill-panel-head {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 2.9rem minmax(8rem, 0.7fr) minmax(0, 2.3fr);
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.78rem 0.76rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+  background: color-mix(in srgb, var(--profile-skill-accent) 4%, rgb(4 9 14 / 0.7));
+}
+
+.profile-skill-panel-icon {
+  display: grid;
+  width: 2.9rem;
+  height: 2.9rem;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--profile-skill-accent) 34%, transparent);
+  border-radius: 0.52rem;
+  background: color-mix(in srgb, var(--profile-skill-accent) 7%, rgb(3 8 13 / 0.72));
+}
+
+.profile-skill-panel-title {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.profile-skill-panel-title small {
+  color: color-mix(in srgb, var(--profile-skill-accent) 80%, white 8%);
+  font-size: 0.54rem;
+  font-weight: 720;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.profile-skill-panel-title strong {
+  color: #f0f5f8;
+  font-size: 0.88rem;
+  font-weight: 740;
+}
+
+.profile-skill-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 0.4rem;
+}
+
+.profile-skill-facts > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.14rem;
+  padding: 0.38rem 0.46rem;
+  border-left: 1px solid rgb(255 255 255 / 0.055);
+  background: rgb(2 6 10 / 0.3);
+}
+
+.profile-skill-facts > div:first-child {
+  border-left: 0;
+}
+
+.profile-skill-facts dt {
+  overflow: hidden;
+  color: rgb(151 169 184 / 0.62);
+  font-size: 0.49rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-skill-facts dd {
+  overflow: hidden;
+  margin: 0;
+  color: rgb(230 238 244 / 0.9);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.profile-skill-contexts {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.72rem;
+  padding: 0.72rem;
+}
+
+.profile-skill-contexts--multi {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.profile-skill-context {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 0.48rem;
+  background: rgb(5 10 16 / 0.42);
+}
+
+.profile-skill-context > header {
+  display: flex;
+  min-width: 0;
+  min-height: 2.35rem;
+  align-items: center;
+  padding: 0.48rem 0.65rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.065);
+  background: rgb(6 12 18 / 0.54);
+}
+
+.profile-skill-context > header > strong {
+  overflow: hidden;
+  color: rgb(226 235 241 / 0.9);
+  font-size: 0.68rem;
+  font-weight: 710;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-skill-context-body {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(18rem, 0.92fr) minmax(24rem, 1.48fr);
+}
+
+.profile-skill-armour,
+.profile-skill-gear {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.55rem;
+  padding: 0.68rem;
+}
+
+.profile-skill-gear {
+  border-left: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.profile-skill-section-heading {
+  display: grid;
+  min-height: 1.65rem;
+  align-content: start;
+  gap: 0.12rem;
+}
+
+.profile-skill-section-heading > small,
+.profile-skill-armour-stats > small {
+  color: rgb(145 161 176 / 0.62);
+  font-size: 0.52rem;
+  font-weight: 690;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.profile-skill-section-heading > strong {
+  color: rgb(213 224 232 / 0.84);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.profile-skill-armour-detail,
+.profile-skill-armour-stats {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.48rem;
+}
+
+.profile-skill-armour-stats {
+  padding-top: 0.55rem;
+  border-top: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.profile-skill-armour-items {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 0.38rem;
+}
+
+.profile-skill-armour-item-wrap {
+  display: block;
+  min-width: 0;
+}
+
+.profile-skill-armour-item {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.35rem;
+  grid-template-columns: 2.55rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.52rem;
+  padding: 0.38rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--profile-rarity-color, #8b99a7) 34%, transparent);
+  border-radius: 0.38rem;
+  outline: 0;
+  background: color-mix(in srgb, var(--profile-rarity-color, #8b99a7) 7%, rgb(5 10 16 / 0.64));
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.profile-skill-armour-item .profile-skill-item-icon {
+  width: 2.55rem;
+  height: 2.55rem;
+}
+
+.profile-skill-armour-item:hover,
+.profile-skill-armour-item:focus-visible,
+.profile-skill-gear-item:hover,
+.profile-skill-gear-item:focus-visible {
+  border-color: color-mix(in srgb, var(--profile-rarity-color, #8b99a7) 58%, transparent);
+  background: color-mix(in srgb, var(--profile-rarity-color, #8b99a7) 11%, rgb(5 10 16 / 0.7));
+}
+
+.profile-skill-gear-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  align-items: start;
+  gap: 0.42rem;
+}
+
+.profile-skill-gear-item-wrap {
+  display: block;
+  min-width: 0;
+}
+
+.profile-skill-gear-item {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 4.15rem;
+  grid-template-columns: 2.7rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.55rem;
+  padding: 0.48rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--profile-rarity-color, #8b99a7) 28%, transparent);
+  border-radius: 0.38rem;
+  outline: 0;
+  background: color-mix(in srgb, var(--profile-rarity-color, #8b99a7) 6%, rgb(5 10 16 / 0.6));
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.profile-skill-item-icon {
+  display: grid;
+  width: 2.7rem;
+  height: 2.7rem;
+  place-items: center;
+}
+
+.profile-skill-item-copy {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.12rem;
+}
+
+.profile-skill-item-copy > strong {
+  color: var(--profile-rarity-color, rgb(220 230 237 / 0.88));
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.profile-skill-item-copy > small {
+  color: rgb(155 172 186 / 0.66);
+  font-size: 0.48rem;
+  font-weight: 680;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.profile-skill-item-rarity {
+  color: color-mix(in srgb, var(--profile-rarity-color, #a4b0bb) 76%, white 8%) !important;
+}
+
+.profile-skill-stat-list {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(8.6rem, 1fr));
+  gap: 0.24rem 0.72rem;
+  margin-top: 0.22rem;
+}
+
+.profile-skill-stat.profile-gear-bonus {
+  min-width: 0;
+  min-height: 1rem;
+  grid-template-columns: 0.82rem minmax(0, 1fr) auto;
+  gap: 0.28rem;
+  font-size: 0.57rem;
+}
+
+.profile-skill-stat .profile-gear-bonus-name {
+  overflow: visible;
+  white-space: normal;
+}
+
+.profile-skill-stat strong {
+  white-space: nowrap;
+}
+
+.profile-skill-empty {
+  display: flex;
+  min-height: 2.1rem;
+  align-items: center;
+  color: rgb(151 166 180 / 0.58);
+  font-size: 0.56rem;
+}
+
+.profile-skill-empty--stats {
+  min-height: 1.2rem;
+  margin-top: 0.16rem;
+}
+
+@container profile-workspace (max-width: 66rem) {
+  .profile-skill-context-body {
+    grid-template-columns: minmax(16rem, 0.88fr) minmax(20rem, 1.22fr);
+  }
+}
+
+@container profile-workspace (max-width: 52rem) {
+  .profile-skill-tabs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .profile-skill-tabs button:nth-child(4) {
+    border-left: 0;
+  }
+
+  .profile-skill-tabs button:nth-child(n + 4) {
+    border-top: 1px solid rgb(255 255 255 / 0.065);
+  }
+
+  .profile-skill-panel-head {
+    grid-template-columns: 2.9rem minmax(0, 1fr);
+  }
+
+  .profile-skill-facts,
+  .profile-skill-progress {
+    grid-column: 1 / -1;
+  }
+
+  .profile-skill-context-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-skill-gear {
+    border-top: 1px solid rgb(255 255 255 / 0.06);
+    border-left: 0;
+  }
+}
+
+@container profile-workspace (max-width: 36rem) {
+  .profile-skill-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-skill-facts > div:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .profile-skill-facts > div:nth-child(n + 3) {
+    border-top: 1px solid rgb(255 255 255 / 0.055);
+  }
+}
+
+@container profile-workspace (max-width: 27.5rem) {
+  .profile-skill-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-skill-tabs button:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .profile-skill-tabs button:nth-child(n + 3) {
+    border-top: 1px solid rgb(255 255 255 / 0.065);
+  }
+
+  .profile-skill-tabs button:nth-child(4) {
+    border-left: 1px solid rgb(255 255 255 / 0.065);
+  }
+
+  .profile-skill-contexts {
+    padding: 0.46rem;
+  }
+
+  .profile-skill-panel-head {
+    padding-inline: 0.55rem;
+  }
+
+  .profile-skill-armour,
+  .profile-skill-gear {
+    padding: 0.55rem;
+  }
+
+  .profile-skill-gear-grid,
+  .profile-skill-stat-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

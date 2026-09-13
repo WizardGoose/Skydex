@@ -1,0 +1,87 @@
+/* A recipe keeps its input pair together; the result owns identity and effect. */
+.shards-stationary { container: shard-fusions / inline-size; display: grid; grid-template-columns: minmax(0,1fr); gap: 4px; align-items: start; }
+.shards-stationary-target { min-width: 0; }
+.shards-equation-group { --profile-wardrobe-page-padding: 12px; container-type: inline-size; position: relative; min-width: 0; margin: 0 0 12px; padding: 0 12px 12px; border: 1px solid var(--profile-border); border-radius: .55rem; }
+.shards-fusion-disclosure > span { display: flex; align-items: center; gap: 6px; font-size: .8125rem; font-weight: 700; text-align: left; }
+.shards-fusion-disclosure img { flex: none; image-rendering: pixelated; }
+.shards-fusion-disclosure[aria-expanded="true"] .profile-disclosure-chevron { transform: rotate(180deg); }
+.shards-fusion-disclosure:hover .profile-disclosure-chevron { color: var(--profile-text); }
+.shards-fusion-disclosure:focus-visible { outline: 1px solid var(--color-stat-aqua); outline-offset: -1px; }
+.shards-fusion-steps { min-width: 0; }
+.shards-equation-group > [hidden] { display: none; }
+.shards-equation-group.is-collapsed { padding-bottom: 0; }
+.shards-equation-group.is-collapsed > .shards-fusion-disclosure { border-bottom-color: transparent; border-radius: .5rem; }
+.shards-fusion-needed { color: var(--profile-label); font-size: .75rem; font-weight: 600; white-space: nowrap; }
+.shards-fusion-disclosure > span { flex-wrap: wrap; }
+.shards-fusion-content { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; padding-top: 10px; align-items: start; }
+.shards-fusion-content > .shards-fusion-steps { order: 0; }
+.shards-fusion-content > .shards-result-summary { order: 1; }
+.shards-fusion-inputs { min-width: 0; border-top: 1px solid var(--profile-border); padding-top: 10px; }
+.shards-equation { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 8px; }
+.shards-equation-operand:first-child { grid-column: 1; grid-row: 1; }
+.shards-equation-operand:nth-child(2) { grid-column: 3; grid-row: 1; }
+.shards-equation-operation { grid-column: 2; grid-row: 1; display: grid; justify-items: center; align-content: start; gap: 10px; padding-top: 15px; color: var(--profile-label); }
+.shards-equation-operation b { font-size: .8125rem; color: var(--profile-text); font-variant-numeric: tabular-nums; }
+.shards-equation-operand { min-width: 0; }
+.shards-equation-input { display: grid; justify-items: center; align-content: start; gap: 6px; min-width: 0; text-align: center; }
+.shards-equation-input > strong { font-size: .8125rem; font-weight: 700; line-height: 1.4; overflow-wrap: break-word; }
+.shards-equation-tile { flex: 0 0 54px; width: 54px; }
+.shards-stationary .shards-sequence-picture { width: 54px; }
+.shards-stationary .profile-item-tile { width: 54px; height: 54px; }
+.shards-stationary .profile-item-tile img { width: 40px; height: 40px; }
+.shards-equation-tile .profile-item-tile { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.shards-stationary .shards-equation-tile .equation-input-toggle { position: static; width: 100%; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--profile-surface); border: 1px solid var(--profile-border); border-top: 0; border-radius: 0 0 5px 5px; color: var(--profile-label); }
+.shards-output-breakdown { display: grid; grid-template-columns: minmax(0,1fr); gap: 4px; margin: 0; }
+.shards-output-breakdown > div { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.shards-output-breakdown dt,.shards-direct-breakdown dt { color: var(--profile-label); font-size: .6875rem; font-weight: 600; }
+.shards-output-breakdown dd,.shards-direct-breakdown dd { margin: 0; color: var(--profile-text); font-size: .8125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.shards-equation-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 4px; }
+.shards-equation-actions small { color: var(--profile-muted); font-size: .6875rem; }
+.shards-equation-actions button,.shards-stationary .shards-equation-reset { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; color: var(--profile-label); font: inherit; font-size: .6875rem; padding: 4px; }
+.shards-equation-reset { float: right; }
+.shards-result-summary { min-width: 0; display: grid; grid-template-columns: 54px minmax(0,1fr); column-gap: 10px; row-gap: 8px; align-content: start; }
+.shards-result-identity { display: contents; }
+.shards-result-identity > .shards-sequence-picture { grid-column: 1; grid-row: 1 / span 2; }
+.shards-result-identity > div { min-width: 0; grid-column: 2; }
+.shards-result-identity > div > strong { display: block; font-size: .8125rem; line-height: 1.4; overflow-wrap: anywhere; }
+.shards-result-classification { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: .8125rem; line-height: 1.4; }
+.shards-result-classification > strong { text-transform: capitalize; font-weight: 700; }
+.shards-result-category { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; }
+.shards-result-category img { width: 20px; height: 20px; }
+.shards-result-attribute { grid-column: 2; min-width: 0; }
+.shards-result-attribute > strong { font-size: .8125rem; font-weight: 700; color: var(--color-stat-gold); line-height: 1.4; }
+.shards-result-attribute p { margin: 3px 0 0; font-size: .75rem; line-height: 1.5; color: var(--profile-label); }
+.shards-result-summary .shards-output-breakdown { grid-column: 2; }
+.shards-output-breakdown + .shards-result-attribute { border-top: 1px solid var(--profile-border); padding-top: 8px; }
+.shards-batch-caption { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px 12px; margin-top: 6px; color: var(--profile-label); font-size: .6875rem; }
+.shards-batch-caption b { color: var(--profile-text); font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.shards-batch-caption > span { white-space: nowrap; }
+.shards-batch-caption > button { margin-left: auto; }
+.shards-batch-caption:empty { display: none; }
+.shards-repeat-count { display: inline-flex; align-items: center; gap: 5px; }
+.shards-repeat-count svg { color: var(--color-stat-light-purple); }
+.shards-equation-batch + .shards-equation-batch { border-top: 1px solid var(--profile-border); margin-top: 8px; padding-top: 8px; }
+.shards-stationary-direct { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; padding-top: 8px; }
+.shards-direct-breakdown { display: grid; grid-template-columns: minmax(0,.6fr) minmax(0,.8fr) minmax(0,1.3fr); gap: 10px; border-top: 1px solid var(--profile-border); padding-top: 8px; margin: 0; }
+.shards-direct-source dt { color: var(--color-stat-gold); }
+@container (min-width: 440px) {
+  .shards-fusion-content,.shards-stationary-direct { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; align-items: start; }
+  .shards-fusion-content > .shards-fusion-steps { grid-column: 1; grid-row: 1; }
+  .shards-fusion-content > .shards-result-summary { grid-column: 2; grid-row: 1; border-left: 1px solid var(--profile-border); padding-left: 20px; }
+  .shards-stationary-direct > .shards-fusion-steps { border-left: 1px solid var(--profile-border); padding-left: 20px; }
+  .shards-fusion-inputs { border-top: 0; padding-top: 0; }
+  .shards-direct-breakdown { grid-template-columns: minmax(0,1fr); border-top: 0; padding-top: 0; gap: 8px; }
+  .shards-direct-breakdown > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .shards-direct-breakdown dd { text-align: right; }
+}
+@container (min-width: 800px) {
+  .shards-fusion-content,.shards-stationary-direct { grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); }
+}
+@container (max-width: 380px) {
+  .shards-direct-breakdown { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .shards-direct-source { grid-column: 1 / -1; }
+}
+@container (max-width: 439px) {
+  .shards-fusion-content .shards-fusion-inputs { border-top: 0; padding-top: 0; }
+  .shards-fusion-content > .shards-result-summary { border-top: 1px solid var(--profile-border); padding-top: 10px; }
+}

@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { localProfileApiProxy } from "./tools/localProfileApi";
 import {
   PUBLIC_PAGE_METADATA,
   renderPageMetadataHtml,
@@ -75,23 +76,12 @@ function packageOfModule(id: string): string | null {
 }
 
 // https://vite.dev/config/
-export default defineConfig(() => {
+export default defineConfig(({ command, isPreview }) => {
   const deployRevision = (process.env.GITHUB_SHA ?? "local").slice(0, 12);
 
-  /*
-   * There is no dev proxy any more, and that is deliberate.
-   *
-   * `/api` existed for exactly one caller: the old `hypixelService`, which
-   * fetched api.skyshards.com. The proxy made that same-origin under
-   * `pnpm run dev` and does not exist in a build, so the feature worked on the
-   * developer's machine and nowhere else - api.skyshards.com sends no
-   * `Access-Control-Allow-Origin`. The import now goes straight to
-   * api.hypixel.net with the player's own key, which allows the browser
-   * preflight, so dev and production take the identical code path. Anything
-   * added here in future would reintroduce exactly that split.
-   *
-   * `VITE_API_TARGET` went with it; it had no other reader.
-   */
+  // LAN preview origins cannot call the hosted profile API directly. Relay its
+  // four public read routes during development; keep production on the hosted
+  // service and retain its anonymous client IDs, cache, and quota handling.
   return {
     plugins: [
       react(),
@@ -126,6 +116,28 @@ export default defineConfig(() => {
         },
       },
     ],
+    /* Keep generated review captures outside the dev watcher. The project
+     * root contains large screenshot/DOM audit artifacts; watching them
+     * made every capture look like source churn and grew duplicate Vite
+     * processes into multi-gigabyte servers. */
+    server: {
+      proxy: command === "serve" && !isPreview ? localProfileApiProxy() : undefined,
+      // Prepare the main lazy routes on startup, not on the first navigation.
+      // This only warms Vite's transform cache; it does not fetch them in the browser.
+      warmup: {
+        clientFiles: [
+          "./src/profile-view/ProfileView.tsx",
+          "./src/pages/ItemsPage.tsx",
+          "./src/pages/StoragePage.tsx",
+          "./src/greenhouse/GreenhouseShell.tsx",
+          "./src/pages/SettingsPage.tsx",
+          "./src/island/PlayerModel.tsx",
+        ],
+      },
+      watch: {
+        ignored: ["**/.tmp-layoutrefs/**", "**/.codex-reference/**", "**/.vite/**"],
+      },
+    },
     base: "/",
     build: {
       rollupOptions: {
@@ -150,9 +162,8 @@ export default defineConfig(() => {
       },
       // No `target` here on purpose. Vite 7 defaults to
       // "baseline-widely-available" (chrome107 / edge107 / firefox104 /
-      // safari16), which is the floor this app already needs elsewhere. Naming
-      // an older target only adds downlevelling preambles to chunks that no
-      // supported browser reads.
+      // safari16). Runtime/CSS support requires Safari 16.4+, Chrome 111+,
+      // and Firefox 128+ (Tailwind 4); compilation does not polyfill Web APIs.
       sourcemap: false,
       cssCodeSplit: true,
       chunkSizeWarningLimit: 1000,

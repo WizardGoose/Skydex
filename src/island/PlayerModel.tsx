@@ -1,7 +1,138 @@
 import React, { useEffect, useRef, useState } from "react";
-import { SkinViewer } from "skinview3d";
-import { bodyUrl, skinUrl } from "./heads";
+import { IdleAnimation, SkinViewer } from "skinview3d";
+import { skinUrl } from "./heads";
 import { applyVoxelLayers } from "./voxelLayers";
+
+const IDLE_FRAME_INTERVAL_MS = 125;
+const IDLE_AUTO_PREVIEW_MS = 2_500;
+
+/**
+ * The idle pose only rotates a few joints, so a full display-rate WebGL loop
+ * wastes work without making the motion meaningfully smoother. Eight frames
+ * per second suits the pixel-art model. It plays briefly when the model enters
+ * view and while the pointer is over it, then returns to change-only rendering.
+ */
+const startIdleAnimation = (viewer: SkinViewer, target: Element): (() => void) => {
+  const idle = new IdleAnimation();
+  idle.speed = 0.58;
+  viewer.animation = idle;
+
+  let disposed = false;
+  let inViewport = typeof IntersectionObserver === "undefined";
+  let pointerActive = false;
+  let previewRemainingMs = IDLE_AUTO_PREVIEW_MS;
+  let previewStartedAt: number | null = null;
+  let previewTimer: number | null = null;
+  let lastFrameAt: number | null = null;
+  let timer: number | null = null;
+  let frame: number | null = null;
+
+  const canAnimate = () =>
+    !disposed
+    && inViewport
+    && document.visibilityState === "visible"
+    && (pointerActive || previewRemainingMs > 0);
+
+  const cancelScheduledFrame = () => {
+    if (timer !== null) {
+      window.clearTimeout(timer);
+      timer = null;
+    }
+    if (frame !== null) {
+      window.cancelAnimationFrame(frame);
+      frame = null;
+    }
+  };
+
+  const schedule = () => {
+    if (!canAnimate() || timer !== null || frame !== null) return;
+    timer = window.setTimeout(() => {
+      timer = null;
+      if (!canAnimate()) return;
+      frame = window.requestAnimationFrame((now) => {
+        frame = null;
+        if (!canAnimate()) {
+          lastFrameAt = null;
+          return;
+        }
+        const elapsedSeconds = lastFrameAt === null
+          ? IDLE_FRAME_INTERVAL_MS / 1_000
+          : Math.min((now - lastFrameAt) / 1_000, 0.25);
+        lastFrameAt = now;
+        idle.update(viewer.playerObject, elapsedSeconds);
+        viewer.render();
+        schedule();
+      });
+    }, IDLE_FRAME_INTERVAL_MS);
+  };
+
+  const pausePreviewClock = () => {
+    if (previewTimer !== null) {
+      window.clearTimeout(previewTimer);
+      previewTimer = null;
+    }
+    if (previewStartedAt !== null) {
+      previewRemainingMs = Math.max(
+        0,
+        previewRemainingMs - (performance.now() - previewStartedAt),
+      );
+      previewStartedAt = null;
+    }
+  };
+
+  const syncActivity = () => {
+    const visible = !disposed && inViewport && document.visibilityState === "visible";
+    if (visible && previewRemainingMs > 0 && previewTimer === null) {
+      previewStartedAt = performance.now();
+      previewTimer = window.setTimeout(() => {
+        previewTimer = null;
+        previewStartedAt = null;
+        previewRemainingMs = 0;
+        syncActivity();
+      }, previewRemainingMs);
+    } else if (!visible) {
+      pausePreviewClock();
+    }
+
+    if (canAnimate()) {
+      schedule();
+    } else {
+      cancelScheduledFrame();
+      lastFrameAt = null;
+    }
+  };
+
+  const onPointerEnter = () => {
+    pointerActive = true;
+    syncActivity();
+  };
+  const onPointerLeave = () => {
+    pointerActive = false;
+    syncActivity();
+  };
+
+  const observer = typeof IntersectionObserver === "undefined"
+    ? null
+    : new IntersectionObserver(([entry]) => {
+        inViewport = entry?.isIntersecting ?? false;
+        syncActivity();
+      });
+  observer?.observe(target);
+  target.addEventListener("pointerenter", onPointerEnter);
+  target.addEventListener("pointerleave", onPointerLeave);
+  document.addEventListener("visibilitychange", syncActivity);
+  syncActivity();
+
+  return () => {
+    disposed = true;
+    pausePreviewClock();
+    cancelScheduledFrame();
+    observer?.disconnect();
+    target.removeEventListener("pointerenter", onPointerEnter);
+    target.removeEventListener("pointerleave", onPointerLeave);
+    document.removeEventListener("visibilitychange", syncActivity);
+  };
+};
 
 /**
  * The player, standing in the profile page's sharp channel.
@@ -15,13 +146,13 @@ import { applyVoxelLayers } from "./voxelLayers";
  * live site's fallback discipline. What each parent contributed:
  *
  * FROM THE LIVE SITE, learned the hard way here first:
- *   - DELIBERATELY STILL. No idle/walk/wave animation; drag to turn, zoom off.
+ *   - STILL BY DEFAULT. Callers can opt into a quiet joint-level idle pose;
+ *     drag to turn remains available and zoom remains off.
  *   - THE SKIN LOADS THROUGH THE PROMISE, not the constructor. `new
  *     SkinViewer({ skin })` fires `loadSkin` asynchronously and nothing
  *     catches it, so a failed fetch leaves an UNTEXTURED dark smear. Failure
- *     here falls back to the flat MCHeads render with a title that says why;
- *     lost WebGL contexts get the same treatment; and if the flat render ALSO
- *     fails it hides rather than showing a broken-image glyph.
+ *     here leaves the model absent instead of substituting a differently
+ *     framed flat body; lost WebGL contexts take the same quiet path.
  *   - NO ARMOR MESHES: skinview3d 3.4.2 renders skin, cape, ears and elytra
  *     only (verified against the library's exports), so worn armor is shown
  *     in the Gear tab rather than on the body.
@@ -40,8 +171,9 @@ import { applyVoxelLayers } from "./voxelLayers";
  *     notice.
  *   - VOXEL LAYERS: the outer skin layer built as real geometry (one voxel
  *     per opaque texel) instead of a flat transparent shell, with the hidden
- *     hat-underside culled and the z-fighting EPSILON + polygon offset
- *     measured there. Failure degrades to the library's own flat shell.
+ *     hat-underside culled and a measured geometric gap preventing the flat
+ *     body and voxel shell from sharing a depth plane. Failure degrades to the
+ *     library's own flat shell.
  */
 
 interface Props {
@@ -55,6 +187,8 @@ interface Props {
   frameX?: number;
   frameY?: number;
   voxelLayers?: boolean;
+  /** Animate the character's joints in place. The canvas itself never drifts. */
+  animate?: boolean;
 }
 
 export const PlayerModel: React.FC<Props> = ({
@@ -66,18 +200,19 @@ export const PlayerModel: React.FC<Props> = ({
   frameX = -2.8,
   frameY = 6.9,
   voxelLayers = true,
+  animate = false,
 }) => {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<SkinViewer | null>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [fallback, setFallback] = useState<null | "webgl" | "skin" | "context">(null);
-  const [flatFailed, setFlatFailed] = useState(false);
 
   const skin = skinUrl(uuid);
-  const flat = bodyUrl(uuid);
+  const canRenderModel = fallback === null;
 
   /* Measure first. Nothing is built until there is a real size to build at. */
   useEffect(() => {
+    if (!canRenderModel) return;
     const host = hostRef.current;
     if (!host) return;
     const ro = new ResizeObserver(([entry]) => {
@@ -86,16 +221,17 @@ export const PlayerModel: React.FC<Props> = ({
     });
     ro.observe(host);
     return () => ro.disconnect();
-  }, [fallback === null]);
+  }, [canRenderModel]);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host || !size || !skin) return;
-
     /* A brand new element every time. See the header. */
     const canvas = document.createElement("canvas");
     canvas.style.display = "block";
     canvas.style.cursor = "grab";
+    canvas.style.opacity = "0";
+    canvas.style.pointerEvents = "none";
     canvas.title = "Drag to turn the model.";
     canvas.setAttribute("aria-label", "3D render of the player's skin. Drag to rotate.");
     /* The projection offset correction. See the header: CSS moves the
@@ -104,6 +240,8 @@ export const PlayerModel: React.FC<Props> = ({
     host.appendChild(canvas);
 
     let viewer: SkinViewer | null = null;
+    let renderViewer: (() => void) | null = null;
+    let stopIdleAnimation: (() => void) | null = null;
     let live = true;
 
     const onContextLost = () => {
@@ -111,10 +249,17 @@ export const PlayerModel: React.FC<Props> = ({
     };
 
     try {
-      viewer = new SkinViewer({ canvas, width: size.w, height: size.h });
+      /* Static callers stay paused and render only on real changes. The
+         profile preview uses a capped, visible-only joint animation that
+         never translates the player or its canvas. */
+      viewer = new SkinViewer({ canvas, width: size.w, height: size.h, renderPaused: true });
       viewer.controls.enableZoom = false;
       viewer.autoRotate = false;
       viewer.zoom = zoom;
+      if (animate) stopIdleAnimation = startIdleAnimation(viewer, host);
+      const activeViewer = viewer;
+      renderViewer = () => activeViewer.render();
+      viewer.controls.addEventListener("change", renderViewer);
 
       /* The second skin layer, set explicitly for all six parts: "defaults to
          on" is not the same as "is on", and on skins whose crown IS the hat
@@ -145,6 +290,7 @@ export const PlayerModel: React.FC<Props> = ({
       cam.position.z = target.z + Math.cos(azimuth) * radius;
       cam.position.y += pitch * radius;
       viewer.controls.update();
+      viewer.render();
       viewerRef.current = viewer;
     } catch {
       canvas.remove();
@@ -160,7 +306,11 @@ export const PlayerModel: React.FC<Props> = ({
     viewer
       .loadSkin(skin)
       .then(() => {
-        if (!live || !voxelLayers) return;
+        if (!live) return;
+        built.render();
+        canvas.style.opacity = "1";
+        canvas.style.pointerEvents = "auto";
+        if (!voxelLayers) return;
         /* The sheet is decoded a second time, deliberately: reading texels
            back off the GPU is slower and lossier than re-decoding the 64x64
            PNG from cache. crossOrigin because the canvas reads its pixels. */
@@ -170,6 +320,7 @@ export const PlayerModel: React.FC<Props> = ({
           if (!live) return;
           try {
             disposeVoxels = applyVoxelLayers(built.playerObject, sheet);
+            built.render();
           } catch {
             /* Geometry failed; the flat shell is still there and still right,
                so this degrades to the normal render rather than to nothing. */
@@ -184,6 +335,8 @@ export const PlayerModel: React.FC<Props> = ({
     return () => {
       live = false;
       canvas.removeEventListener("webglcontextlost", onContextLost, false);
+      if (renderViewer) viewer?.controls.removeEventListener("change", renderViewer);
+      stopIdleAnimation?.();
       disposeVoxels?.();
       viewer?.dispose();
       viewerRef.current = null;
@@ -192,37 +345,20 @@ export const PlayerModel: React.FC<Props> = ({
     /* Size is intentionally NOT a dependency: a resize should resize the
        viewer (the effect below), not rebuild the WebGL context. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skin, size !== null, yaw, pitch, zoom, frameX, frameY, voxelLayers]);
+  }, [skin, size !== null, yaw, pitch, zoom, frameX, frameY, voxelLayers, animate]);
 
   useEffect(() => {
-    if (size && viewerRef.current) viewerRef.current.setSize(size.w, size.h);
+    if (size && viewerRef.current) {
+      viewerRef.current.setSize(size.w, size.h);
+      viewerRef.current.render();
+    }
   }, [size]);
 
-  if (!skin) return null;
+  if (!skin || fallback !== null) return <div className={className} aria-hidden />;
 
-  if (fallback !== null) {
-    if (!flat || flatFailed) return null;
-    const title =
-      fallback === "webgl"
-        ? "3D view needs WebGL, which this browser is not offering; this is the flat render instead."
-        : fallback === "skin"
-          ? "The skin image did not load, so the 3D model would have rendered wrong; this is the flat render instead."
-          : "The browser dropped the 3D canvas, so this is the flat render instead.";
-    return (
-      <div className={`flex items-center justify-center ${className}`}>
-        <img
-          src={flat}
-          alt=""
-          title={title}
-          onError={() => setFlatFailed(true)}
-          className="h-full max-h-[280px] w-auto object-contain"
-          style={{ imageRendering: "pixelated" }}
-        />
-      </div>
-    );
-  }
-
-  return <div ref={hostRef} className={className} />;
+  return (
+    <div ref={hostRef} className={className} />
+  );
 };
 
 export default PlayerModel;

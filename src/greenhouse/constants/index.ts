@@ -1,10 +1,10 @@
 export const GRID_SIZE = 10;
 
-export function getDefaultUnlockedCells(): Set<string> {
+const PERMANENT_CORE_CELLS = (() => {
   const cells = new Set<string>();
   const startRow = Math.floor((GRID_SIZE - 4) / 2);
   const startCol = Math.floor((GRID_SIZE - 4) / 2);
-  
+
   for (let r = 0; r < 4; r++) {
     for (let c = 0; c < 4; c++) {
       if ((r === 0 && c === 0) || (r === 0 && c === 3) ||
@@ -14,8 +14,22 @@ export function getDefaultUnlockedCells(): Set<string> {
       cells.add(`${startRow + r},${startCol + c}`);
     }
   }
-  
+
   return cells;
+})();
+
+export function getDefaultUnlockedCells(): Set<string> {
+  return new Set(PERMANENT_CORE_CELLS);
+}
+
+/** The starter core exists independently of purchased greenhouse slots. */
+export function isPermanentUnlockedCell(row: number, col: number): boolean {
+  return PERMANENT_CORE_CELLS.has(`${row},${col}`);
+}
+
+/** Every usable-cell shape must include the permanent starter core. */
+export function withPermanentUnlockedCells(cells: Iterable<string>): Set<string> {
+  return new Set([...cells, ...PERMANENT_CORE_CELLS]);
 }
 
 // check if a cell is adjacent to any unlocked cell

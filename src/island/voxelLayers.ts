@@ -199,13 +199,12 @@ const OCCLUDED: Partial<Record<string, Face[]>> = {
  * two coplanar polygons at identical depth - the depth buffer then picks a
  * winner per pixel per frame and the surface shimmers as the model turns.
  *
- * Fixed twice over, because either alone leaves a case. EPSILON separates the
- * two surfaces in world space, which handles the general case; polygon offset
- * biases the overlay toward the camera in the depth test, which handles the
- * grazing angles where a hundredth of a unit is smaller than the depth
- * buffer can resolve.
+ * EPSILON separates the two surfaces in world space. Do not also apply a
+ * camera-facing polygon offset to these boxes: it biases every face, including
+ * the inward and corner faces, and can pull those faces through the visible
+ * jacket surface as the model turns.
  */
-const EPSILON = 0.02;
+const EPSILON = 0.06;
 
 /** Read the sheet once into a flat RGBA array. */
 const readSheet = (img: HTMLImageElement): { data: Uint8ClampedArray; width: number } => {
@@ -293,11 +292,8 @@ const voxelisePart = (
   material.map = null;
   material.transparent = false;
   material.alphaTest = 0;
-  /* See the z-fighting note. Negative values pull the overlay toward the
-     camera in the depth test without moving it in world space. */
-  material.polygonOffset = true;
-  material.polygonOffsetFactor = -1;
-  material.polygonOffsetUnits = -2;
+  material.depthTest = true;
+  material.depthWrite = true;
   material.needsUpdate = true;
 
   const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, cells.length);

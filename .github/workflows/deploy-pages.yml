@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test website
+        run: pnpm test
+
       - name: Build skydex.ca Pages artifact
         run: pnpm run build:pages
 

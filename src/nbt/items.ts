@@ -110,6 +110,8 @@ export interface NbtItem {
   reforge: string | null;
   /** tag.ExtraAttributes.rarity_upgrades, the recomb flag as a count. Null when absent. */
   rarityUpgrades: number | null;
+  /** tag.ExtraAttributes.talisman_enrichment, e.g. "magic_find". Null when absent. */
+  enrichment: string | null;
   /** tag.ExtraAttributes.uuid, when present. Null otherwise. */
   uuid: string | null;
 }
@@ -254,6 +256,7 @@ const readItem = (item: NbtCompound, slot: number): NbtItem | null => {
     enchantments: readEnchantments(extra),
     reforge: stringAt(extra, "modifier"),
     rarityUpgrades: integerAt(extra, "rarity_upgrades"),
+    enrichment: stringAt(extra, "talisman_enrichment"),
     uuid: stringAt(extra, "uuid"),
   };
 };

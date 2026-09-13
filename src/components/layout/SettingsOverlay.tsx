@@ -11,16 +11,15 @@ const SiteSettingsPage = lazy(() =>
 /**
  * Settings, as a window over the site rather than a page of it.
  *
- * The whole site stays where it is and blurs behind a veil; one frosted panel
+ * The whole site stays where it is behind a quiet neutral veil; one panel
  * floats on top carrying the settings surface. Opening is `?settings=1` on
  * whatever address you are already at, so the state is linkable, the back
  * button closes it, and closing returns you to exactly the page you were on
  * with nothing remounted.
  *
- * The veil does the blurring and the panel is tint only. The panel's backdrop
- * is the veil's own already-blurred output, so a second backdrop-filter on it
- * would cost a full-screen pass and return nothing visible - same reasoning
- * as the curtain in index.css.
+ * Settings deliberately applies no backdrop blur or colour bloom. The veil
+ * only dims the route beneath it, keeping the workspace visually still while
+ * the user changes preferences.
  */
 
 export const SettingsOverlay: React.FC = () => {
@@ -35,13 +34,50 @@ export const SettingsOverlay: React.FC = () => {
     navigate(closeSettingsLocation(location));
   };
 
+  const trapFocus = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Tab") return;
+    const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable || focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+
   /* Esc closes; the page under the veil must not scroll while it is up. */
   useEffect(() => {
     if (!open) return;
     openerRef.current = document.activeElement;
     panelRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") {
+        close();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      const inside = panelRef.current?.contains(active) ?? false;
+      if (!inside || (e.shiftKey && (active === first || active === panelRef.current))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.documentElement.style.overflow;
@@ -61,7 +97,7 @@ export const SettingsOverlay: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden bg-slate-950/45 px-3 py-6 backdrop-blur-[6px] sm:py-10"
+      className="settings-overlay fixed inset-0 z-[70] flex items-start justify-center overflow-hidden px-3 py-4 sm:items-center sm:px-6 sm:py-8"
       onMouseDown={(e) => {
         /* The veil closes, the panel does not. mousedown rather than click so
            a text selection that ends outside the panel does not dismiss it. */
@@ -74,17 +110,18 @@ export const SettingsOverlay: React.FC = () => {
         aria-modal="true"
         aria-label="Settings"
         tabIndex={-1}
-        className="sd-lip relative flex max-h-[calc(100dvh-3rem)] w-full max-w-[52rem] flex-col overflow-hidden rounded-lg border border-white/12 bg-slate-900/85 outline-none"
+        onKeyDown={trapFocus}
+        className="settings-shell sd-toolkit relative flex h-[calc(100dvh-2rem)] w-full max-w-[62rem] flex-col overflow-hidden outline-none sm:h-[calc(100dvh-4rem)]"
       >
         <button
           type="button"
           onClick={close}
           aria-label="Close settings"
-          className={`absolute right-3 top-3 z-10 cursor-pointer rounded-md p-2 text-slate-300 transition-colors hover:bg-white/8 hover:text-slate-50 active:translate-y-px ${FOCUS}`}
+          className={`settings-shell-close absolute right-3 top-3 z-10 cursor-pointer rounded-md p-2 text-slate-300 transition-colors hover:bg-white/8 hover:text-slate-50 active:translate-y-px ${FOCUS}`}
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="settings-shell-body relative flex min-h-0 flex-1 overflow-hidden">
           <Suspense
             fallback={
               <div className="flex items-center justify-center py-12">

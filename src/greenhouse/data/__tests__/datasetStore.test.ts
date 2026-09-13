@@ -100,6 +100,8 @@ type WikiSync = typeof import("../wikiSync");
 let store: DatasetStore;
 let service: DataService;
 let wikiCacheKey: string;
+let getDataset: DatasetStore["getDataset"];
+let publishWikiSnapshot: DatasetStore["publishWikiSnapshot"];
 
 beforeAll(async () => {
   vi.stubGlobal("localStorage", storage);
@@ -118,6 +120,8 @@ beforeAll(async () => {
   writeWikiCache(wikiCacheKey, "legendary");
 
   store = await import("../datasetStore");
+  getDataset = store.getDataset;
+  publishWikiSnapshot = store.publishWikiSnapshot;
   service = await import("../../services/greenhouseDataService");
 });
 
@@ -192,5 +196,34 @@ describe("greenhouse dataset store", () => {
     expect(raw).toBe(store.getDataset().raw);
     expect(service.isDataLoaded()).toBe(true);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});
+describe("datasetStore wiki publishing", () => {
+  it("adopts a Settings refresh in the same tab", () => {
+    const before = getDataset();
+    const id = before.mutations[0]?.id;
+    expect(id).toBeTruthy();
+    const base = before.raw.mutations[id!];
+
+    publishWikiSnapshot({
+      fetchedAt: 123456789,
+      mutations: {
+        [id!]: {
+          name: base.name,
+          size: base.size,
+          ground: base.ground,
+          grounds: base.grounds ?? [base.ground],
+          rarity: base.rarity,
+          growth_stages: base.growth_stages,
+          requirements: base.requirements,
+        },
+      },
+    });
+
+    const after = getDataset();
+    expect(after.wiki.fetchedAt).toBe(123456789);
+    expect(after.wiki.syncing).toBe(false);
+    expect(after.wiki.error).toBeNull();
+    expect(after.raw.mutations[id!].name).toBe(base.name);
   });
 });

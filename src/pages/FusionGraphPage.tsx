@@ -9,23 +9,18 @@ import {
   useNodesInitialized,
   useNodesState,
   useReactFlow,
-  useUpdateNodeInternals,
   type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Menu, Search, Share2, X } from "lucide-react";
 import { useFusionData } from "../hooks";
-import { CalculationService } from "../services/calculationService";
-import { DEFAULT_CALCULATION_PARAMS } from "../constants";
+import { buildFusionGraphInWorker } from "../services/fusionGraphWorkerService";
 import { ShardGraphNode } from "../components/graph";
 import { BTN_QUIET, INPUT, LABEL, PANEL, PageHeader, SplitPage, Figure, stated } from "../ui/kit";
 import {
   EDGE_COLORS,
   NODE_HEIGHT,
   NODE_WIDTH,
-  buildFusionGraph,
-  buildGraphElements,
-  fusionDataToData,
   getConnectedLine,
   type EdgeFilter,
   type FusionEdge,
@@ -38,7 +33,6 @@ const nodeTypes = { shard: ShardGraphNode };
 const FusionGraphInner: React.FC = () => {
   const { fusionData, rates, loading } = useFusionData();
   const { fitView, setCenter } = useReactFlow();
-  const updateNodeInternals = useUpdateNodeInternals();
 
   const [nodes, setNodes, onNodesChange] = useNodesState<ShardNode>([]);
   const [graph, setGraph] = useState<FusionGraph | null>(null);
@@ -93,24 +87,23 @@ const FusionGraphInner: React.FC = () => {
 
   useEffect(() => {
     if (!fusionData || !rates) return;
-    const data = fusionDataToData(fusionData, rates);
-    // Guard: only prune when rates actually loaded. An empty map would mark every
-    // shard unobtainable and cascade-delete the whole graph.
-    const hasRates = Object.keys(rates).length > 0;
-    // Structural min cost (neutral params) so we can drop backwards "expensive ->
-    // cheap" edges; a pricier shard is never used to fuse a cheaper one.
-    const { minCosts } = new CalculationService().computeMinCosts(data, DEFAULT_CALCULATION_PARAMS);
-    const g = buildFusionGraph(
-      data,
-      hasRates
-        ? { isDirectlyObtainable: (id) => (rates[id] ?? 0) > 0, minCost: (id) => minCosts.get(id) ?? Infinity }
-        : {}
-    );
-    const { nodes: builtNodes, edges } = buildGraphElements(data, g);
-    setGraph(g);
-    setBaseEdges(edges);
-    setNodes(builtNodes);
-    didFit.current = false;
+    let active = true;
+    const task = buildFusionGraphInWorker(fusionData, rates);
+    task.promise
+      .then(({ graph: builtGraph, nodes: builtNodes, edges }) => {
+        if (!active) return;
+        setGraph(builtGraph);
+        setBaseEdges(edges);
+        setNodes(builtNodes);
+        didFit.current = false;
+      })
+      .catch((error) => {
+        if (active) console.error("Failed to build the fusion graph", error);
+      });
+    return () => {
+      active = false;
+      task.cancel();
+    };
   }, [fusionData, rates, setNodes]);
 
   const connectedLine = useMemo(() => {
@@ -127,19 +120,8 @@ const FusionGraphInner: React.FC = () => {
   useEffect(() => {
     if (didFit.current || !nodesInitialized || nodes.length === 0) return;
     didFit.current = true;
-    const ids = nodes.map((n) => n.id);
     fitView({ padding: 0.15, duration: 0 });
-    const remeasure = () => {
-      for (const id of ids) updateNodeInternals(id);
-    };
-    const raf = requestAnimationFrame(() => requestAnimationFrame(remeasure));
-    const timers = [250, 600].map((ms) => setTimeout(remeasure, ms));
-    return () => {
-      cancelAnimationFrame(raf);
-      timers.forEach(clearTimeout);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodesInitialized, nodes.length, fitView, updateNodeInternals]);
+  }, [nodesInitialized, nodes.length, fitView]);
 
   const displayNodes = useMemo(
     () =>
@@ -331,7 +313,7 @@ const FusionGraphInner: React.FC = () => {
     >
       <PageHeader
         title="Fusion Lines"
-        sub="Every fusion in the game as one graph. Click a shard to highlight the line it belongs to."
+        sub="Special and ID fusion lines. Click a shard to highlight the line it belongs to."
         icon={Share2}
         actions={
           selectedName ? (

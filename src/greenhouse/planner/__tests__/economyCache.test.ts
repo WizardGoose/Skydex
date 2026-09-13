@@ -25,12 +25,15 @@ describe("betterEconomy", () => {
     expect(betterEconomy(eco(51, { a: 99, b: 99 }), eco(50, { a: 1 }))).toBe(false);
   });
 
-  it("breaks a yield tie by fewer unique crops, then a smaller bill", () => {
-    // Fewer kinds wins even against fewer total plants: variety slows the
-    // growth clock, and the stage formula reads the kind count.
-    expect(betterEconomy(eco(50, { a: 10, b: 10 }), eco(50, { a: 30 }))).toBe(true);
-    expect(betterEconomy(eco(50, { a: 30 }), eco(50, { a: 10, b: 10 }))).toBe(false);
+  it("breaks a yield tie by fewer placements, then fewer crop types", () => {
+    // A field's crop variety does not change its clock; the unique-crop bonus
+    // is greenhouse-wide. Fewer physical placements therefore wins first.
+    expect(betterEconomy(eco(50, { a: 10, b: 10 }), eco(50, { a: 30 }))).toBe(false);
+    expect(betterEconomy(eco(50, { a: 30 }), eco(50, { a: 10, b: 10 }))).toBe(true);
     expect(betterEconomy(eco(50, { a: 30 }), eco(50, { a: 20 }))).toBe(true);
+
+    // On an equal bill, fewer kinds is the simpler field.
+    expect(betterEconomy(eco(50, { a: 10, b: 10 }), eco(50, { a: 20 }))).toBe(true);
   });
 
   it("keeps the stored answer on an exact tie, so equal plots cannot flap", () => {

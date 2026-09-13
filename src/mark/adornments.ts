@@ -141,6 +141,9 @@ export const underscoreSpans = (t: number) => [underscoreSpan(EYE_CX_L, t), unde
 /** How many z's are in flight at once. */
 export const ZZZ_COUNT = 3;
 
+/** Full glyph travel, including font extents, stays inside its own SVG viewport. */
+export const ZZZ_VIEWPORT = { x: 0, y: -8, width: 40, height: 20 } as const;
+
 /** Where the first z leaves the face: just off the right eye's outer shoulder. */
 export const ZZZ_X = EYE_CX_R + EYE_W * 0.62;
 export const ZZZ_Y = EYE_TOP + 0.6;

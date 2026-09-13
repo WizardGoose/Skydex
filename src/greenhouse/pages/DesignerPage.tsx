@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { Eye, EyeOff, Menu, X } from "lucide-react";
-import { PageHeader, PANEL, TILE, LABEL, BTN_QUIET, SplitPage } from "../../ui/kit";
+import { PageHeader, PANEL, TILE, LABEL, BTN_QUIET } from "../../ui/kit";
 import { Grid3x3 as DesignerIcon } from "lucide-react";
 import { 
   CropSelectionPalette, 
@@ -15,8 +15,11 @@ import { useDesigner, useGreenhouseData } from "../context";
 import { decodeDesign, getRarityTextColor } from "../utilities";
 import { nextDesignerLayoutCode } from "../designerRoute";
 import type { DesignerGridHandle } from "../components";
+import { ManagedInventoryPanel } from "../../components/common/ManagedInventoryPanel";
+import { greenhouseHoldingsItems } from "../../inventory";
+import { GreenhouseCapabilityFrame } from "../GreenhouseCapabilityFrame";
 
-export const DesignerPage: React.FC = () => {
+export const DesignerPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const [showTargets, setShowTargets] = useState(true);
   // Narrow viewports collapse the rail behind one button, same as every split page.
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -24,7 +27,8 @@ export const DesignerPage: React.FC = () => {
   const location = useLocation();
   const { toast } = useToast();
   const { inputPlacements, targetPlacements, loadFromSolverResult } = useDesigner();
-  const { getCropDef, getMutationDef, isLoading: isDataLoading } = useGreenhouseData();
+  const { crops, mutations, getCropDef, getMutationDef, isLoading: isDataLoading } = useGreenhouseData();
+  const holdingsItems = React.useMemo(() => greenhouseHoldingsItems(crops, mutations), [crops, mutations]);
   const lastLoadedLayoutCodeRef = useRef<string | null>(null);
   
   // Responsive grid sizing
@@ -167,11 +171,18 @@ export const DesignerPage: React.FC = () => {
     }
   }, [location.hash, location.search, isDataLoading, loadLayoutFromCode, toast]);
 
+  const designerHeading = (
+    <PageHeader title="Designer" sub="Lay out a plot by hand and validate the mutations" icon={DesignerIcon} />
+  );
+
   return (
     /* The signature split: tools in the rail under the logo, the plot canvas
        under the tabs. Same furniture positions as every page. */
-    <SplitPage
+    <GreenhouseCapabilityFrame
+      embedded={embedded}
+      variant="band"
       railLabel="Designer tools"
+      leading={designerHeading}
       rail={
         <>
           {/* Narrow viewports collapse the rail behind one button. */}
@@ -183,6 +194,7 @@ export const DesignerPage: React.FC = () => {
           </div>
 
           <div className={`${sidebarOpen ? "block" : "hidden min-[900px]:block"} space-y-4`}>
+            {!embedded && <ManagedInventoryPanel items={holdingsItems} defaultOpen={false} />}
             <div className={`${PANEL} p-3 sm:p-4`}>
               <DesignerActions gridRef={gridRef} showTargets={showTargets} />
             </div>
@@ -203,7 +215,6 @@ export const DesignerPage: React.FC = () => {
         </>
       }
     >
-      <PageHeader title="Designer" sub="Lay out a plot by hand and validate the mutations" icon={DesignerIcon} />
       <div className={`${PANEL} p-3 sm:p-4 w-full`}>
             <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-2">
               <h3 className="text-[13px] font-medium text-slate-200">Greenhouse Designer</h3>
@@ -319,6 +330,6 @@ export const DesignerPage: React.FC = () => {
               </>
             )}
       </div>
-    </SplitPage>
+    </GreenhouseCapabilityFrame>
   );
 };

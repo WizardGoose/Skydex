@@ -1,18 +1,41 @@
 import React from "react";
+import FailureSurface from "../errors/FailureSurface";
+import { createFailureModel, type FailureModel, type RetryMode } from "../errors/failureModel";
 
-export class ErrorBoundary extends React.Component<{ children?: React.ReactNode }, { hasError: boolean; error: Error | null }> {
-  constructor(props: { children?: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error: Error) {
+interface ErrorBoundaryProps {
+  children?: React.ReactNode;
+  route?: string;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: unknown;
+}
+
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
     return { hasError: true, error };
   }
+
+  private retry = (mode: RetryMode) => {
+    if (mode === "reload" && typeof window !== "undefined") {
+      window.location.reload();
+      return;
+    }
+    this.setState({ hasError: false, error: null });
+  };
+
   render() {
     if (this.state.hasError) {
-      // Raw CSS `red` is #ff0000, which is the one red the theme never defines
-      // and lands at 5.25:1 here purely by luck. This is the theme's error red.
-      return <div style={{ color: "#ff6b6b", padding: 16 }}>Error: {String(this.state.error)}</div>;
+      const failure: FailureModel = createFailureModel({
+        error: this.state.error,
+        route: this.props.route,
+        source: "component",
+        phase: "render",
+      });
+      return <FailureSurface failure={failure} onRetry={() => this.retry(failure.retryMode)} />;
     }
     return this.props.children;
   }

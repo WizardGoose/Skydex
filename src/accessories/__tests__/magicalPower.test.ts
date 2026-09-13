@@ -76,6 +76,10 @@ describe("computeMagicalPower", () => {
     );
     expect(figure.total).toBe(MP_BY_RARITY.EPIC + MP_BY_RARITY.COMMON);
     expect(figure.counted).toBe(2);
+    expect(figure.breakdown).toStrictEqual([
+      { tier: "COMMON", count: 1, mpEach: 3, subtotal: 3 },
+      { tier: "EPIC", count: 1, mpEach: 12, subtotal: 12 },
+    ]);
   });
 
   it("a duplicate can never count twice, because held ids are a set", () => {
@@ -124,6 +128,10 @@ describe("recombobulators", () => {
     expect(figure.total).toBe(5 + 12);
     expect(figure.recombobulated).toBe(2);
     expect(figure.recombBonus).toBe(2 + 4);
+    expect(figure.breakdown).toStrictEqual([
+      { tier: "UNCOMMON", count: 1, mpEach: 5, subtotal: 5 },
+      { tier: "EPIC", count: 1, mpEach: 12, subtotal: 12 },
+    ]);
   });
 
   it("bumps nothing above mythic", () => {
@@ -197,6 +205,8 @@ describe("the accessories the game prices specially", () => {
   it("prices a bag-held Rift Prism at the wiki's 11, not its listed rare 8", () => {
     const figure = computeMagicalPower(new Set(["RIFT_PRISM"]), catalogue, chains);
     expect(figure.total).toBe(11);
+    expect(figure.riftPrism).toBe(11);
+    expect(figure.breakdown).toStrictEqual([]);
   });
 
   it("prices the Abicase by rarity plus one MP per two contacts, floored", () => {

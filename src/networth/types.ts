@@ -87,9 +87,21 @@ export interface CatalogueEntry {
   tier?: string;
   soulbound?: string;
   museum?: boolean;
+  /** Base item stats, retained so catalogue-only Museum entries still have truthful tooltips. */
+  stats?: Record<string, number>;
+  /** Hypixel's canonical Museum unit metadata, trimmed to collection semantics. */
+  museum_data?: CatalogueMuseumData;
   upgrade_costs?: UpgradeCost[][] | UpgradeCost[];
   gemstone_slots?: GemstoneSlot[];
   prestige?: { item_id?: string; costs?: UpgradeCost[] };
+}
+
+export interface CatalogueMuseumData {
+  donation_xp?: number;
+  category?: string;
+  armor_set_donation_xp?: Record<string, number>;
+  mapped_item_ids?: string[];
+  game_stage?: string;
 }
 
 export interface UpgradeCost {

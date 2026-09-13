@@ -1,0 +1,240 @@
+.profile-progression-filterbar {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.profile-progression-search {
+  display: flex;
+  min-width: 8rem;
+  min-height: 2.18rem;
+  flex: 1 1 18rem;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0 0.58rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0.42rem;
+  background: rgb(4 9 14 / 0.54);
+  color: rgb(155 173 188 / 0.72);
+}
+
+.profile-progression-search > svg {
+  width: 0.78rem;
+  height: 0.78rem;
+  flex: none;
+}
+
+.devkit-root .profile-progression-search > input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #dce6ee;
+  font: inherit;
+  font-size: 0.63rem;
+}
+
+.profile-progression-search:focus-within {
+  border-color: rgb(56 199 244 / 0.48);
+  box-shadow: 0 0 0 2px rgb(56 199 244 / 0.08);
+}
+
+.profile-progression-filter-menu {
+  position: static;
+  flex: none;
+}
+
+.profile-progression-filter-menu > summary {
+  display: inline-flex;
+  min-height: 2.18rem;
+  align-items: center;
+  gap: 0.34rem;
+  padding: 0.42rem 0.62rem;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.42rem;
+  background: rgb(255 255 255 / 0.035);
+  color: #b8c5d0;
+  cursor: pointer;
+  font-size: 0.63rem;
+  font-weight: 650;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.profile-progression-filter-menu > summary::-webkit-details-marker { display: none; }
+
+.profile-progression-filter-menu > summary > svg,
+.profile-progression-filter-popover > button svg,
+.profile-progression-filter-result button svg {
+  width: 0.76rem;
+  height: 0.76rem;
+}
+
+.profile-progression-filter-menu > summary > b {
+  display: grid;
+  min-width: 1.12rem;
+  height: 1.12rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(56 199 244 / 0.14);
+  color: #8de6ff;
+  font-size: 0.625rem;
+}
+
+.profile-progression-filter-menu[open] > summary,
+.profile-progression-filter-menu > summary:hover {
+  border-color: rgb(56 199 244 / 0.42);
+  color: #e4edf3;
+}
+
+.profile-progression-filter-popover {
+  position: absolute;
+  top: calc(100% + 0.38rem);
+  right: 0;
+  z-index: 45;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(10.5rem, 1fr));
+  width: min(30rem, 100%);
+  max-height: min(31rem, 72vh);
+  gap: 0.8rem;
+  padding: 0.78rem;
+  overflow: auto;
+  border: 1px solid rgb(126 218 242 / 0.22);
+  border-radius: 0.5rem;
+  background: rgb(5 9 14 / 0.98);
+  box-shadow: 0 0.9rem 2rem rgb(0 0 0 / 0.54);
+}
+
+.profile-progression-filter-popover.is-single-group {
+  grid-template-columns: minmax(11.5rem, 1fr);
+  width: min(16rem, 100%);
+}
+
+.profile-progression-filter-popover fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.profile-progression-filter-popover legend {
+  margin-bottom: 0.42rem;
+  color: var(--profile-label);
+  font-size: 0.625rem;
+  font-weight: 720;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.profile-progression-filter-popover fieldset > div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.profile-progression-filter-popover label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 1.75rem;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.22rem 0.32rem;
+  border-radius: 0.3rem;
+  color: #c3cfd8;
+  cursor: pointer;
+  font-size: 0.625rem;
+}
+
+.profile-progression-filter-popover label.has-icon {
+  grid-template-columns: auto 1.4rem minmax(0, 1fr) auto;
+}
+
+.profile-progression-filter-popover label.is-selected {
+  background: color-mix(in srgb, var(--profile-filter-accent) 9%, transparent);
+}
+
+.profile-progression-filter-option-icon {
+  display: grid;
+  width: 1.4rem;
+  height: 1.4rem;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--profile-filter-accent) 40%, transparent);
+  border-radius: 0.28rem;
+  background: color-mix(in srgb, var(--profile-filter-accent) 10%, rgb(5 9 14 / 0.9));
+}
+
+.profile-progression-filter-option-icon img {
+  image-rendering: pixelated;
+}
+
+.profile-progression-filter-popover label:hover { background: rgb(255 255 255 / 0.045); }
+.profile-progression-filter-popover label.is-disabled { opacity: 0.38; cursor: not-allowed; }
+.profile-progression-filter-popover label.is-disabled:hover { background: transparent; }
+
+.profile-progression-filter-popover input {
+  width: 0.82rem;
+  height: 0.82rem;
+  accent-color: var(--profile-filter-accent);
+}
+
+.profile-progression-filter-popover label small {
+  color: rgb(164 181 194 / 0.76);
+  font-size: 0.625rem;
+}
+
+.profile-progression-filter-popover > button,
+.profile-progression-filter-result button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  border: 0;
+  background: transparent;
+  color: #8ddff4;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.625rem;
+}
+
+.profile-progression-filter-popover > button {
+  grid-column: 1 / -1;
+  width: fit-content;
+  padding: 0.32rem 0.46rem;
+}
+
+.profile-progression-filter-result {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgb(168 185 198 / 0.76);
+  font-size: 0.625rem;
+}
+
+.profile-progression-filter-result button { padding: 0.18rem; }
+
+@media (max-width: 560px) {
+  .profile-progression-filterbar { flex-wrap: wrap; }
+  .profile-progression-search { flex-basis: calc(100% - 5.5rem); }
+  .profile-progression-filter-result { width: 100%; justify-content: flex-end; }
+  .profile-progression-filter-popover {
+    right: 0;
+    left: 0;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+}
+
+@container profile-workspace (max-width: 560px) {
+  .profile-progression-filterbar { flex-wrap: wrap; }
+  .profile-progression-search { flex-basis: calc(100% - 5.5rem); }
+  .profile-progression-filter-result { width: 100%; justify-content: flex-end; }
+  .profile-progression-filter-popover {
+    right: 0;
+    left: 0;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+}

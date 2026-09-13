@@ -2,8 +2,7 @@ import React from "react";
 import { ExternalLink } from "lucide-react";
 import { FOCUS } from "./kit";
 import { ItemIcon } from "./ItemIcon";
-
-const WIKI = "https://hypixelskyblock.minecraft.wiki";
+import { wikiArticleUrl } from "./wikiUrl";
 
 /**
  * Article URL for a thing, built straight from its display name.
@@ -13,9 +12,6 @@ const WIKI = "https://hypixelskyblock.minecraft.wiki";
  * content is CC BY-NC-SA and stays where it is; we point at it, we never
  * bundle it. See `items/wikiCrafting.ts` for the full reasoning.
  */
-export const wikiArticleUrl = (name: string): string =>
-  `${WIKI}/wiki/${encodeURIComponent(name.replace(/ /g, "_"))}`;
-
 export interface WikiLinkProps {
   /** Display name. Derives the article URL and, with `icon`, the image too. */
   name: string;
@@ -34,6 +30,8 @@ export interface WikiLinkProps {
   title?: string;
   /** Label to render instead of `name`, when the two differ. */
   children?: React.ReactNode;
+  /** Dense icon-only surfaces can keep the shared link without a second glyph. */
+  showExternalIcon?: boolean;
 }
 
 /**
@@ -61,6 +59,7 @@ export const WikiLink: React.FC<WikiLinkProps> = ({
   nameClassName = "",
   title,
   children,
+  showExternalIcon = true,
 }) => (
   <a
     href={href ?? wikiArticleUrl(name)}
@@ -71,10 +70,12 @@ export const WikiLink: React.FC<WikiLinkProps> = ({
   >
     {icon && <ItemIcon name={name} src={iconSrc} size={iconSize} />}
     <span className={nameClassName}>{children ?? name}</span>
-    <ExternalLink
-      className="w-2.5 h-2.5 shrink-0 opacity-0 transition-opacity duration-150 group-hover/wikilink:opacity-70 group-focus-visible/wikilink:opacity-70"
-      aria-hidden
-    />
+    {showExternalIcon && (
+      <ExternalLink
+        className="w-2.5 h-2.5 shrink-0 opacity-0 transition-opacity duration-150 group-hover/wikilink:opacity-70 group-focus-visible/wikilink:opacity-70"
+        aria-hidden
+      />
+    )}
   </a>
 );
 

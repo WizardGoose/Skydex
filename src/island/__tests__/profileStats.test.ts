@@ -113,6 +113,45 @@ describe("parseGreenhouseStats: the one field the API exposes", () => {
   });
 });
 
+describe("parseGreenhouseStats: Hypixel greenhouse slots", () => {
+  it("maps the API's x/z slots onto the site's row/column grid", () => {
+    expect(parseGreenhouseStats(gardenResponse(), UUID, AT).unlockedCells).toStrictEqual({
+      value: [[0, 0], [0, 1], [9, 7]],
+      source: "api",
+    });
+  });
+
+  it("deduplicates repeated slots without inventing extra capacity", () => {
+    const payload = garden();
+    payload.greenhouse_slots.push({ x: 1, z: 0 });
+    expect(parseGreenhouseStats({ garden: payload }, UUID, AT).unlockedCells?.value).toStrictEqual([
+      [0, 0],
+      [0, 1],
+      [9, 7],
+    ]);
+  });
+
+  it("falls back honestly when the slot field is absent or malformed", () => {
+    const withoutSlots: Record<string, unknown> = { ...garden() };
+    delete withoutSlots.greenhouse_slots;
+    expect(parseGreenhouseStats({ garden: withoutSlots }, UUID, AT).unlockedCells).toBeNull();
+
+    for (const bad of [
+      "not-a-list",
+      [{ x: 0 }],
+      [{ x: 10, z: 0 }],
+      [{ x: 0.5, z: 0 }],
+    ]) {
+      expect(parseGreenhouseStats({ garden: { ...garden(), greenhouse_slots: bad } }, UUID, AT).unlockedCells).toBeNull();
+    }
+  });
+
+  it("does not let manual stat overrides replace the API cell layout", () => {
+    const fromApi = parseGreenhouseStats(gardenResponse(), UUID, AT);
+    expect(applyManualOverrides(fromApi, { plots: 2 }).unlockedCells).toStrictEqual(fromApi.unlockedCells);
+  });
+});
+
 describe("parseGreenhouseStats: refusing to guess", () => {
   it("returns null, never 0, when garden_upgrades is absent entirely", () => {
     const stats = parseGreenhouseStats(gardenResponse(), UUID, AT);
@@ -186,7 +225,7 @@ describe("parseGreenhouseStats: the stats the API does not expose", () => {
  * than guessed: the Desk UI page shows the upgrade as "Current Tier: 0/2" with
  * each tier granting "+1 Greenhouse Plot", and The Garden page caps the total
  * at 3. So plots = purchased + 1, and an ABSENT key is the unpurchased default
- * of one base greenhouse, which the one live dump (1 plot, no key) agrees with.
+ * of one base greenhouse.
  * Not yet observed against an account that has bought a tier; these tests pin
  * the documented mapping so that first observation has something to confirm.
  */

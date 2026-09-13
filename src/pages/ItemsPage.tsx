@@ -1,38 +1,69 @@
-import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { isPlayerItem } from "../items/itemAvailability";
+import { includeMinionItems } from "../recipes/minionItems";
+import { includeLinkedItem, resolveLinkedItem } from "../recipes/linkedItem";
+import { LinkedItemAcquisition } from "../recipes/LinkedItemAcquisition";
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search, ChevronRight, ChevronDown, Hammer, ShoppingCart, HelpCircle, Menu, Package, Trophy, Coins, Flame, Store, X } from "lucide-react";
-import { useRecipes, useBazaar, buildCostTree, collectRawMaterials, sumNpcValue, formatCoins, type CostNode, type Item } from "../items/useItemData";
-import { useProfile } from "../profile/useProfile";
+import { ChevronRight, ChevronDown, LockKeyhole, UnlockKeyhole, Hammer, ShoppingCart, HelpCircle, Info, CheckCircle2, ListTree, Plus, Minus, X } from "lucide-react";
+import { useRecipes, useBazaar, buildCostTree, formatCoins, type CostNode, type Item } from "../items/useItemData";
+import { useProfileType } from "../profile/profileType";
+import { useEnsureProfileSources, useParsedProfile } from "../networth/useNetworth";
+import { useApiAccess } from "../island/apiKey";
+import { useIsland } from "../island/useIsland";
+import { requestSkillDefs, useSkillDefs } from "../island/skills";
 import { ItemIcon } from "../ui/ItemIcon";
+import { ItemTooltip } from "../ui/ItemTooltip";
 import { WikiLink } from "../ui/WikiLink";
 import { fetchMaterialChains, readChainCache, writeChainCache, type ChainIndex } from "../items/materialChain";
 import { useForgeRecipes, mergeForgeItems, formatDuration, type ForgeRecipe } from "../items/wikiForge";
 import { useShopStock, describeCosts, type ShopListing } from "../items/wikiShops";
-import { hasKnownCraftingRecipe, norm, slug } from "../items/wikiCrafting";
+import { norm, slug } from "../items/wikiCrafting";
 import { itemResourceVersion, resourceHasId, resourceTierFor, subscribeItemResource } from "../items/itemResource";
-import { useAdminItems, isTestingItem } from "../items/wikiAdmin";
+import { useAdminItems } from "../items/wikiAdmin";
 import { fetchWikiTiers, readTierCache, tierCacheFresh, writeTierCache, type WikiTierCache } from "../items/wikiTiers";
 import { useOwned, describeSources, type OwnedIndex } from "../inventory";
+import { allocateCostTree, allocateCraftingQueue, type AllocationNode } from "../items/craftingAllocation";
+import { alternativeDisplayOptions, alternativeGroupLabel } from "../items/alternativeDisplay";
 import { normaliseItemQuantity } from "../utilities/itemQuantity";
+import { checkRequirement, readRequirement, type PlayerProgress } from "../accessories/requirements";
+import { buildAcquisitionRoutes, type AcquisitionRoute, type MaterialReadiness } from "../recipes/acquisition";
+import { AlternativeAcquisitionRoutes } from "../recipes/AcquisitionRoutes";
+import { RecipeAccessPanel, RecipeCollection, RecipeMethodPicker } from "../recipes/RecipeBook";
 import {
-  PANEL,
-  TILE,
+  buildCollectionProgressIndex,
+  buildRecipeBook,
+  type RecipeMaterialStatus,
+  type RecipeMethodKind,
+} from "../recipes/progressionModel";
+import { useWikiAcquisition } from "../recipes/useWikiAcquisition";
+import { buildSkyBlockPlanningIndex } from "../recipes/catalogue";
+import { buildRecipePlanInWorker } from "../recipes/recipePlanWorkerService";
+import { CraftingTree } from "../recipes/CraftingTree";
+import { RecipesMuseumCollection } from "../recipes/RecipesMuseumCollection";
+import { includeMuseumGoals } from "../recipes/museumPlanning";
+import { holdingLocations } from "../recipes/holdings";
+import { buildMuseumPreviewModel } from "../profile/riftMuseumDungeons";
+import { addCraftingGoal, craftingGoalKey, readCraftingList, CRAFTING_LIST_KEY } from "../recipes/craftingQueue";
+import { itemStatsFromRecord } from "../ui/itemTooltipModel";
+import { skyBlockStatPresentation } from "../utilities/utilityFunctions";
+import { CharacterStage } from "../profile-view/CharacterStage";
+import { ProfileIdentity } from "../profile-view/ProfileIdentity";
+import { UtilityInfo, UtilityMetric } from "../profile-view/UtilityMetric";
+import { ProfileItemTile } from "../profile-view/profile-sections/ProfileItemTile";
+import { profileSkillRows } from "../profile/skillDisplay";
+import {
   LABEL,
   NUM,
-  PageHeader,
-  INPUT,
-  SectionHead,
-  SplitPage,
-  BTN_QUIET,
   FOCUS,
   META,
   BADGE,
   COL,
-  HELP,
-  Figure,
   ItemQuantityField,
-  stated,
 } from "../ui/kit";
+import "../profile-view/profile.css";
+import "../recipes/recipes-page.css";
+import "../recipes/recipe-workspace.css";
+import "../profile-view/utility-workspace.css";
 
 /**
  * Crafting trees for every craftable item.
@@ -68,7 +99,7 @@ const TIER: Record<string, string> = {
 };
 
 /*
- * META, BADGE, COL, Figure and stated are the kit's dense-row type ladder,
+ * META, BADGE and COL are the kit's dense-row type ladder,
  * imported above. They were written here first and now live in ui/kit.tsx so
  * the shard pages carry the same ladder rather than three copies of it.
  */
@@ -152,18 +183,49 @@ const LANE_NAME = "min-w-[8rem] flex-1";
  * dashes: an empty column is worse than no column, and it also invites the
  * reader to believe a dash means zero.
  */
+const AlternativeItemIcon: React.FC<{ node: CostNode; allocation?: AllocationNode }> = ({ node, allocation }) => {
+  const options = useMemo(
+    () => alternativeDisplayOptions(
+      { id: node.id, name: node.wikiTitle ?? node.name },
+      node.alternatives ?? []
+    ),
+    [node.id, node.name, node.wikiTitle, node.alternatives]
+  );
+  const selectedId = allocation?.selectedAlternative?.id;
+  const [index, setIndex] = useState(() => {
+    const selected = selectedId ? options.findIndex((option) => option.id === selectedId) : -1;
+    return selected >= 0 ? selected : 0;
+  });
+
+  useEffect(() => {
+    if (selectedId) {
+      const selected = options.findIndex((option) => option.id === selectedId);
+      if (selected >= 0) setIndex(selected);
+    }
+  }, [options, selectedId]);
+
+  useEffect(() => {
+    if (options.length < 2 || typeof window === "undefined") return;
+    const timer = window.setInterval(() => setIndex((current) => (current + 1) % options.length), 1800);
+    return () => window.clearInterval(timer);
+  }, [options.length]);
+
+  const option = options[index % options.length] ?? options[0];
+  return <ItemTooltip id={option.id} name={option.name} tier={resourceTierFor(option.id)} wrapperTag="span"><span><ItemIcon id={option.id} name={option.name} /></span></ItemTooltip>;
+};
 const TreeRow: React.FC<{
   node: CostNode;
   depth?: number;
   defaultOpen?: boolean;
   ironman?: boolean;
   owned: OwnedIndex | null;
-}> = ({ node, depth = 0, defaultOpen = false, ironman = false, owned }) => {
+  allocation?: AllocationNode;
+}> = ({ node, depth = 0, defaultOpen = false, ironman = false, owned, allocation }) => {
   // Only auto-open branches we would actually craft. A "buy" branch is a leaf
   // decision, so expanding it by default is noise. On Ironman nothing is a buy
   // decision, so open the first couple of levels instead.
   const [open, setOpen] = useState(defaultOpen || (ironman ? depth < 2 : depth === 0 && node.action === "craft"));
-  const hasChildren = node.children.length > 0;
+  const hasChildren = allocation ? allocation.children.length > 0 : node.children.length > 0;
   const meta = ACTION[node.action];
   const Icon = meta.icon;
 
@@ -174,8 +236,15 @@ const TreeRow: React.FC<{
    * stated would print the full quantity and assert you have none of it. Both
    * lanes say "not known" instead, which is the only claim the data supports.
    */
-  const held = owned ? owned.count(node.id) : undefined;
-  const missing = held === undefined ? null : Math.max(0, node.qty - held);
+  const required = allocation?.requested ?? node.qty;
+  const held = allocation ? (allocation.inventoryKnown ? allocation.allocated : undefined) : owned ? owned.count(node.id) : undefined;
+  const missing = allocation
+    ? allocation.inventoryKnown
+      ? allocation.remaining
+      : null
+    : held === undefined
+    ? null
+    : Math.max(0, node.qty - held);
 
   return (
     <>
@@ -197,24 +266,23 @@ const TreeRow: React.FC<{
             into the column block would recreate, for the most important figure
             on the row, exactly the separation this layout exists to close. The
             header names this lane "need", which is what it is. */}
-        <span className={`text-[11px] ${NUM} text-slate-500 shrink-0 w-14 text-right`}>{node.qty.toLocaleString()}x</span>
+        <span className={`text-[11px] ${NUM} text-slate-500 shrink-0 w-14 text-right`}>{required.toLocaleString()}x</span>
 
         {/* The icon resolves from the item's preferred wiki title when it has
             one (the forge pets file their image under "<Name> Pet"); the link
             below keeps the article name, because the article is the article. */}
-        <ItemIcon id={node.id} name={node.wikiTitle ?? node.name} />
+        <AlternativeItemIcon node={node} allocation={allocation} />
 
         <WikiLink
           name={node.name}
+          title={node.alternatives?.length ? node.alternatives.map((alternative) => alternative.name).concat(node.name).join(" or ") : undefined}
           className={`${LANE_NAME} text-[11px] ${TIER[node.tier ?? ""] ?? "text-slate-300"}`}
           nameClassName="truncate"
-        />
+        >
+          {node.alternatives?.length ? alternativeGroupLabel({ id: node.id, name: node.name }, node.alternatives) : node.name}
+        </WikiLink>
 
-        {node.alternatives && (
-          <span className={`${BADGE} shrink-0 text-slate-500`} title={node.alternatives.map((a) => a.name).join(" or ")}>
-            or {node.alternatives.length}
-          </span>
-        )}
+
 
         {/*
           Ironman has no bazaar, so the craft-or-buy decision does not exist and
@@ -249,7 +317,7 @@ const TreeRow: React.FC<{
                 ? "No known NPC price"
                 : "What an NPC pays for this quantity"
               : node.cost === null
-              ? "Not on the bazaar, so there is no price to state"
+              ? "No live market price"
               : "Cheapest of buying it or crafting it"
           }
         >
@@ -296,7 +364,20 @@ const TreeRow: React.FC<{
       </div>
 
       {open &&
-        node.children.map((c, i) => <TreeRow key={`${c.id}-${i}`} node={c} depth={depth + 1} ironman={ironman} owned={owned} />)}
+        (allocation ? allocation.children : node.children).map((_, i) => {
+          const c = node.children[i];
+          if (!c) return null;
+          return (
+            <TreeRow
+              key={`${c.id}-${i}`}
+              node={c}
+              depth={depth + 1}
+              ironman={ironman}
+              owned={owned}
+              allocation={allocation?.children[i]}
+            />
+          );
+        })}
     </>
   );
 };
@@ -325,147 +406,32 @@ const TreeHead: React.FC<{ ironman: boolean; owned: OwnedIndex | null }> = ({ ir
   </div>
 );
 
-/**
- * Every known way to obtain an item, and what it feeds into.
- *
- * Sources are only listed when the data actually proves them: a collection
- * unlock from the wiki's Collection module, bazaar presence from live prices,
- * NPC sale from the Hypixel item metadata. Absence of a source here means we
- * have no data for it, not that the item is unobtainable, and the panel says
- * so rather than implying the list is exhaustive.
- *
- * Two TILE cards rather than one flush band: sources and uses are things you
- * read as units, not rows you scan, which is exactly the side of the line the
- * TILE note in ui/kit.tsx puts tiles on.
- */
-const ItemSources: React.FC<{
+const UsedInSection: React.FC<{
   item: Item;
   items: Record<string, Item>;
-  bazaar: Record<string, { buy: number; sell: number }>;
-  ironman: boolean;
-  /** The item's forge recipe, when the Forge table lists one. */
-  forge: ForgeRecipe | null;
-  /** Every NPC shop listing that sells the item, from the wiki's shop UIs. */
-  soldBy: ShopListing[];
-  /** True when `item.recipe` is the forge recipe rather than a crafting grid. */
-  forgeFed: boolean;
-  /** True while the shop stock is still being fetched, so absence is not claimed. */
-  shopsPending: boolean;
   onPick: (id: string) => void;
-}> = ({ item, items, bazaar, ironman, forge, forgeFed, soldBy, shopsPending, onPick }) => {
-  const onBazaar = !ironman && item.hypixelId ? bazaar[item.hypixelId] : undefined;
+}> = ({ item, items, onPick }) => {
   const usedIn = item.usedIn ?? [];
-
-  const sources: { icon: React.ReactNode; label: string; detail?: string }[] = [];
-
-  /**
-   * "Crafting" is only claimed for a grid recipe the crafting module states.
-   * A forge-fed `recipe` also lands in `item.recipe` so the cost tree can run,
-   * but calling that "Crafting" would state the wrong acquisition route, so
-   * the forge entry below owns it instead.
-   */
-  if (item.recipe && !forgeFed) {
-    sources.push({
-      icon: <Hammer className="w-3 h-3 text-emerald-400" />,
-      label: "Crafting",
-      detail: `${item.recipe.length} ingredient${item.recipe.length === 1 ? "" : "s"}${item.yields > 1 ? `, makes ${item.yields}` : ""}`,
-    });
-  }
-
-  if (forge) {
-    const bits = [
-      `${forge.ingredients.length} ingredient${forge.ingredients.length === 1 ? "" : "s"}`,
-      forge.seconds !== null ? formatDuration(forge.seconds) : forge.duration ?? "duration not stated",
-      forge.hotm !== null ? `HotM ${forge.hotm}` : null,
-    ].filter(Boolean);
-    sources.push({
-      icon: <Flame className="w-3 h-3 text-emerald-400" />,
-      label: "Forge",
-      detail: bits.join(", "),
-    });
-  }
-
-  for (const listing of soldBy.slice(0, 6)) {
-    sources.push({
-      icon: <Store className="w-3 h-3 text-blue-400" />,
-      label: `Sold by ${listing.npc}`,
-      detail: `${listing.offer.stack > 1 ? `${listing.offer.stack}x for ` : ""}${describeCosts(listing.offer.costs)}`,
-    });
-  }
-  if (soldBy.length > 6) {
-    sources.push({
-      icon: <Store className="w-3 h-3 text-blue-400" />,
-      label: `and ${soldBy.length - 6} more shops`,
-    });
-  }
-
-  for (const u of item.unlocks ?? []) {
-    sources.push({
-      icon: <Trophy className="w-3 h-3 text-amber-400" />,
-      label: `${u.collection} collection ${u.tier}`,
-      detail: `${u.required.toLocaleString()} collected${u.type === "Recipe" ? " unlocks the recipe" : u.type === "Trade" ? " unlocks an NPC trade" : " unlocks a Forge recipe"}`,
-    });
-  }
-
-  if (onBazaar) {
-    sources.push({
-      icon: <ShoppingCart className="w-3 h-3 text-blue-400" />,
-      label: "Bazaar",
-      detail: `buy ${formatCoins(onBazaar.buy)}, sell ${formatCoins(onBazaar.sell)}`,
-    });
-  }
-
-  if (item.npcSell !== null) {
-    sources.push({
-      icon: <Coins className="w-3 h-3 text-slate-400" />,
-      label: "Sells to NPC",
-      detail: `${formatCoins(item.npcSell)} each`,
-    });
-  }
-
   return (
-    <div className="border-b border-white/8 p-2.5 grid grid-cols-1 lg:grid-cols-2 gap-2">
-      <div className={`${TILE} px-2.5 py-2`}>
-        <h3 className={`${LABEL} mb-1.5`}>Where to get it</h3>
-        {sources.length === 0 ? (
-          <p className="text-[12px] text-slate-500">
-            No source in our data. Crafting, the Forge and NPC shop stock have all been checked
-            {shopsPending ? " (shop stock is still loading)" : ""}, so it likely drops from a mob, comes from an event, or is a quest reward, none of
-            which the wiki exposes as structured data.
-          </p>
-        ) : (
-          <ul className="space-y-1">
-            {sources.map((s, i) => (
-              <li key={i} className="flex items-baseline gap-1.5">
-                <span className="translate-y-px">{s.icon}</span>
-                <span className="text-[12px] text-slate-200">{s.label}</span>
-                {s.detail && <span className="text-[11px] text-slate-500">{s.detail}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-        {ironman && onBazaar === undefined && item.hypixelId && bazaar[item.hypixelId] && (
-          <p className="text-[11px] text-slate-500 mt-1">Tradeable on the Bazaar, but not on Ironman.</p>
-        )}
-      </div>
-
-      <div className={`${TILE} px-2.5 py-2`}>
-        <h3 className={`${LABEL} mb-1.5`}>
+    <section className="recipes-used-in border-b border-white/8 px-3 py-2.5">
+      <div className="flex items-start gap-3">
+        <h3 className={`${LABEL} mt-1 shrink-0`}>
           Used in{item.usedInTotal ? ` (${item.usedInTotal})` : ""}
         </h3>
         {usedIn.length === 0 ? (
-          <p className="text-[12px] text-slate-500">Not an ingredient in any known recipe.</p>
+          <p className="mt-0.5 text-[11px] text-slate-500">Not an ingredient in any known recipe.</p>
         ) : (
           <div className="flex flex-wrap gap-1">
             {usedIn.map((u) => (
+              <ItemTooltip key={u} id={u} name={items[u]?.name ?? u} tier={items[u]?.tier} interactive>
               <button
-                key={u}
                 onClick={() => onPick(u)}
                 className={`flex cursor-pointer items-center gap-1 rounded-sm border border-white/12 bg-white/8 px-1.5 py-0.5 text-[11px] text-slate-300 hover:border-emerald-500/40 hover:bg-white/12 hover:text-emerald-200 ${FOCUS}`}
               >
                 <ItemIcon id={u} name={items[u]?.wikiTitle ?? items[u]?.name ?? u} size={14} />
                 {items[u]?.name ?? u}
               </button>
+              </ItemTooltip>
             ))}
             {item.usedInTotal && item.usedInTotal > usedIn.length && (
               <span className="text-[11px] text-slate-500 self-center">and {item.usedInTotal - usedIn.length} more</span>
@@ -473,136 +439,210 @@ const ItemSources: React.FC<{
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 
-/**
- * The Forge route for an item, stated the way the wiki's Forge table states
- * it: components, coins, duration and the Heart of the Mountain gate.
- *
- * This exists separately from the tree because forging is not crafting. When
- * the item has no grid recipe the tree runs through these same components and
- * this panel says so; when it has both, this is the alternative route and the
- * tree above stays the crafting one.
- */
-const ForgeSection: React.FC<{
-  recipe: ForgeRecipe;
-  items: Record<string, Item>;
-  /** True when the cost tree on screen is running this forge recipe. */
-  forgeFed: boolean;
-  /** True when a crafting grid recipe also exists, so this is the second route. */
-  hasGridRecipe: boolean;
-  onPick: (id: string) => void;
-}> = ({ recipe, items, forgeFed, hasGridRecipe, onPick }) => (
-  <div className="border-b border-white/8 px-3 py-2.5">
-    <div className="flex items-baseline justify-between gap-3 mb-1.5 flex-wrap">
-      <h3 className={`${LABEL} flex items-center gap-1.5`}>
-        <Flame className="w-3 h-3 text-emerald-400" />
-        Forge recipe
-      </h3>
-      <div className="flex items-baseline gap-3 text-[11px] text-slate-500">
-        <span title="Base forge time, before Quick Forge or Cole reductions">
-          <span className={`${NUM} text-slate-300`}>
-            {recipe.seconds !== null ? formatDuration(recipe.seconds) : recipe.duration ?? "duration not stated"}
-          </span>{" "}
-          base
+interface DirectIngredientView {
+  id: string;
+  name: string;
+  label: string;
+  required: number;
+  held: number | undefined;
+  foundInTrackedStorage: boolean;
+  missing: number | null;
+  tier: string | null;
+  wikiTitle?: string;
+  locations: string;
+}
+
+const DirectIngredient: React.FC<{ ingredient: DirectIngredientView; inventoryKnown: boolean }> = ({ ingredient, inventoryKnown }) => (
+  <div className="recipes-ingredient">
+    <span className="recipes-ingredient-icon">
+      <ProfileItemTile id={ingredient.id} name={ingredient.name} iconName={ingredient.wikiTitle ?? ingredient.name} tier={ingredient.tier} count={ingredient.required} iconSize={34} ariaLabel={`${ingredient.name}, ${ingredient.required.toLocaleString()} required`} />
+    </span>
+    <span className="recipes-ingredient-copy">
+      <WikiLink
+        name={ingredient.name}
+        title={ingredient.label === ingredient.name ? undefined : ingredient.label}
+        className={`recipes-ingredient-name ${TIER[ingredient.tier ?? ""] ?? "text-slate-200"}`}
+        nameClassName="break-words"
+      >
+        {ingredient.label}
+      </WikiLink>
+      <UtilityInfo title={`${ingredient.name} materials`} info={{ rows: [
+        { label: "Required", value: ingredient.required.toLocaleString() },
+        { label: "Held", value: ingredient.held?.toLocaleString() ?? "Unknown" },
+        { label: "Still needed", value: ingredient.missing?.toLocaleString() ?? "Unknown" },
+      ], summary: ingredient.held === undefined ? "Holdings are unavailable for this item." : ingredient.foundInTrackedStorage ? "Held items come from the selected profile's enabled Storage sources." : "This item was not found in the captured storage sources." }}>
+        <span tabIndex={0} className="recipes-ingredient-counts">
+          {ingredient.required === 1 && (!inventoryKnown || ingredient.missing === 0) && <><strong>1</strong> required<i aria-hidden>·</i></>}
+          {inventoryKnown && ingredient.held !== undefined ? <>
+            <span>{ingredient.foundInTrackedStorage ? `${ingredient.held.toLocaleString()} held` : "Not found in tracked storage"}</span>
+            <i aria-hidden>·</i><span className={`recipes-ingredient-state${ingredient.missing === 0 ? " is-covered" : ""}`}>{ingredient.missing === 0 ? "Covered" : `${ingredient.missing?.toLocaleString()} left`}</span>
+          </> : <span>Holdings unknown</span>}
         </span>
-        {recipe.hotm !== null && (
-          <span title="Heart of the Mountain tier required">
-            HotM <span className={`${NUM} text-slate-300`}>{recipe.hotm}</span>
-          </span>
-        )}
-        {recipe.requirement && <span title="Additional requirement, as the wiki states it">{recipe.requirement}</span>}
-      </div>
-    </div>
-
-    {recipe.ingredients.length === 0 && recipe.coins === null ? (
-      <p className="text-[12px] text-slate-500">
-        The Forge table lists this item but its cost cell did not parse, so no ingredient list can be shown. The wiki has the row.
-      </p>
-    ) : (
-      <div className="flex flex-wrap gap-1">
-        {recipe.ingredients.map((ing) => {
-          const id = slug(ing.name);
-          const known = Boolean(items[id]);
-          const inner = (
-            <>
-              <span className={`${NUM} text-slate-500`}>{ing.qty.toLocaleString()}x</span>
-              <ItemIcon id={id} name={items[id]?.wikiTitle ?? ing.name} size={14} />
-              {ing.name}
-            </>
-          );
-          return known ? (
-            <button
-              key={ing.name}
-              onClick={() => onPick(id)}
-              className={`flex cursor-pointer items-center gap-1 rounded-sm border border-white/12 bg-white/8 px-1.5 py-0.5 text-[11px] text-slate-300 hover:border-emerald-500/40 hover:bg-white/12 hover:text-emerald-200 ${FOCUS}`}
-            >
-              {inner}
-            </button>
-          ) : (
-            <WikiLink
-              key={ing.name}
-              name={ing.name}
-              className="flex items-center gap-1 rounded-sm border border-white/12 bg-white/8 px-1.5 py-0.5 text-[11px] text-slate-300"
-            >
-              {inner}
-            </WikiLink>
-          );
-        })}
-        {recipe.coins !== null && (
-          <span className="flex items-center gap-1 rounded-sm border border-white/12 bg-white/8 px-1.5 py-0.5 text-[11px] text-slate-300">
-            <Coins className="w-3 h-3 text-slate-400" />
-            <span className={NUM}>{recipe.coins.toLocaleString()}</span> coins
-          </span>
-        )}
-      </div>
-    )}
-
-    {forgeFed && (
-      <p className="text-[11px] text-slate-500 mt-1.5">The cost tree below runs through this forge recipe; there is no crafting grid for it.</p>
-    )}
-    {hasGridRecipe && (
-      <p className="text-[11px] text-slate-500 mt-1.5">This item can also be crafted; the tree below shows the crafting route.</p>
-    )}
+      </UtilityInfo>
+      {ingredient.locations && <small className="recipes-holding-locations">{ingredient.locations}</small>}
+    </span>
   </div>
 );
 
+interface PlannedMaterialView {
+  id: string;
+  name: string;
+  qty: number;
+  held: number | undefined;
+  foundInTrackedStorage: boolean;
+  missing: number;
+  gather: number;
+  locations: string;
+}
+
+const RecipeActionBoard: React.FC<{
+  route: AcquisitionRoute;
+  runs: number;
+  yieldPerRun: number;
+  ingredients: readonly DirectIngredientView[];
+}> = ({ route, runs, yieldPerRun, ingredients }) => {
+  const forging = route.kind === "forge";
+  const runLabel = `${runs.toLocaleString()} ${forging ? "forge" : "craft"}${runs === 1 ? "" : "s"}`;
+  const runSummary = [yieldPerRun > 1 ? `${yieldPerRun.toLocaleString()} per run` : null, runLabel]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <section className="recipes-action-board is-compact" aria-labelledby="recipes-action-title">
+      <div className="recipes-action-heading">
+        <div>
+          <span>Exact recipe</span>
+          <h2 id="recipes-action-title">{forging ? "Forge inputs" : "Required inputs"}</h2>
+        </div>
+        <small className={NUM}>{runSummary}</small>
+      </div>
+      <div className="recipes-action-inputs" aria-label="Inputs">
+        {ingredients.length > 0 ? ingredients.map((ingredient) => (
+          <DirectIngredient key={`${ingredient.id}:${ingredient.required}`} ingredient={ingredient} inventoryKnown={ingredient.held !== undefined} />
+        )) : <p className="recipes-route-empty">The exact inputs are not available in the current recipe data.</p>}
+      </div>
+    </section>
+  );
+};
+
+const MaterialWorklist: React.FC<{
+  materials: readonly PlannedMaterialView[];
+  items: Readonly<Record<string, Item>>;
+  inventoryKnown: boolean;
+  planPending: boolean;
+  planFailed: boolean;
+  missingOnly: boolean;
+  onMissingOnlyChange: (value: boolean) => void;
+}> = ({ materials, items, inventoryKnown, planPending, planFailed, missingOnly, onMissingOnlyChange }) => {
+  const outstandingTypes = materials.filter((material) => !inventoryKnown || material.held === undefined || material.missing > 0).length;
+  const shown = missingOnly && inventoryKnown
+    ? materials.filter((material) => material.held === undefined || material.missing > 0)
+    : materials;
+
+  return (
+    <section className="recipes-material-worklist" aria-labelledby="recipes-material-title">
+      <div className="recipes-support-heading">
+        <div>
+          <h2 id="recipes-material-title">{inventoryKnown ? "Still needed" : "Required materials"}</h2>
+        </div>
+        <UtilityInfo title="Material requirements" info={{ summary: inventoryKnown ? "Combined requirements after allocating the selected profile's held materials across every crafting target. A held item is spent only once." : "Required materials are shown without subtracting unavailable holdings.", note: "Counts use the sources managed on Storage. Unknown holdings remain unknown." }}>
+          <button type="button" className="profile-metric-hint-button"><Info aria-hidden /></button>
+        </UtilityInfo>
+        {!planPending && !planFailed && materials.length > 0 && (
+          <small className={NUM}>{inventoryKnown ? outstandingTypes : materials.length} {(inventoryKnown ? outstandingTypes : materials.length) === 1 ? "type" : "types"}</small>
+        )}
+      </div>
+
+      {inventoryKnown && materials.some((material) => material.missing === 0) && (
+        <label className="recipes-covered-toggle">
+          <input type="checkbox" checked={missingOnly} onChange={(event) => onMissingOnlyChange(event.target.checked)} />
+          Hide covered
+        </label>
+      )}
+
+      {planPending ? (
+        <p className="recipes-plan-state" role="status">Building the material route…</p>
+      ) : planFailed ? (
+        <p className="recipes-plan-state is-error">The material route could not be expanded. The direct recipe remains available.</p>
+      ) : shown.length > 0 ? (
+        <div className="recipes-material-list">
+          {shown.map((material) => {
+            const tier = items[material.id]?.tier ?? null;
+            const tracked = inventoryKnown && material.held !== undefined;
+            const complete = tracked && material.missing === 0;
+            return (
+              <div key={material.id} className={`recipes-material-row${complete ? " is-covered" : ""}`}>
+                <span className="recipes-material-icon"><ProfileItemTile id={material.id} name={material.name} iconName={items[material.id]?.wikiTitle ?? material.name} tier={tier} iconSize={26} /></span>
+                <span className="recipes-material-copy">
+                  <WikiLink name={material.name} className={TIER[tier ?? ""] ?? "text-slate-200"} nameClassName="line-clamp-2" />
+                  <small>
+                    {material.foundInTrackedStorage
+                      ? `${(material.held ?? 0).toLocaleString()} held · ${material.qty.toLocaleString()} required`
+                      : tracked
+                        ? `${material.qty.toLocaleString()} required · not found in tracked storage`
+                        : `${material.qty.toLocaleString()} required · holdings unknown`}
+                  </small>
+                  {material.locations && <small className="recipes-holding-locations">{material.locations}</small>}
+                </span>
+                <strong className={`${NUM}${complete ? " is-covered" : ""}`}>
+                  {tracked ? complete ? <CheckCircle2 aria-label="Covered" /> : `${material.missing.toLocaleString()} left` : `${material.gather.toLocaleString()} need`}
+                </strong>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="recipes-plan-state is-covered">Everything required for this route is already covered.</p>
+      )}
+    </section>
+  );
+};
+
 export const ItemsPage: React.FC = () => {
-  const { items, loading, error } = useRecipes();
+  useEnsureProfileSources();
+  const { items: sourceItems, loading, error } = useRecipes();
   const bazaar = useBazaar();
-  const { ironman } = useProfile();
+  const { ironman } = useProfileType();
+  const parsedProfile = useParsedProfile();
+  const { snapshot: islandSnapshot } = useIsland();
+  const { access, setProfileId } = useApiAccess();
+  const { defs: skillDefs } = useSkillDefs();
+
+  useEffect(() => requestSkillDefs(), []);
 
   /**
    * The landing page's search sends people here with `?q=`, so the box starts
    * with whatever they typed rather than empty. Read once on mount as the
    * initial value, not synced: after that the field belongs to the user, and a
    * URL that kept overwriting it would fight anyone who edited their search.
-   */
+  */
   const [searchParams] = useSearchParams();
-  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
-  const [quantity, setQuantity] = useState(() => normaliseItemQuantity(searchParams.get("qty")));
-  const [selected, setSelected] = useState<string | null>(null);
-  const [craftableOnly, setCraftableOnly] = useState(true);
-
-  /**
-   * The two hide-by-default toggles.
-   *
-   * "Show vanilla" is off by default because this page is for SkyBlock item
-   * crafting, not vanilla recipes; "Show unobtainable" is off by default to
-   * keep admin-only and testing items out of the list. Two
-   * controls rather than one because they hide different claims: a vanilla
-   * recipe is real and craftable, just not SkyBlock crafting, while an admin
-   * or testing item cannot be obtained at all, and folding ~290 vanilla rows
-   * under a checkbox that says "unobtainable" would be the label lying. The
-   * hidden counts are stated in the header line, never silent.
-   */
-  const [showVanilla, setShowVanilla] = useState(false);
-  const [showUnobtainable, setShowUnobtainable] = useState(false);
-
-  /** Below the split breakpoint the rail collapses behind one button. */
-  const [railOpen, setRailOpen] = useState(false);
+  const resourceVersion = useSyncExternalStore(subscribeItemResource, itemResourceVersion, itemResourceVersion);
+  const minionItems = useMemo(() => { void resourceVersion; return includeMinionItems(sourceItems); }, [sourceItems, resourceVersion]);
+  const items = useMemo(() => includeLinkedItem(minionItems, searchParams), [minionItems, searchParams]);
+  const appliedLink = useRef<string | null>(null);
+  const scrollToLinkedItem = useRef(false);
+  const [craftingList, setCraftingList] = useState(readCraftingList);
+  const initialGoal = (searchParams.get("q") || searchParams.get("item")) ? undefined : craftingList[0];
+  const [quantity, setQuantity] = useState(() => normaliseItemQuantity(searchParams.get("qty") ?? initialGoal?.quantity));
+  const [selected, setSelected] = useState<string | null>(() => initialGoal?.id ?? null);
+  const [treeOpen, setTreeOpen] = useState(false);
+  const [selectedMethodKind, setSelectedMethodKind] = useState<RecipeMethodKind>(() => initialGoal?.method ?? "craft");
+  const calculatorScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    calculatorScrollRef.current?.scrollTo({ top: 0 });
+    if (scrollToLinkedItem.current) {
+      calculatorScrollRef.current?.closest(".recipes-planner")?.scrollIntoView({ block: "start" });
+      scrollToLinkedItem.current = false;
+    }
+  }, [selected, selectedMethodKind]);
+  useEffect(() => {
+    try { localStorage.setItem(CRAFTING_LIST_KEY, JSON.stringify(craftingList)); } catch { /* The current list still works without persistence. */ }
+  }, [craftingList]);
 
   /*
    * The sharp channel. The frosted curtain's left edge is `--sd-split`, which
@@ -657,7 +697,7 @@ export const ItemsPage: React.FC = () => {
   // Re-render when the Hypixel item resource lands, because the tier fill
   // below reads from it and a forge item should gain its colour the moment
   // the resource does, not on the next unrelated state change.
-  const resourceVersion = useSyncExternalStore(subscribeItemResource, itemResourceVersion, itemResourceVersion);
+  useSyncExternalStore(subscribeItemResource, itemResourceVersion, itemResourceVersion);
 
   const enriched = useMemo(() => {
     const withForge = mergeForgeItems(items, forge.index, new Set(Object.keys(bazaar.prices)), resourceHasId);
@@ -696,15 +736,21 @@ export const ItemsPage: React.FC = () => {
       if (tier) cloned()[id] = { ...item, tier };
     }
     return out;
-  }, [items, chains, forge.index, bazaar.prices, resourceVersion, wikiTiers]);
+  }, [items, chains, forge.index, bazaar.prices, wikiTiers]);
+
+  /**
+   * Vanilla items can still be ingredients with real names, prices, and held
+   * counts. Their Minecraft crafting grids do not belong in a SkyBlock plan.
+   */
+  const planningItems = useMemo(() => buildSkyBlockPlanningIndex(enriched), [enriched]);
 
   /**
    * Ask the wiki for the tiers the resource could not state, once per day.
    *
    * Only names that are still tierless after the resource fill, and only the
-   * non-vanilla ones: vanilla rows are hidden by default, and spending five
-   * more requests colouring Acacia Doors that are not on screen would be
-   * paying for nothing. Inside the cache TTL a recorded null is an answer
+   * non-vanilla ones: vanilla rows are outside this catalogue, and spending
+   * more requests colouring Acacia Doors would be paying for nothing. Inside
+   * the cache TTL a recorded null is an answer
    * (the article states no single tier) and is not re-asked; past it, nulls
    * become questions again while learned tiers keep serving. The effect
    * converges: once the learned tiers land in `enriched`, nothing is
@@ -752,136 +798,110 @@ export const ItemsPage: React.FC = () => {
    */
   const unobtainable = useMemo(() => {
     const names = admin.names;
-    return (it: Item) => names.has(norm(it.name)) || isTestingItem(it.name, it.hypixelId);
+    return (it: Item) => !isPlayerItem(it.name, it.hypixelId, names);
   }, [admin.names]);
 
-  /** How many rows each default-off filter is currently holding back. */
-  const hiddenCounts = useMemo(() => {
-    let vanilla = 0;
-    let unob = 0;
-    for (const it of Object.values(enriched)) {
-      if (unobtainable(it)) unob++;
-      else if (it.vanilla) vanilla++;
+  // Apply each navigation once, then leave manual selection and quantity alone.
+  useEffect(() => {
+    const key = searchParams.toString();
+    if (appliedLink.current === key && (!selected || enriched[selected])) return;
+    const hit = resolveLinkedItem(enriched, searchParams, admin.names);
+    if (hit) {
+      scrollToLinkedItem.current = true;
+      setSelected(hit);
+      setQuantity(normaliseItemQuantity(searchParams.get("qty")));
+      setSelectedMethodKind("craft");
+      appliedLink.current = key;
+    } else if (searchParams.get("item") || searchParams.get("q")) {
+      setSelected(null);
     }
-    return { vanilla, unob };
-  }, [enriched, unobtainable]);
+  }, [admin.names, enriched, searchParams, selected]);
+
+  const chosen: Item | null = selected ? enriched[selected] ?? null : null;
+  const forgeRec: ForgeRecipe | null = chosen ? forge.index.byName.get(norm(chosen.name)) ?? null : null;
+  const hasGridRecipe = Boolean(selected && items[selected]?.recipe);
+  const activeMethodKind: RecipeMethodKind = selectedMethodKind === "forge" && forgeRec
+    ? "forge"
+    : hasGridRecipe
+      ? "craft"
+      : "forge";
+  const activePlanningItems = useMemo(() => {
+    if (activeMethodKind !== "forge" || !selected || !chosen || !forgeRec?.ingredients.length) return planningItems;
+    const recipe = forgeRec.ingredients.map((ingredient) => ({ id: slug(ingredient.name), name: ingredient.name, qty: ingredient.qty }));
+    return {
+      ...planningItems,
+      [selected]: { ...(planningItems[selected] ?? chosen), recipe, yields: 1 },
+    };
+  }, [activeMethodKind, chosen, forgeRec, planningItems, selected]);
+  const activeRecipe = selected ? activePlanningItems[selected]?.recipe ?? null : null;
+  const planKey = `${selected ?? ""}:${activeMethodKind}:${quantity}:${ironman ? "ironman" : "normal"}`;
+  const [plan, setPlan] = useState<{
+    key: string;
+    status: "idle" | "loading" | "ready" | "error";
+    tree: CostNode | null;
+  }>({ key: "", status: "idle", tree: null });
 
   /**
-   * Arriving from the landing search with an exact item name opens that item
-   * rather than just filtering to it, which is what picking a row from a
-   * dropdown implies. Guarded on `selected` so it only ever fires for the
-   * first load: once the user has clicked anything, the deep link is spent.
+   * The selected recipe paints from its direct recipe immediately. Recursive
+   * costing is isolated in a worker so comparing every craft/buy branch cannot
+   * hold the search box, the selected identity, or the direct ingredients.
    */
   useEffect(() => {
-    const q = searchParams.get("q");
-    if (!q || selected || !Object.keys(enriched).length) return;
-    const hit = Object.entries(enriched).find(([, it]) => it.name.toLowerCase() === q.trim().toLowerCase());
-    if (hit) setSelected(hit[0]);
-    // `selected` is deliberately not a dependency: this is a one-shot on load.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enriched, searchParams]);
+    let cancelled = false;
+    let fallbackHandle: number | null = null;
+    const item = selected ? activePlanningItems[selected] : null;
 
-  /**
-   * Name matches across the whole index, before the craftable filter.
-   *
-   * The vanilla and unobtainable filters apply here, which is what takes the
-   * hidden items out of search as well as out of the list; the toggles bring
-   * either set back. A hidden item can still be OPENED (the deep link and the
-   * used-in chips go through `enriched` directly), so nothing is unreachable.
-   */
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return Object.entries(enriched)
-      .filter(([, it]) => (showVanilla || !it.vanilla) && (showUnobtainable || !unobtainable(it)))
-      .filter(([, it]) => !q || it.name.toLowerCase().includes(q))
-      .sort((a, b) => a[1].name.localeCompare(b[1].name));
-  }, [enriched, query, showVanilla, showUnobtainable, unobtainable]);
+    if (!treeOpen || !selected || !item?.recipe) {
+      setPlan({ key: planKey, status: "ready", tree: null });
+      return;
+    }
 
-  /**
-   * Resolve chains for what the search turned up.
-   *
-   * Without this, "Craftable only" hides every enchanted item, because having
-   * no grid recipe looks identical to not having been looked up yet. That hid
-   * "Enchanted Brown Mushroom Block" from its own search. One batched request
-   * per settled query is enough to make the filter tell the truth.
-   */
-  useEffect(() => {
-    if (!query.trim() || !Object.keys(items).length) return;
+    setPlan({ key: planKey, status: "loading", tree: null });
 
-    const unknown = matches
-      .filter(([id, it]) => !it.recipe && !(id in chains))
-      .slice(0, 50)
-      .map(([, it]) => it.name);
+    const finishOnMainThread = () => {
+      fallbackHandle = window.setTimeout(() => {
+        if (cancelled) return;
+        try {
+          const tree = buildCostTree(selected, quantity, activePlanningItems, bazaar.prices, ironman);
+          if (!cancelled) setPlan({ key: planKey, status: "ready", tree });
+        } catch {
+          if (!cancelled) setPlan({ key: planKey, status: "error", tree: null });
+        }
+      }, 0);
+    };
 
-    if (!unknown.length) return;
+    const task = buildRecipePlanInWorker({
+      id: selected,
+      quantity,
+      items: activePlanningItems,
+      prices: bazaar.prices,
+      ironman,
+    });
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      fetchMaterialChains(unknown, controller.signal)
-        .then((learned) => {
-          if (controller.signal.aborted || !Object.keys(learned).length) return;
-          setChains((prev) => {
-            const next = { ...prev, ...learned };
-            writeChainCache(next);
-            return next;
-          });
+    if (!task) {
+      finishOnMainThread();
+    } else {
+      task.promise
+        .then((tree) => {
+          if (!cancelled) setPlan({ key: planKey, status: "ready", tree });
         })
         .catch(() => {
-          // Offline or a wiki hiccup; the filter just stays conservative.
+          if (!cancelled) finishOnMainThread();
         });
-    }, 400);
+    }
 
     return () => {
-      clearTimeout(timer);
-      controller.abort();
+      cancelled = true;
+      task?.cancel();
+      if (fallbackHandle !== null) window.clearTimeout(fallbackHandle);
     };
-  }, [query, matches, chains, items]);
+  }, [activePlanningItems, bazaar.prices, ironman, planKey, quantity, selected, treeOpen]);
 
-  const list = useMemo(
-    () => matches.filter(([, it]) => (craftableOnly ? hasKnownCraftingRecipe(it) : true)).slice(0, 300),
-    [matches, craftableOnly]
-  );
+  useEffect(() => setTreeOpen(false), [selected]);
 
-  const tree = useMemo(() => {
-    if (!selected || !enriched[selected]) return null;
-    return buildCostTree(selected, quantity, enriched, bazaar.prices, ironman);
-  }, [selected, quantity, enriched, bazaar.prices, ironman]);
-
-  /**
-   * Any leaf we have not tried to break down yet gets looked up once. Results
-   * are cached permanently, including the misses, so a tree deepens a level at
-   * a time and never re-asks.
-   */
-  useEffect(() => {
-    if (!tree) return;
-
-    const unknown = new Map<string, string>();
-    const walk = (n: CostNode) => {
-      if (n.children.length === 0 && !(n.id in chains) && enriched[n.id] && !enriched[n.id].recipe) {
-        unknown.set(n.id, n.name);
-      }
-      n.children.forEach(walk);
-    };
-    walk(tree);
-
-    if (!unknown.size) return;
-
-    const controller = new AbortController();
-    fetchMaterialChains([...unknown.values()], controller.signal)
-      .then((learned) => {
-        if (controller.signal.aborted || !Object.keys(learned).length) return;
-        setChains((prev) => {
-          const next = { ...prev, ...learned };
-          writeChainCache(next);
-          return next;
-        });
-      })
-      .catch(() => {
-        // A failed lookup just means the branch stays a leaf.
-      });
-
-    return () => controller.abort();
-  }, [tree, chains, enriched]);
+  const tree = plan.key === planKey && plan.status === "ready" ? plan.tree : null;
+  const planPending = treeOpen && Boolean(activeRecipe) && (plan.key !== planKey || plan.status === "loading");
+  const planFailed = plan.key === planKey && plan.status === "error";
 
   /**
    * What the site knows you already hold, across every source it has.
@@ -892,59 +912,114 @@ export const ItemsPage: React.FC = () => {
    * typed override the lot. When nothing at all is known `has` is false and
    * every trace of this disappears from the page, because a column of dashes is
    * worse than no column.
-   */
-  const owned = useOwned({ items: enriched });
+  */
+  const holdingsItems = useMemo(() => {
+    const index: Record<string, { hypixelId: string | null }> = { ...enriched };
+    const existing = new Set(Object.values(enriched).map(item => item.hypixelId));
+    for (const [id, item] of Object.entries(parsedProfile.catalogue ?? {})) {
+      const hypixelId = item.id || id;
+      if (!existing.has(hypixelId)) index[`museum:${hypixelId}`] = { hypixelId };
+    }
+    return index;
+  }, [enriched, parsedProfile.catalogue]);
+  const owned = useOwned({ items: holdingsItems });
+  const museum = useMemo(() => buildMuseumPreviewModel({ parsed: parsedProfile.parsed, catalogue: parsedProfile.catalogue,
+    coverage: parsedProfile.coverage, api: parsedProfile.museumApi, result: null }),
+  [parsedProfile.parsed, parsedProfile.catalogue, parsedProfile.coverage, parsedProfile.museumApi]);
+
+  /** Reserve exact held items before any chosen craft branch expands. The
+   * CostNode adapter keeps normal Bazaar buy/craft decisions local to each
+   * occurrence, while Ironman trees naturally expand only uncovered crafts. */
+  const allocation = useMemo(
+    () => (tree ? allocateCostTree(tree, activePlanningItems, owned) : null),
+    [activePlanningItems, tree, owned]
+  );
+
+  const selectedCrafting = useMemo(() => allocateCraftingQueue(
+    selected && activeRecipe ? [{ id: selected, quantity }] : [],
+    activePlanningItems,
+    owned,
+    { useRootInventory: false },
+  ), [activePlanningItems, activeRecipe, owned, quantity, selected]);
+
+  const listCrafting = useMemo(() => allocateCraftingQueue(
+    craftingList.map((goal) => {
+      const item = planningItems[goal.id];
+      const method = item && goal.method === "forge" ? forge.index.byName.get(norm(item.name)) : null;
+      return {
+        id: goal.id,
+        quantity: goal.quantity,
+        ...(item && method ? { item: { ...item, yields: 1, recipe: method.ingredients.map((ingredient) => ({
+          id: slug(ingredient.name), name: ingredient.name, qty: ingredient.qty,
+        })) } } : {}),
+      };
+    }),
+    planningItems,
+    owned,
+    { useRootInventory: false },
+  ), [craftingList, forge.index.byName, owned, planningItems]);
+
+  // Discover missing intermediate recipes from the crafting branches, not a
+  // price plan that can stop at a purchasable parent before reaching them.
+  useEffect(() => {
+    const unknown = new Map<string, string>();
+    const walk = (node: AllocationNode) => {
+      if (!node.children.length && node.remaining > 0 && !(node.id in chains)
+        && enriched[node.id] && !enriched[node.id].recipe && !enriched[node.id].vanilla) unknown.set(node.id, node.name);
+      node.children.forEach(walk);
+    };
+    [...selectedCrafting.roots, ...listCrafting.roots].forEach(walk);
+    if (!unknown.size) return;
+    const controller = new AbortController();
+    fetchMaterialChains([...unknown.values()], controller.signal).then((learned) => {
+      if (controller.signal.aborted || !Object.keys(learned).length) return;
+      setChains((previous) => {
+        const next = { ...previous, ...learned };
+        writeChainCache(next);
+        return next;
+      });
+    }).catch(() => { /* Unavailable recipe data stays an explicit terminal ingredient. */ });
+    return () => controller.abort();
+  }, [chains, enriched, listCrafting, selectedCrafting]);
 
   /**
    * Everything you have to obtain, rolled up across the whole tree.
    *
    * Three numbers per row and they mean different things. `qty` is what the
-   * tree needs, `held` is what you already have, and `missing` is the only one
-   * you act on. `held` stays undefined rather than 0 when no source has ever
-   * mentioned the item, because "nobody looked" and "you have none" are
-   * different answers and a confident 0 would state the second while meaning
-   * the first.
+   * tree needs, `held` is what tracked storage located, and `missing` is the
+   * only one you act on. A connected inventory can still fail to mention an
+   * item; that becomes "not found in tracked storage" rather than the stronger
+   * claim that the player owns exactly zero everywhere.
    */
-  const rawMaterials = useMemo(() => {
-    if (!tree) return [];
-    return [...collectRawMaterials(tree).entries()]
-      .map(([id, v]) => {
-        const unit = enriched[id]?.npcSell ?? null;
-        const held = owned.count(id);
+  const rawMaterials = useMemo<PlannedMaterialView[]>(() => {
+    return selectedCrafting.remaining
+      .map((remainder) => {
+        const held = remainder.known ? remainder.allocated : owned.has ? 0 : undefined;
+        const gather = remainder.known ? remainder.remaining : remainder.required;
         return {
-          id,
-          ...v,
+          id: remainder.id,
+          name: remainder.name,
+          qty: remainder.required,
           held,
-          missing: Math.max(0, v.qty - (held ?? 0)),
-          npc: unit === null ? null : unit * v.qty,
+          foundInTrackedStorage: remainder.known,
+          missing: gather,
+          gather,
+          locations: holdingLocations(owned.get(remainder.id)),
         };
       })
-      .sort((a, b) => b.qty - a.qty);
-  }, [tree, owned, enriched]);
+      .sort((a, b) => b.gather - a.gather);
+  }, [selectedCrafting, owned]);
 
-  /** How much of the gather list you can already cover from what you own. */
-  const covered = useMemo(
-    () => (owned.has ? rawMaterials.filter((r) => r.missing === 0).length : 0),
-    [rawMaterials, owned.has]
-  );
+  const listMaterials = useMemo<PlannedMaterialView[]>(() => listCrafting.remaining.map((entry) => ({
+    id: entry.id, name: entry.name, qty: entry.required,
+    held: entry.known ? entry.allocated : undefined,
+    foundInTrackedStorage: entry.known,
+    missing: entry.remaining, gather: entry.remaining,
+    locations: holdingLocations(owned.get(entry.id)),
+  })).sort((a, b) => b.gather - a.gather), [listCrafting, owned]);
 
   /** Hide everything you already have, so the list becomes the shopping list. */
-  const [missingOnly, setMissingOnly] = useState(false);
-  const shownMaterials = useMemo(
-    () => (missingOnly && owned.has ? rawMaterials.filter((r) => r.missing > 0) : rawMaterials),
-    [rawMaterials, missingOnly, owned.has]
-  );
-
-  /**
-   * What the gather list is worth at NPC prices. Only shown on Ironman, where
-   * it is the one coin figure left once the bazaar is gone.
-   */
-  const npcRollup = useMemo(() => sumNpcValue(rawMaterials, enriched), [rawMaterials, enriched]);
-
-  const chosen: Item | null = selected ? enriched[selected] ?? null : null;
-
-  /** The chosen item's forge recipe, when the Forge table lists one. */
-  const forgeRec: ForgeRecipe | null = chosen ? forge.index.byName.get(norm(chosen.name)) ?? null : null;
+  const [missingOnly, setMissingOnly] = useState(true);
 
   /**
    * Whether the tree on screen is running the forge recipe. True exactly when
@@ -952,571 +1027,539 @@ export const ItemsPage: React.FC = () => {
    * null recipe, so this is a statement about where `chosen.recipe` came from,
    * not a guess.
    */
-  const forgeFed = forgeRec !== null && forgeRec.ingredients.length > 0 && selected !== null && !items[selected]?.recipe;
+  const forgeFed = activeMethodKind === "forge" && forgeRec !== null && forgeRec.ingredients.length > 0;
 
   /** Every shop listing selling the chosen item. */
-  const soldBy: ShopListing[] = chosen ? shops.index.byItem.get(norm(chosen.name)) ?? [] : [];
-
-  /** Craftable, minus whatever the default-off filters are holding back. */
-  const craftableCount = useMemo(
-    () =>
-      Object.values(enriched).filter(
-        (i) => hasKnownCraftingRecipe(i) && (showVanilla || !i.vanilla) && (showUnobtainable || !unobtainable(i))
-      ).length,
-    [enriched, showVanilla, showUnobtainable, unobtainable]
+  const soldBy: ShopListing[] = useMemo(
+    () => (chosen ? shops.index.byItem.get(norm(chosen.name)) ?? [] : []),
+    [chosen, shops.index.byItem]
   );
 
-  /**
-   * How many items the index is currently willing to show.
-   *
-   * Pulled out of the count line so the summary strip and the header sentence
-   * are the same number by construction. Two independent subtractions of the
-   * same two filters is how a page ends up stating "2,350 indexed" in one
-   * place and "2,639" in another, and being wrong somewhere is worse than
-   * being terse everywhere.
-   */
-  const indexedCount = useMemo(
+  /** The selected article contributes routes that are not present in recipe, Forge, shop, or market tables. */
+  const wikiRoute = useWikiAcquisition(chosen?.wikiTitle ?? chosen?.name ?? null);
+
+  const skillLevels = useMemo<Record<string, number> | null>(() => {
+    if (!parsedProfile.facts || !skillDefs) return null;
+    const levels = Object.fromEntries(
+      profileSkillRows(parsedProfile.facts.skillXp, skillDefs)
+        .filter((skill) => skill.level !== null)
+        .map((skill) => [skill.resourceKey, skill.level!]),
+    );
+    return Object.keys(levels).length > 0 ? levels : null;
+  }, [parsedProfile.facts, skillDefs]);
+
+  const playerProgress = useMemo<PlayerProgress>(() => ({
+    slayerLevels: parsedProfile.apiDetails?.slayers
+      ? Object.fromEntries(parsedProfile.apiDetails.slayers.map((slayer) => [slayer.key, slayer.level]))
+      : null,
+    trophyFish: null,
+    skillLevels,
+  }), [parsedProfile.apiDetails?.slayers, skillLevels]);
+
+  const checkedRequirements = useMemo(
     () =>
-      Object.keys(enriched).length -
-      (showVanilla ? 0 : hiddenCounts.vanilla) -
-      (showUnobtainable ? 0 : hiddenCounts.unob),
-    [enriched, hiddenCounts, showVanilla, showUnobtainable]
+      (chosen?.requirements ?? [])
+        .map(readRequirement)
+        .filter((requirement): requirement is NonNullable<typeof requirement> => requirement !== null)
+        .map((requirement) => checkRequirement(requirement, playerProgress)),
+    [chosen?.requirements, playerProgress]
   );
 
-  /** True once the recipe index has actually answered, so counts may be stated. */
-  const indexReady = !loading && Object.keys(enriched).length > 0;
+  const collectionTiers = useMemo<Readonly<Record<string, number | null>> | null>(() => {
+    const entries = parsedProfile.pbc?.collections.entries;
+    if (!entries) return null;
+    const tiers: Record<string, number | null> = {};
+    for (const entry of entries) {
+      tiers[norm(entry.name)] = entry.unlockedTier;
+      tiers[norm(entry.id)] = entry.unlockedTier;
+    }
+    return tiers;
+  }, [parsedProfile.pbc?.collections.entries]);
 
-  /**
-   * The count line. Hidden is stated, never silent: when either filter is
-   * holding rows back, the line says how many and which kind.
-   */
-  const countLine = useMemo(() => {
-    if (loading) return "Loading recipes";
-    const indexed = indexedCount;
-    const hidden: string[] = [];
-    if (!showVanilla && hiddenCounts.vanilla > 0) hidden.push(`${hiddenCounts.vanilla.toLocaleString()} vanilla`);
-    if (!showUnobtainable && hiddenCounts.unob > 0) hidden.push(`${hiddenCounts.unob.toLocaleString()} unobtainable`);
-    return `${craftableCount.toLocaleString()} craftable of ${indexed.toLocaleString()} indexed${
-      hidden.length ? `, ${hidden.join(" and ")} hidden` : ""
-    }`;
-  }, [loading, indexedCount, craftableCount, hiddenCounts, showVanilla, showUnobtainable]);
+  const collectionProgress = useMemo(
+    () => buildCollectionProgressIndex(
+      parsedProfile.pbc?.collections.available
+        ? parsedProfile.pbc.collections.entries
+        : null,
+    ),
+    [parsedProfile.pbc?.collections.available, parsedProfile.pbc?.collections.entries],
+  );
+
+  const recipeBook = useMemo(
+    () => buildRecipeBook({
+      items: enriched,
+      sourceItems: items,
+      forgeRecipes: forge.index.recipes,
+      collections: collectionProgress,
+      owned,
+      playerProgress,
+      tradingAllowed: !ironman,
+      adminNames: admin.names,
+    }),
+    [admin.names, collectionProgress, enriched, forge.index.recipes, ironman, items, owned, playerProgress],
+  );
+  const selectedBookEntry = useMemo(
+    () => selected ? recipeBook.find((entry) => entry.id === selected) ?? null : null,
+    [recipeBook, selected],
+  );
+  const selectedMethod = selectedBookEntry?.methods.find((method) => method.kind === selectedMethodKind)
+    ?? selectedBookEntry?.preferredMethod
+    ?? null;
+
+  useEffect(() => {
+    if (!selectedBookEntry) return;
+    setSelectedMethodKind((current) => selectedBookEntry.methods.some((method) => method.kind === current)
+      ? current : selectedBookEntry.preferredMethod.kind);
+  }, [selectedBookEntry]);
+
+  useEffect(() => {
+    if (selected || searchParams.get("q") || searchParams.get("item") || loading || forge.loading || recipeBook.length === 0) return;
+    const defaultRecipe = recipeBook.find((entry) => entry.accessStatus === "unlocked" && entry.materialStatus === "ready")
+      ?? recipeBook.find((entry) => entry.accessStatus === "unlocked")
+      ?? recipeBook[0];
+    if (defaultRecipe) setSelected(defaultRecipe.id);
+  }, [forge.loading, loading, recipeBook, searchParams, selected]);
+
+  const materialReadiness = useMemo<MaterialReadiness | null>(() => {
+    if (!chosen?.recipe || rawMaterials.length === 0) return null;
+    const unknown = rawMaterials.filter((material) => material.held === undefined);
+    if (!owned.has || unknown.length > 0) {
+      return {
+        state: "unknown",
+        detail: unknown.length > 0
+          ? `${unknown.length} material type${unknown.length === 1 ? " has" : "s have"} no inventory count yet.`
+          : "Inventory has not been loaded yet.",
+      };
+    }
+    const missing = rawMaterials.filter((material) => material.missing > 0);
+    if (missing.length === 0) return { state: "ready", detail: "Every required material is already held." };
+    const count = missing.reduce((total, material) => total + material.missing, 0);
+    return {
+      state: "missing",
+      detail: `${count.toLocaleString()} item${count === 1 ? "" : "s"} across ${missing.length} material type${missing.length === 1 ? "" : "s"} remain.`,
+    };
+  }, [chosen?.recipe, rawMaterials, owned.has]);
+
+  const acquisitionRoutes = useMemo(
+    () =>
+      chosen
+        ? buildAcquisitionRoutes({
+            item: chosen,
+            hasGridRecipe: Boolean(selected && items[selected]?.recipe),
+            forge: forgeRec,
+            forgeFeedsTree: forgeFed,
+            shops: soldBy,
+            market: !ironman && chosen.hypixelId ? bazaar.prices[chosen.hypixelId] ?? null : null,
+            ironman,
+            unavailable: unobtainable(chosen),
+            requirements: checkedRequirements,
+            collectionTiers,
+            materials: materialReadiness,
+            wiki: wikiRoute.facts,
+            formatCoins,
+            formatDuration,
+            describeShopCosts: (listing) => describeCosts(listing.offer.costs),
+          })
+        : [],
+    [
+      chosen,
+      selected,
+      items,
+      forgeRec,
+      forgeFed,
+      soldBy,
+      ironman,
+      bazaar.prices,
+      unobtainable,
+      checkedRequirements,
+      collectionTiers,
+      materialReadiness,
+      wikiRoute.facts,
+    ]
+  );
+
+  const chosenHeld = selected ? owned.count(selected) : undefined;
+  const gridRecipe = selected ? items[selected]?.recipe ?? null : null;
+  const directCrafts = gridRecipe && chosen ? Math.ceil(quantity / Math.max(1, chosen.yields)) : 0;
+  const directIngredients = useMemo<DirectIngredientView[]>(() => {
+    if (!gridRecipe) return [];
+    return gridRecipe.map((ingredient) => {
+      const candidates = [{ id: ingredient.id, name: ingredient.name }, ...(ingredient.alternatives ?? [])];
+      const heldCounts = candidates.map((candidate) => owned.count(candidate.id));
+      const foundInTrackedStorage = heldCounts.some((count) => count !== undefined);
+      const held = owned.has
+        ? heldCounts.reduce<number>((total, count) => total + (count ?? 0), 0)
+        : undefined;
+      const required = ingredient.qty * directCrafts;
+      return {
+        id: ingredient.id,
+        name: ingredient.name,
+        label: ingredient.alternatives?.length
+          ? alternativeGroupLabel({ id: ingredient.id, name: ingredient.name }, ingredient.alternatives)
+          : ingredient.name,
+        locations: candidates.map(candidate => holdingLocations(owned.get(candidate.id))).filter(Boolean).join(" · "),
+        required,
+        held,
+        foundInTrackedStorage,
+        missing: held === undefined ? null : Math.max(0, required - held),
+        tier: enriched[ingredient.id]?.tier ?? null,
+        ...(enriched[ingredient.id]?.wikiTitle ? { wikiTitle: enriched[ingredient.id].wikiTitle } : {}),
+      };
+    });
+  }, [directCrafts, enriched, gridRecipe, owned]);
+  const forgeDirectIngredients = useMemo<DirectIngredientView[]>(() => {
+    if (!forgeRec) return [];
+    return forgeRec.ingredients.map((ingredient) => {
+      const id = slug(ingredient.name);
+      const trackedCount = owned.count(id);
+      const held = owned.has ? trackedCount ?? 0 : undefined;
+      const required = ingredient.qty * quantity;
+      return {
+        id,
+        name: ingredient.name,
+        label: ingredient.name,
+        locations: holdingLocations(owned.get(id)),
+        required,
+        held,
+        foundInTrackedStorage: trackedCount !== undefined,
+        missing: held === undefined ? null : Math.max(0, required - held),
+        tier: enriched[id]?.tier ?? null,
+        ...(enriched[id]?.wikiTitle ? { wikiTitle: enriched[id].wikiTitle } : {}),
+      };
+    });
+  }, [enriched, forgeRec, owned, quantity]);
+  const alternativeRoutes = useMemo(
+    () => acquisitionRoutes.filter((route) => route.kind !== "craft" && route.kind !== "forge"),
+    [acquisitionRoutes],
+  );
+  const selectedRecipeRoute = selectedMethod
+    ? acquisitionRoutes.find((route) => route.kind === selectedMethod.kind) ?? null
+    : null;
+  const selectedIngredients = selectedMethod?.kind === "forge" ? forgeDirectIngredients : directIngredients;
+  const selectedRuns = selectedMethod?.kind === "forge" ? quantity : directCrafts;
+  const selectedMaterialStatus: RecipeMaterialStatus = !owned.has
+    ? "unknown"
+    : selectedIngredients.every((ingredient) => ingredient.missing === 0)
+      ? "ready"
+      : "missing";
+  const recursivePlanMatchesMethod = selectedMethod?.kind === "craft" || forgeFed;
+  const itemStats = useMemo(() => itemStatsFromRecord(chosen?.stats), [chosen?.stats]);
+
+  const characterPlayer = useMemo(() => {
+    const uuid = parsedProfile.playerUuid || islandSnapshot?.player.uuid || access.uuid;
+    if (!uuid) return null;
+    return {
+      name: parsedProfile.playerName || islandSnapshot?.player.name || access.name || "Player",
+      uuid,
+      profileName: parsedProfile.profileName || islandSnapshot?.profile.name || "Profile",
+      gameMode: parsedProfile.gameMode ?? islandSnapshot?.profile.gameMode ?? "Normal",
+      fetchedAt: parsedProfile.fetchedAt ?? islandSnapshot?.exportedAt ?? 0,
+    };
+  }, [
+    access.name,
+    access.uuid,
+    islandSnapshot,
+    parsedProfile.fetchedAt,
+    parsedProfile.gameMode,
+    parsedProfile.playerName,
+    parsedProfile.playerUuid,
+    parsedProfile.profileName,
+  ]);
+  const characterProfiles = useMemo(() => {
+    if (parsedProfile.profileOptions.length > 0) return parsedProfile.profileOptions;
+    if (!characterPlayer) return [];
+    return [{
+      id: parsedProfile.profileId ?? access.profileId ?? characterPlayer.profileName,
+      name: characterPlayer.profileName,
+      gameMode: parsedProfile.gameMode ?? islandSnapshot?.profile.gameMode ?? null,
+    }];
+  }, [
+    access.profileId,
+    characterPlayer,
+    islandSnapshot?.profile.gameMode,
+    parsedProfile.gameMode,
+    parsedProfile.profileId,
+    parsedProfile.profileOptions,
+  ]);
+  const selectedCharacterProfile = parsedProfile.profileId ?? access.profileId ?? characterProfiles[0]?.id ?? "profile";
+
+  const identity = (
+    <ProfileIdentity
+      mobileProfilePicker
+      playerName={characterPlayer?.name ?? access.name ?? "Player"}
+      playerUuid={characterPlayer?.uuid ?? parsedProfile.playerUuid ?? access.uuid}
+      profiles={characterProfiles}
+      selectedProfileId={selectedCharacterProfile}
+      gameMode={characterPlayer?.gameMode ?? "Normal"}
+      onProfileChange={setProfileId}
+      fetchedAt={characterPlayer?.fetchedAt ?? parsedProfile.fetchedAt}
+      sourceStatus={parsedProfile.profileStatus.label}
+      className="recipes-identity"
+      trailing={
+        <div className="recipes-profile-state">
+          {!ironman && (
+            <span className={`text-[11px] ${NUM} ${bazaar.error ? "text-amber-400" : "text-slate-500"}`}>
+              {bazaar.error
+                ? "market unavailable"
+                : bazaar.fetchedAt
+                ? `${Object.keys(bazaar.prices).length} live prices`
+                : "loading prices"}
+            </span>
+          )}
+        </div>
+      }
+    />
+  );
 
   return (
-    /* The signature split: the item index in the rail under the logo, the
-       crafting tree under the tabs. Same furniture positions as every page. */
-    <SplitPage
-      railLabel="Item index"
-      rail={
-        <>
-          {/* Narrow viewports collapse the rail behind one button. */}
-          <div className="min-[900px]:hidden">
-            <button onClick={() => setRailOpen(!railOpen)} className={`${BTN_QUIET} w-full justify-center`}>
-              {railOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-              <span>{railOpen ? "Hide" : "Show"} Item List</span>
-            </button>
-          </div>
-
-          {/* `.sd-glass` rather than the kit's PANEL: this column sits in the
-              sharp channel opened above, so its ground is the photograph
-              itself rather than the curtain's already-blurred output. That is
-              the one place a real backdrop-filter is correct, and it is the
-              difference between a pane of frosted glass and a flat swatch laid
-              over a picture. Radius and geometry stay the panel's. */}
-          <section className={`${railOpen ? "block" : "hidden min-[900px]:block"} ws-panel sd-glass rounded-md`}>
-            <div className="border-b border-white/8 p-2.5">
-              <div className="relative mb-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search items"
-                  className={`${INPUT} w-full pl-8`}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-              <ItemQuantityField id="crafting-quantity" value={quantity} onChange={setQuantity} className="mb-2" />
-              {/*
-                Filter pills, in the exact language the Forge page filters with.
-                These were three stacked ToggleRows in a bordered ControlGrid,
-                which read as its own boxed sub-panel, one more design language
-                than the page needs; the design must stay uniform. Filters on
-                this site are pills.
-              */}
-              <div className="flex flex-wrap gap-1.5">
-                {(
-                  [
-                    { label: "Craftable only", checked: craftableOnly, set: setCraftableOnly, hint: "Hide items with no recipe." },
-                    {
-                      label: "Vanilla",
-                      checked: showVanilla,
-                      set: setShowVanilla,
-                      hint: "Show plain Minecraft recipes (doors, slabs, wool). The wiki's own crafting data marks them.",
-                    },
-                    {
-                      label: "Unobtainable",
-                      checked: showUnobtainable,
-                      set: setShowUnobtainable,
-                      hint: "Show admin-only and testing items, per the wiki's admin banner and Hypixel's TEST_ ids.",
-                    },
-                  ] as const
-                ).map((f) => (
-                  <button
-                    key={f.label}
-                    type="button"
-                    aria-pressed={f.checked}
-                    title={f.hint}
-                    onClick={() => f.set(!f.checked)}
-                    className={`cursor-pointer rounded-md border px-2.5 py-1 text-[12px] transition-colors ${
-                      f.checked
-                        ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-200"
-                        : "border-white/12 bg-white/8 text-slate-300 hover:bg-white/12 hover:text-slate-100"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/*
-              The list is sized to the window rather than to a fixed 32rem.
-              A fixed cap showed about sixteen rows of a nine thousand pixel
-              list and then left a third of a screen empty underneath it, so
-              the page managed to be simultaneously too full to read and too
-              empty to look finished. Measured against the viewport it shows
-              about twice as many rows and the band underneath closes.
-
-              The subtrahend is measured, not guessed: 106px of furniture above
-              the list (the rail's top padding, the panel edge, and the
-              search-and-filters block) plus the 40px of bottom padding the
-              shared rail reserves, which is 148px, or 9.25rem. Rounding it up
-              to a comfortable-looking 11rem is what a previous pass would have
-              done, and it silently threw away a row and a half of a nine
-              thousand pixel list.
-
-              `min-h` keeps a usable list on a short window, where clipping the
-              rail would be worse than letting the sticky column scroll.
-            */}
-            <div className="max-h-[calc(100vh-var(--sd-bar-h)-9.25rem)] min-h-[16rem] overflow-y-auto p-1">
-              <div className="divide-y divide-white/8">
-                {list.map(([id, it]) => {
-                  /*
-                   * How the item is made, in the page's own terms. Asking the
-                   * RAW crafting index about the grid is what keeps this
-                   * honest: `enriched[id].recipe` is also where the forge
-                   * merge writes, so reading that alone would call every
-                   * forge-only item "craft". Same test the detail panel's
-                   * `forgeFed` makes, for the same reason.
-                   */
-                  const forged = !items[id]?.recipe && forge.index.byName.has(norm(it.name));
-                  const made = forged ? "forge" : it.recipe ? "craft" : "raw";
-                  const parts = it.recipe?.length ?? null;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => setSelected(id)}
-                      className={`w-full flex items-center gap-2 rounded-sm px-1.5 py-1.5 text-left cursor-pointer transition-colors duration-150 hover:bg-white/8 ${FOCUS} ${
-                        selected === id ? "bg-emerald-500/10" : ""
-                      }`}
-                    >
-                      <ItemIcon id={id} name={it.wikiTitle ?? it.name} size={16} />
-                      {/* Item names are primary content, not metadata. The old
-                          11px line was visibly smaller than the Profile page's
-                          body labels and became difficult to distinguish at
-                          normal zoom. A 14px face with a 20px line keeps the
-                          compact list while restoring the shared hierarchy. */}
-                      <span className={`min-w-0 flex-1 truncate text-[14px] leading-5 ${TIER[it.tier ?? ""] ?? "text-slate-300"}`}>
-                        {it.name}
-                      </span>
-                      {/*
-                        The meta cells. The row was 482px wide and spent all of
-                        it on an icon and a name; these three answer the
-                        questions you would otherwise have to open the item to
-                        ask, and they cost no height at all.
-                      */}
-                      <span
-                        className={`${BADGE} w-10 shrink-0 text-right ${made === "raw" ? "text-slate-500" : "text-slate-400"}`}
-                        title={
-                          made === "forge"
-                            ? "The Forge table lists this item; the crafting module has no grid for it"
-                            : made === "craft"
-                            ? "Has a crafting recipe"
-                            : "No known recipe, so it is gathered rather than made"
-                        }
-                      >
-                        {made}
-                      </span>
-                      <span
-                        className={`${META} w-4 shrink-0 text-right text-slate-500`}
-                        title={parts === null ? "No recipe, so no ingredient count" : `${parts} ingredient${parts === 1 ? "" : "s"}`}
-                      >
-                        {parts === null ? "-" : parts}
-                      </span>
-                      <span
-                        className={`${META} w-14 shrink-0 text-right ${it.npcSell === null ? "text-slate-500" : "text-slate-400"}`}
-                        title={it.npcSell === null ? "No known NPC price" : `An NPC pays ${it.npcSell.toLocaleString()} for one`}
-                      >
-                        {it.npcSell === null ? "-" : formatCoins(it.npcSell)}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {!loading && list.length === 0 && <p className="text-[11px] text-slate-500 px-1.5 py-2">Nothing matches.</p>}
-            </div>
-          </section>
-        </>
-      }
-    >
-      <PageHeader
-        title="Items"
-        sub={countLine}
-        icon={Package}
-        actions={
-          <span className={`text-[11px] ${NUM} ${bazaar.error && !ironman ? "text-amber-400" : "text-slate-500"}`}>
-            {ironman
-              ? "ironman: no bazaar"
-              : bazaar.error
-              ? "bazaar unavailable"
-              : bazaar.fetchedAt
-              ? `${Object.keys(bazaar.prices).length} bazaar prices`
-              : "loading prices"}
-          </span>
-        }
-      />
-
-      {error && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200">
-          Recipe database unavailable ({error}). Run <code>pnpm data:recipes</code> to build it.
-        </div>
-      )}
-
-      {/*
-        Only shown when there is nothing cached to fall back on: a stale forge
-        table or shop list is still true data and stays on screen silently,
-        but a first visit that failed has to say why the sections are missing
-        rather than let their absence read as "these items have no forge".
-      */}
-      {forge.error && forge.index.recipes.length === 0 && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200">
-          Forge recipes could not be loaded from the wiki ({forge.error}), so forge items and their recipes are missing from this page.
-        </div>
-      )}
-      {shops.error && shops.index.shops.length === 0 && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200">
-          NPC shop stock could not be loaded from the wiki ({shops.error}), so &quot;sold by&quot; sources are missing from this page.
-        </div>
-      )}
-
-      {/*
-        What the index actually holds, as a strip of figures.
-
-        This replaces an empty state that spent a 1330x147 panel on ninety
-        characters of prose telling you to click something. The strip is the
-        same height as one row of the Profile's own summary band and says
-        eight true things instead of one obvious one, so the top of the page
-        is worth reading whether or not an item is open.
-
-        Every figure is a dash until its own source has answered. A zero here
-        would read as "there are none of these", which is a different and
-        false claim while a fetch is still in flight.
-      */}
-      <div className={`${PANEL} flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-3 py-2`}>
-        <Figure label="Indexed" value={stated(indexReady, indexedCount)} title="Items on this page, after the filters in the rail" />
-        <Figure label="Craftable" value={stated(indexReady, craftableCount)} title="Of those, the ones with a recipe" />
-        <Figure label="Vanilla" value={stated(indexReady, hiddenCounts.vanilla)} title="Plain Minecraft recipes, hidden unless the Vanilla filter is on" />
-        <Figure
-          label="Unobtainable"
-          value={stated(indexReady, hiddenCounts.unob)}
-          title="Admin-only and testing items, hidden unless the Unobtainable filter is on"
-        />
-        <Figure label="Listed" value={stated(indexReady, list.length)} title="Rows in the index beside this, which is capped at 300" />
-        <Figure
-          label="Forge"
-          value={stated(forge.index.recipes.length > 0, forge.index.recipes.length)}
-          title="Forge recipes read from the wiki"
-        />
-        <Figure label="Shops" value={stated(shops.index.shops.length > 0, shops.index.shops.length)} title="NPC shops read from the wiki" />
-        <Figure
-          label="Bazaar"
-          value={stated(Boolean(bazaar.fetchedAt), Object.keys(bazaar.prices).length)}
-          title="Live bazaar prices, which Ironman cannot buy at"
-        />
-      </div>
-
-      {!chosen && (
-        <div className={`${PANEL} flex items-center gap-2.5 px-3 py-2.5 ${HELP}`}>
-          <Package className="h-4 w-4 shrink-0 text-emerald-300" />
-          <p>
-          Pick an item from the index to see how it is made. Try Hyperion, or Perfect Boots for a twelve-level tree.
-          </p>
-        </div>
-      )}
-
-      {chosen && tree && (
-        <div className={PANEL}>
-          {/*
-            The header band: identity on the left, the figures you compare on
-            the right, each on its own translucent tile with room around it.
-            Tiles rather than a flush strip because these are the few figures
-            you weigh against each other, which is the side of the kit's TILE
-            note that earns a card.
-          */}
-          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-3 py-2.5 flex-wrap">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <ItemIcon id={selected!} name={chosen.wikiTitle ?? chosen.name} size={32} />
-              <div className="min-w-0">
-                <div className={COL}>{chosen.category ?? "item"}</div>
-                <WikiLink
-                  name={chosen.name}
-                  className={`text-[15px] font-semibold ${TIER[chosen.tier ?? ""] ?? "text-slate-100"}`}
-                />
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {chosen.yields > 1 && (
-                <div className={`${TILE} px-2.5 py-1.5`}>
-                  <Figure label="Per craft" value={chosen.yields} />
-                </div>
-              )}
-              {ironman ? (
-                <>
-                  <div className={`${TILE} px-2.5 py-1.5`}>
-                    <Figure label="Raw types" value={rawMaterials.length} />
-                  </div>
-                  <div className={`${TILE} px-2.5 py-1.5`}>
-                    <Figure
-                      label="NPC value"
-                      title="What an NPC would pay for the gather list"
-                      value={
-                        <>
-                          {npcRollup.known === 0 ? "-" : formatCoins(npcRollup.total)}
-                          {npcRollup.unknown > 0 && npcRollup.known > 0 && (
-                            <span className="ml-1 text-[10px] font-medium text-slate-500">+{npcRollup.unknown} unpriced</span>
-                          )}
-                        </>
-                      }
-                    />
-                  </div>
-                  <div className={`${TILE} px-2.5 py-1.5`}>
-                    <Figure
-                      label="Items to gather"
-                      value={
-                        <span className="text-emerald-300">{rawMaterials.reduce((s, r) => s + r.qty, 0).toLocaleString()}</span>
-                      }
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className={`${TILE} px-2.5 py-1.5`}>
-                    <Figure
-                      label="Buy"
-                      title={tree.buyCost === null ? "Not on the bazaar" : "Buying it outright"}
-                      value={<span className={tree.buyCost === null ? "text-slate-500" : "text-blue-300"}>{coins(tree.buyCost)}</span>}
-                    />
-                  </div>
-                  <div className={`${TILE} px-2.5 py-1.5`}>
-                    <Figure
-                      label="Craft"
-                      title={tree.craftCost === null ? "At least one leg has no price" : "Crafting it from its parts"}
-                      value={
-                        <span className={tree.craftCost === null ? "text-slate-500" : "text-emerald-300"}>{coins(tree.craftCost)}</span>
-                      }
-                    />
-                  </div>
-                  <div className={`${TILE} px-2.5 py-1.5`}>
-                    <Figure label="Cheapest" value={<span className="text-emerald-300">{coins(tree.cost)}</span>} />
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <ItemSources
-            item={chosen}
-            items={enriched}
-            bazaar={bazaar.prices}
-            ironman={ironman}
-            forge={forgeRec}
-            forgeFed={forgeFed}
-            soldBy={soldBy}
-            shopsPending={shops.loading}
-            onPick={setSelected}
+    <div className={`profile-view-root profile-view-root--frosted recipes-view-root${characterPlayer ? "" : " recipes-view-root--no-character"}`}>
+      <div className="profile-shell recipes-shell">
+        {characterPlayer ? (
+          <CharacterStage
+            player={characterPlayer}
+            profiles={characterProfiles}
+            selectedProfileId={selectedCharacterProfile}
+            onProfileChange={setProfileId}
+            showProfilePicker={false}
           />
+        ) : (
+          <aside className="profile-character-stage" aria-label="Character preview" />
+        )}
 
-          {forgeRec && (
-            <ForgeSection
-              recipe={forgeRec}
-              items={enriched}
-              forgeFed={forgeFed}
-              hasGridRecipe={Boolean(selected && items[selected]?.recipe)}
-              onPick={setSelected}
-            />
-          )}
-
-          {!chosen.recipe &&
-            (chosen.unlocks?.some((u) => u.type !== "Trade") ? (
-              <p className={`${HELP} px-3 py-3`}>
-                A collection tier unlocks this recipe in game, but the wiki&apos;s crafting database has no grid for it, so there is no tree to
-                show. The unlock above is what you need.
-              </p>
-            ) : (
-              <p className={`${HELP} px-3 py-3`}>
-                No crafting recipe. Check the sources above, or it drops from a mob or comes from an event.
-              </p>
-            ))}
-
-          {chosen.recipe && (
-            <>
-              {ironman && (
-                <p className={`flex items-center gap-1.5 border-b border-white/8 px-3 py-2 ${HELP}`}>
-                  <Hammer className="h-2.5 w-2.5 shrink-0 text-emerald-400" />
-                  Ironman: nothing can be bought, so every branch runs down to what you gather, and NPC is what a shop pays rather than a price
-                  you can buy at.
-                </p>
-              )}
-              <div className="overflow-x-auto">
-                <TreeHead ironman={ironman} owned={owned.has ? owned : null} />
-                <TreeRow node={tree} defaultOpen ironman={ironman} owned={owned.has ? owned : null} />
+        <div className="profile-workspace recipes-workspace">
+          {identity}
+          <main className="recipes-detail-workspace">
+            {(error || (forge.error && forge.index.recipes.length === 0)) && (
+              <div className="recipes-source-note" role="alert">
+                {error
+                  ? `Crafting recipes could not be refreshed (${error}). Cached recipes remain available when present.`
+                  : `Forge recipes could not be loaded (${forge.error}), so the Forge portion of the recipe book is unavailable.`}
               </div>
+            )}
 
-              {rawMaterials.length > 0 && (
-                <div className="border-t border-white/8">
-                  <SectionHead
-                    title={ironman ? "Gather this yourself" : "Buy or gather this"}
-                    right={
-                      owned.has ? (
-                        <div className="flex items-center gap-3">
-                          <span className={`text-[11px] ${NUM} ${covered === rawMaterials.length ? "text-emerald-400" : "text-slate-500"}`}>
-                            {covered} of {rawMaterials.length} already covered
-                          </span>
-                          <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer hover:text-slate-200">
-                            <input
-                              type="checkbox"
-                              checked={missingOnly}
-                              onChange={(e) => setMissingOnly(e.target.checked)}
-                              className={`cursor-pointer ${FOCUS}`}
-                            />
-                            Missing only
-                          </label>
-                        </div>
-                      ) : undefined
-                    }
-                  />
-                  {/*
-                    One row per item, one header row, lanes that line up.
-
-                    This was a three column grid holding the rows, with a
-                    SECOND three column grid holding a single header cell above
-                    it. A grid with one child fills only its first column, so
-                    the captions landed over the first item and nothing else:
-                    every row after the first printed three items side by side,
-                    each with its numbers under no heading at all, and the two
-                    grids' column edges had no reason to agree. Reading the
-                    third item's "missing" figure meant counting cells.
-
-                    A gather list is a table, so it is now a table: one item to
-                    a line, one set of captions, and every figure under the
-                    word that names it. Hairlines rather than tiles, because
-                    this is data you scan and a hundred bordered cards is the
-                    wall the kit's TILE note exists to prevent.
-                  */}
-                  {/*
-                    `px-2` and this lane ORDER are what make the two tables one
-                    table to look at. The tree ends on npc, have, missing; so
-                    does this, with its own "need" lane sitting ahead of them
-                    where the tree keeps its quantity beside the name. Same
-                    trailing lanes, same widths, same container padding, so the
-                    columns of the gather list land on the columns of the tree
-                    directly above it instead of near them.
-                  */}
-                  <div className="overflow-x-auto px-2 pb-3 pt-1">
-                    <div className={`flex items-center gap-3 border-b border-white/10 py-1.5 ${COL}`}>
-                      <span className="w-4 shrink-0" />
-                      <span className={LANE_NAME}>item</span>
-                      <span className={LANE_COUNT}>need</span>
-                      <span className={LANE_COIN}>npc</span>
-                      {owned.has && <span className={LANE_COUNT}>have</span>}
-                      {owned.has && <span className={LANE_COUNT}>missing</span>}
-                    </div>
-                    <div className="divide-y divide-white/8">
-                      {shownMaterials.map((r) => {
-                        const enough = r.missing === 0 && r.held !== undefined;
-                        return (
-                          <div key={r.id} className="flex items-center gap-3 py-1">
-                            <ItemIcon id={r.id} name={enriched[r.id]?.wikiTitle ?? r.name} size={16} />
-                            <WikiLink
-                              name={r.name}
-                              className={`${LANE_NAME} text-[11px] ${enough ? "text-slate-500 line-through decoration-slate-700" : "text-slate-300"}`}
-                              nameClassName="truncate"
-                            />
-                            <span className={`${LANE_COUNT} ${META} ${enough ? "text-slate-500" : "text-slate-400"}`}>
-                              {r.qty.toLocaleString()}
-                            </span>
-                            <span
-                              className={`${LANE_COIN} ${META} ${r.npc === null ? "text-slate-500" : "text-slate-400"}`}
-                              title={r.npc === null ? "No known NPC price" : "What an NPC pays for this quantity"}
-                            >
-                              {coins(r.npc)}
-                            </span>
-                            {owned.has && (
-                              <span
-                                className={`${LANE_COUNT} ${META} ${enough ? "text-emerald-400" : "text-slate-500"}`}
-                                title={r.held === undefined ? "No source has mentioned this item" : describeSources(owned.get(r.id)) || `${r.held.toLocaleString()} held`}
-                              >
-                                {r.held === undefined ? "-" : r.held.toLocaleString()}
-                              </span>
-                            )}
-                            {owned.has && (
-                              /*
-                               * A shortfall nobody can compute is a dash, not
-                               * the whole quantity. `held` is undefined when no
-                               * source has ever mentioned the item, and
-                               * printing the full need there would assert you
-                               * have none of it, which is the "unknown rendered
-                               * as unmet" this page is not allowed to do. The
-                               * underlying figure is untouched, so the covered
-                               * tally and the Missing only filter keep the
-                               * meaning they have always had.
-                               */
-                              <span
-                                className={`${LANE_COUNT} ${META} font-medium ${
-                                  r.held === undefined ? "text-slate-500" : r.missing === 0 ? "text-emerald-400" : "text-slate-100"
-                                }`}
-                                title={
-                                  r.held === undefined
-                                    ? "Not known, because nothing has said how many you hold"
-                                    : r.missing === 0
-                                    ? "You already have enough"
-                                    : "Still to obtain"
-                                }
-                              >
-                                {r.held === undefined ? "-" : r.missing === 0 ? "done" : r.missing.toLocaleString()}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {missingOnly && shownMaterials.length === 0 && (
-                      <p className="mt-2 text-[12px] text-emerald-300">You already have everything on this list.</p>
-                    )}
-                    {owned.has && (
-                      <p className={`mt-2 ${HELP}`}>
-                        Held counts come from your island data, the Hypixel API and anything you entered by hand. Hover a number to see which.
-                      </p>
-                    )}
-                  </div>
+            <div className="recipes-workbench utility-workbench profile-glass">
+              <aside className="recipes-browser utility-workbench-zone utility-rail-split" aria-label="Recipes and crafting targets">
+                <div className="recipes-picker">
+                <header className="recipes-workspace-heading"><h2>{craftingList.length > 1 ? "Target Items" : "Target Item"}</h2></header>
+                <RecipeCollection
+                  key={searchParams.toString()}
+                  entries={recipeBook}
+                  linkedItem={selectedBookEntry ? null : chosen}
+                  initialQuery={searchParams.get("q") ?? ""}
+                  selectedId={selected}
+                  loading={loading || forge.loading}
+                  onSelect={setSelected}
+                />
                 </div>
-              )}
-            </>
-          )}
+                  <section className="recipes-list" aria-label="Crafting list">
+                    <header className="recipes-list-heading"><h2>Crafting list</h2><small>{craftingList.length} {craftingList.length === 1 ? "target" : "targets"}</small></header>
+                        <div className="recipes-list-goals">
+                          {craftingList.map((goal) => {
+                            const key = craftingGoalKey(goal);
+                            const item = enriched[goal.id];
+                            const name = item?.name ?? goal.id;
+                            const selectGoal = () => { setSelected(goal.id); setQuantity(goal.quantity); setSelectedMethodKind(goal.method); };
+                            const changeQuantity = (value: number | string) => {
+                              const next = normaliseItemQuantity(value);
+                              setCraftingList(goals => goals.map(entry => craftingGoalKey(entry) === key ? { ...entry, quantity: next } : entry));
+                              if (selected === goal.id && selectedMethodKind === goal.method) setQuantity(next);
+                            };
+                            return <div className={`recipes-list-goal${selected === goal.id && selectedMethodKind === goal.method ? " is-selected" : ""}`} key={key}>
+                              <ProfileItemTile id={goal.id} hypixelId={item?.hypixelId} name={name} iconName={item?.wikiTitle ?? name} tier={item?.tier} count={goal.quantity} iconSize={32} onClick={selectGoal} ariaLabel={`Select ${name} recipe`} />
+                              <button type="button" className={`recipes-list-name ${FOCUS}`} onClick={selectGoal}><span className={TIER[item?.tier ?? ""] ?? "text-slate-200"}>{name}</span></button>
+                              <div className="recipes-list-quantity">
+                              <button type="button" className={FOCUS} disabled={goal.quantity <= 1} aria-label={`Decrease ${name} crafting quantity`} onClick={() => changeQuantity(goal.quantity - 1)}><Minus size={12} aria-hidden /></button>
+                              <input type="number" min={1} max={1_000_000} inputMode="numeric" aria-label={`${name} crafting quantity`} value={goal.quantity}
+                                style={{ width: `${Math.max(2, String(goal.quantity).length)}ch` }}
+                                onChange={(event) => changeQuantity(event.target.value)}
+                                onWheel={(event) => event.currentTarget.blur()} />
+                              <button type="button" className={FOCUS} disabled={goal.quantity >= 1_000_000} aria-label={`Increase ${name} crafting quantity`} onClick={() => changeQuantity(goal.quantity + 1)}><Plus size={12} aria-hidden /></button>
+                              </div>
+                              <button type="button" className={FOCUS} aria-label={`Remove ${name} from crafting list`} onClick={() => setCraftingList((goals) => goals.filter((entry) => craftingGoalKey(entry) !== key))}><X aria-hidden /></button>
+                            </div>;
+                          })}
+                        </div>
+                  </section>
+              </aside>
+
+              <section className="recipes-planner utility-workbench-zone" aria-labelledby="recipes-crafting-title" aria-busy={planPending}>
+                <header className="recipes-calculator-heading"><h2 id="recipes-crafting-title">Crafting</h2><p>{craftingList.length || 1} {craftingList.length > 1 ? "target items" : "target item"}</p></header>
+                <div ref={calculatorScrollRef} className="recipes-calculator-scroll utility-scroll" tabIndex={0} role="region" aria-label="Recipe calculation">
+                  {chosen && selectedBookEntry && selectedMethod ? (
+                    <>
+                    <div className="recipes-item-panel">
+                    <header className="recipes-selected-recipe">
+                      <span className="recipes-selected-icon">
+                        <ProfileItemTile id={selected!} hypixelId={chosen.hypixelId} name={chosen.name} iconName={chosen.wikiTitle ?? chosen.name} tier={chosen.tier} count={quantity} iconSize={54} stats={itemStats} />
+                      </span>
+                      <div className="recipes-selected-copy">
+                        <span>{chosen.category ?? "SkyBlock item"}</span>
+                        <h2 id="recipes-planner-title"><WikiLink name={chosen.name} className={TIER[chosen.tier ?? ""] ?? "text-slate-100"} /></h2>
+                        <p>
+                          {selectedMethod.kind === "forge" ? "Forge recipe" : `Crafting recipe · makes ${selectedMethod.yields.toLocaleString()}`}
+                          {chosenHeld !== undefined && <> · {chosenHeld.toLocaleString()} held</>}
+                        </p>
+                        <dl className="recipes-selected-facts">
+                          <div className="utility-metric utility-metric--growth recipes-access-fact">
+                            <dt className="profile-metric-head"><span className="profile-metric-label">Recipe</span>
+                              {selectedMethod.accessStatus === "unlocked" ? <UnlockKeyhole size={13} aria-label="Unlocked" /> : selectedMethod.accessStatus === "locked" ? <LockKeyhole size={13} aria-label="Locked" /> : <HelpCircle size={13} aria-label="Check in game" />}
+                            </dt>
+                            <dd>{selectedMethod.accessGates.length ? selectedMethod.accessGates.map(gate => <span key={gate.id}>{gate.label}</span>) : selectedMethod.accessStatus === "unlocked" ? "No unlock required" : "Check in game"}</dd>
+                          </div>
+                          <div className="utility-metric utility-metric--materials recipes-materials-fact">
+                            <dt className="profile-metric-head"><span className="profile-metric-label">Materials</span></dt>
+                            <dd className="recipes-material-preview" aria-label={selectedMaterialStatus === "unknown" ? "Required materials, holdings unavailable" : "Required materials"}>
+                              {selectedIngredients.map(ingredient => <ProfileItemTile key={ingredient.id} id={ingredient.id} name={ingredient.name} iconName={ingredient.wikiTitle ?? ingredient.name} tier={ingredient.tier} count={ingredient.required} iconSize={26}
+                                metadata={[{label:"Required",value:ingredient.required.toLocaleString()}, {label:"Held",value:ingredient.held?.toLocaleString() ?? "Unknown"}]} />)}
+                            </dd>
+                          </div>
+                          {selectedMethod.kind === "forge" && forgeRec && (
+                            <>
+                              <UtilityMetric label="Base Forge time" tone="time" value={forgeRec.seconds !== null ? formatDuration(forgeRec.seconds) : forgeRec.duration ?? "—"} info={{ summary: "The duration listed by this Forge recipe." }} />
+                              <UtilityMetric label="Coin input" tone="materials" value={forgeRec.coins === null ? "—" : formatCoins(forgeRec.coins * quantity)} info={{ summary: "Coins listed separately from the material ingredients. A dash means the recipe data does not specify a coin cost." }} />
+                            </>
+                          )}
+                        </dl>
+                        {itemStats.length > 0 && (
+                          <dl className="recipes-target-stats" aria-label="Item stats">
+                            {itemStats.map((stat) => {
+                              const presentation = skyBlockStatPresentation(stat.label);
+                              return <div key={stat.label} className={presentation?.colorClass}><dt>{presentation && <span aria-hidden>{presentation.glyph} </span>}{stat.label}</dt><dd>{stat.value}{presentation?.percent ? "%" : ""}</dd></div>;
+                            })}
+                          </dl>
+                        )}
+                      </div>
+                      <div className="recipes-selected-actions">
+                        <ItemQuantityField id="recipes-quantity" value={quantity} onChange={setQuantity} className="recipes-selected-quantity" />
+                        <button type="button" className={`recipes-add-to-list ${FOCUS}`} onClick={() => {
+                          if (selected) setCraftingList((goals) => addCraftingGoal(goals, { id: selected, quantity, method: selectedMethod.kind }));
+                        }}><Plus aria-hidden />Add to crafting list</button>
+                      </div>
+                    </header>
+
+                    {selectedBookEntry.methods.length > 1 && (
+                      <RecipeMethodPicker methods={selectedBookEntry.methods} selected={selectedMethod.kind} onSelect={setSelectedMethodKind} />
+                    )}
+                    {selectedMethod.accessGates.length > 0 && <details className="recipes-unlock" key={`${selected}:${selectedMethod.kind}:${selectedMethod.accessStatus}`} open={selectedMethod.accessStatus !== "unlocked"}>
+                      <summary>{selectedMethod.accessStatus === "unlocked" ? "Unlock requirements met" : selectedMethod.accessStatus === "locked" ? "Unlock requirements" : "Check recipe access"}<ChevronDown size={14} aria-hidden /></summary>
+                      <RecipeAccessPanel method={selectedMethod} />
+                    </details>}
+                    </div>
+                      {!craftingList.some(goal => goal.id === selected && goal.method === selectedMethod.kind) && <CraftingTree roots={selectedCrafting.roots} owned={owned} title={craftingList.length ? "Selected recipe" : "Crafting tree"} />}
+                      {craftingList.length > 0 && <CraftingTree roots={listCrafting.roots} owned={owned} title="Crafting list" />}
+                    </>
+                  ) : chosen ? (
+                    <LinkedItemAcquisition id={selected!} item={chosen} routes={alternativeRoutes} />
+                  ) : (
+                    <>
+                    <header className="recipes-zone-heading">
+                      <span className="profile-eyebrow">Recipe</span>
+                      <h2 id="recipes-planner-title">Recipe breakdown</h2>
+                      <p>Choose a recipe from your collection</p>
+                    </header>
+                    <div className="recipes-planner-empty" role={loading ? "status" : undefined}>
+                      {loading ? <><span className="recipes-spinner" aria-hidden /><strong>Loading the recipe book</strong></> : <><strong>Choose a recipe</strong><span>Pick one from your collection to see its unlock and material breakdown.</span></>}
+                    </div>
+                    </>
+                  )}
+                </div>
+              </section>
+
+              <aside className="recipes-requirements utility-workbench-zone utility-rail-split utility-support-rail" aria-label="Recipe requirements">
+                {chosen && selectedBookEntry && selectedMethod && (
+                  <>
+                      {selectedRecipeRoute ? (
+                        <RecipeActionBoard
+                          route={selectedRecipeRoute}
+                          runs={selectedRuns}
+                          yieldPerRun={selectedMethod.yields}
+                          ingredients={selectedIngredients}
+                        />
+                      ) : (
+                        <section className="recipes-action-board">
+                          <div className="recipes-action-heading"><div><span>Exact recipe</span><h2>Recipe inputs</h2></div></div>
+                          <div className="recipes-action-inputs">
+                            {selectedIngredients.map((ingredient) => <DirectIngredient key={`${ingredient.id}:${ingredient.required}`} ingredient={ingredient} inventoryKnown={owned.has} />)}
+                          </div>
+                        </section>
+                      )}
+                      {craftingList.length === 0 && recursivePlanMatchesMethod && activeRecipe && (
+                        <MaterialWorklist
+                          materials={rawMaterials}
+                          items={enriched}
+                          inventoryKnown={owned.has}
+                          planPending={loading || forge.loading}
+                          planFailed={false}
+                          missingOnly={missingOnly}
+                          onMissingOnlyChange={setMissingOnly}
+                        />
+                      )}
+                    {craftingList.length > 0 && (
+                      <MaterialWorklist materials={listMaterials} items={enriched} inventoryKnown={owned.has}
+                        planPending={loading || forge.loading} planFailed={false} missingOnly={missingOnly} onMissingOnlyChange={setMissingOnly} />
+                    )}
+                  </>
+                )}
+              </aside>
+            </div>
+            <RecipesMuseumCollection model={museum} recipes={recipeBook} owned={owned} onSelect={id => {
+              setSelected(id); setQuantity(1);
+              calculatorScrollRef.current?.closest(".recipes-planner")?.scrollIntoView({ block: "start" });
+            }} onPlan={goals => {
+              if (!goals.length) return;
+              setCraftingList(current => includeMuseumGoals(current, goals));
+              setSelected(goals[0].id); setQuantity(goals[0].quantity); setSelectedMethodKind(goals[0].method);
+              calculatorScrollRef.current?.closest(".recipes-planner")?.scrollIntoView({ block: "start" });
+            }} />
+            {chosen && selectedBookEntry && selectedMethod && (
+              <div className="recipes-reference-area profile-glass">
+                    {alternativeRoutes.length > 0 && (
+                      <AlternativeAcquisitionRoutes itemKey={selected!} routes={alternativeRoutes} />
+                    )}
+
+                    <details className="recipes-reference">
+                      <summary className={FOCUS}>
+                        <ListTree aria-hidden="true" />
+                        <span><strong>Recipe reference</strong><small>Uses and full material tree</small></span>
+                        <ChevronDown aria-hidden="true" />
+                      </summary>
+                      <div className="recipes-reference-body">
+                        <UsedInSection item={chosen} items={enriched} onPick={setSelected} />
+                        {activeRecipe && (
+                          <section className={`recipes-tree${treeOpen ? " is-open" : ""}`}>
+                            <button type="button" aria-expanded={treeOpen} aria-controls="recipes-full-tree" onClick={() => setTreeOpen((open) => !open)} className={FOCUS}>
+                              <span><small>Full calculation</small><strong>Recursive material tree</strong></span>
+                              <span className="recipes-tree-state">
+                                {planPending ? "building" : planFailed ? "unavailable" : "craft and buy decisions"}
+                                <ChevronDown />
+                              </span>
+                            </button>
+                            {treeOpen && (
+                              <div id="recipes-full-tree" className="recipes-tree-body">
+                                {planPending ? (
+                                  <p className="recipes-plan-state" role="status">Building the full material tree…</p>
+                                ) : planFailed || !tree ? (
+                                  <p className="recipes-plan-state is-error">The full material tree is unavailable.</p>
+                                ) : (
+                                  <div className="recipes-tree-table overflow-x-auto">
+                                    <TreeHead ironman={ironman} owned={owned.has ? owned : null} />
+                                    <TreeRow node={tree} defaultOpen ironman={ironman} owned={owned.has ? owned : null} allocation={allocation?.root} />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </section>
+                        )}
+                      </div>
+                    </details>
+              </div>
+            )}
+          </main>
         </div>
-      )}
-    </SplitPage>
+      </div>
+    </div>
   );
+
 };
 
 export default ItemsPage;

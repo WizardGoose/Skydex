@@ -26,8 +26,14 @@ const API = "https://hypixelskyblock.minecraft.wiki/api.php";
 // v2: v1 stored currency as an ingredient ("100000x Coins"). Bumping the key
 // re-fetches rather than serving those poisoned entries forever. Only this
 // derived cache is dropped; nothing the user entered lives under it.
-const CACHE_KEY = "wizardsky.chains.v2";
-const STALE_KEYS = ["wizardsky.chains.v1"];
+// v3: fields inside HTML comments are ignored before parsing. v2 could read a
+// commented `mat_cost_bazaar` and expose its closing `-->` as part of the item
+// name (the live Enchanted Ruby Veilshroom article produced that exact row).
+// v4: multiline material fields are read through their final bullet. v3's
+// single-line matcher kept only the first line, which is how Gigantic Fishing
+// Net collapsed to Sea Lumies while four other material types disappeared.
+const CACHE_KEY = "wizardsky.chains.v4";
+const STALE_KEYS = ["wizardsky.chains.v1", "wizardsky.chains.v2", "wizardsky.chains.v3"];
 const BATCH = 50;
 
 /** id -> ingredients, or null when the wiki has no chain for it. */
@@ -82,8 +88,26 @@ const parseMaterials = (value: string): RecipeIngredient[] => {
   return out;
 };
 
-const parseInfobox = (wikitext: string): RecipeIngredient[] | null => {
-  const field = (key: string) => wikitext.match(new RegExp(`\\|\\s*${key}\\s*=\\s*([^\\n|}]+)`))?.[1]?.trim();
+export const parseMaterialChainInfobox = (wikitext: string): RecipeIngredient[] | null => {
+  const visibleWikitext = wikitext.replace(/<!--[\s\S]*?-->/g, "");
+  const lines = visibleWikitext.split(/\r?\n/);
+  const field = (key: string): string | undefined => {
+    const startPattern = new RegExp(`^\\s*\\|\\s*${key}\\s*=\\s*(.*)$`, "i");
+    for (let index = 0; index < lines.length; index += 1) {
+      const start = lines[index].match(startPattern);
+      if (!start) continue;
+
+      const value = [start[1]];
+      for (let next = index + 1; next < lines.length; next += 1) {
+        const line = lines[next];
+        if (/^\s*\|\s*[a-z0-9_]+\s*=/i.test(line) || /^\s*}}/.test(line)) break;
+        value.push(line);
+      }
+      const joined = value.join("\n").trim();
+      return joined || undefined;
+    }
+    return undefined;
+  };
 
   // One step first. `raw_materials` is already fully expanded, so using it
   // while the tree also recurses would multiply the same cost twice.
@@ -134,7 +158,7 @@ export const fetchMaterialChains = async (names: string[], signal?: AbortSignal)
     for (const page of json.query?.pages ?? []) {
       const text = page.revisions?.[0]?.slots?.main?.content;
       // Record a null for pages with no chain so we never ask again.
-      learned[slug(page.title)] = text ? parseInfobox(text) : null;
+      learned[slug(page.title)] = text ? parseMaterialChainInfobox(text) : null;
     }
 
     // Anything the API did not echo back at all.

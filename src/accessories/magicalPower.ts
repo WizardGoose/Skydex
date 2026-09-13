@@ -166,6 +166,15 @@ export interface MagicalPowerFigure {
   abicaseBonus: number;
   /** Bag ids priced despite being absent from the catalogue, inside `counted`. */
   uncatalogued: number;
+  /** Base MP grouped by the effective rarity that paid it; special bonuses remain separate. */
+  breakdown: MagicalPowerBreakdownRow[];
+}
+
+export interface MagicalPowerBreakdownRow {
+  tier: string;
+  count: number;
+  mpEach: number;
+  subtotal: number;
 }
 
 /**
@@ -204,7 +213,9 @@ export function computeMagicalPower(
     riftPrism: 0,
     abicaseBonus: 0,
     uncatalogued: 0,
+    breakdown: [],
   };
+  const breakdownCounts = new Map<string, number>();
 
   /*
    * The uncatalogued ids ride along after the chain collapse: no chain data
@@ -222,6 +233,7 @@ export function computeMagicalPower(
     // A prism in the bag is the wiki's flat 11, not its listed rare 8.
     if (id === "RIFT_PRISM") {
       figure.total += RIFT_PRISM_MP;
+      figure.riftPrism = RIFT_PRISM_MP;
       figure.counted += 1;
       continue;
     }
@@ -256,17 +268,22 @@ export function computeMagicalPower(
     const statedValue = statedTier !== undefined ? MP_BY_RARITY[statedTier] : undefined;
 
     let value: number;
+    let effectiveTier: string;
     if (statedValue !== undefined) {
       value = statedValue;
+      effectiveTier = statedTier as string;
     } else if (baseTier !== null && baseValue !== undefined) {
       const raised = inputs.recombobulated.has(id) ? RECOMB_BUMP[baseTier] : undefined;
       value = raised !== undefined ? MP_BY_RARITY[raised] : baseValue;
+      effectiveTier = raised ?? baseTier;
     } else {
       // Neither the item nor the resource states a rarity. Nothing honest to
       // price it at, so it contributes nothing and is counted saying so.
       figure.unknownTier += 1;
       continue;
     }
+
+    breakdownCounts.set(effectiveTier, (breakdownCounts.get(effectiveTier) ?? 0) + 1);
 
     if (inputs.recombobulated.has(id) && baseValue !== undefined && value > baseValue) {
       figure.recombobulated += 1;
@@ -293,10 +310,15 @@ export function computeMagicalPower(
 
   // The consumed prism is not in the bag (consuming it is how it stops being
   // an item), so its permanent 11 rides on the profile flag alone.
-  if (inputs.consumedPrism) {
+  if (inputs.consumedPrism && figure.riftPrism === 0) {
     figure.riftPrism = RIFT_PRISM_MP;
     figure.total += RIFT_PRISM_MP;
   }
+
+  figure.breakdown = Object.keys(MP_BY_RARITY).flatMap((tier) => {
+    const count = breakdownCounts.get(tier) ?? 0;
+    return count === 0 ? [] : [{ tier, count, mpEach: MP_BY_RARITY[tier], subtotal: MP_BY_RARITY[tier] * count }];
+  });
 
   return figure;
 }

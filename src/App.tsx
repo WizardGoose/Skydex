@@ -1,27 +1,30 @@
 import { createBrowserRouter, RouterProvider, Navigate, useLocation, useParams } from "react-router-dom";
 import React, { Suspense, lazy } from "react";
-import { Layout } from "./components";
-import { CalculatorStateProvider, RecipeStateProvider } from "./context";
-import { usePageTitle } from "./hooks";
-import { ToastProvider } from "./components";
+import { Layout } from "./components/layout/Layout";
+import { CalculatorStateProvider } from "./context/CalculatorStateContext";
+import { RecipeStateProvider } from "./context/RecipeStateContext";
+import { usePageTitle } from "./hooks/usePageTitle";
+import { ToastProvider } from "./components/ui/Toast";
+import { NotFoundRoute, RouteErrorBoundary } from "./components/errors/RouteErrorBoundary";
 import { GreenhouseHashRoute } from "./greenhouse/GreenhouseHashRoute";
 import { legacyGreenhouseHref } from "./greenhouse/route";
 import { legacySettingsLocation } from "./components/layout/settingsRoute";
+import { preservedRedirectTarget } from "./routeRedirect";
 import { sharedDesignerLocation } from "./greenhouse/designerRoute";
+import { WebMcpBridge } from "./webmcp/WebMcpBridge";
+import { restoreStaticRoute } from "./staticRouteRestore";
 
 const LandingPage = lazy(() => import("./pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const ItemsPage = lazy(() => import("./pages/ItemsPage").then((module) => ({ default: module.ItemsPage })));
-const IslandPage = lazy(() => import("./pages/IslandPage").then((module) => ({ default: module.IslandPage })));
+const StoragePage = lazy(() => import("./pages/StoragePage").then((module) => ({ default: module.StoragePage })));
+const ProfilePage = lazy(() => import("./profile-view/ProfileView").then((module) => ({ default: module.ProfilePage })));
+const ProfileViewerPage = lazy(() => import("./pages/ProfileViewerPage").then((module) => ({ default: module.ProfileViewerPage })));
 const ForgePage = lazy(() => import("./pages/ForgePage").then((module) => ({ default: module.ForgePage })));
 const GreenhouseShell = lazy(() => import("./greenhouse/GreenhouseShell").then((module) => ({ default: module.GreenhouseShell })));
-const GreenhouseSolverPage = lazy(() => import("./greenhouse/pages/CalculatorPage").then((module) => ({ default: module.CalculatorPage })));
-const GreenhouseDesignerPage = lazy(() => import("./greenhouse/pages/DesignerPage").then((module) => ({ default: module.DesignerPage })));
-const GreenhousePlannerPage = lazy(() => import("./greenhouse/pages/PlannerPage").then((module) => ({ default: module.PlannerPage })));
-const CalculatorPage = lazy(() => import("./pages/CalculatorPage").then((module) => ({ default: module.CalculatorPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 /*
  * Two things are called "settings" in this codebase and only one of them is a
- * settings screen. `SettingsPage` above is the Owned-shards editor, inherited
+ * settings screen. `SettingsPage` above is the Shards workspace, inherited
  * under that name from upstream and routed at `/shards`. `SiteSettingsPage` is
  * the real one, at `/settings`.
  */
@@ -39,14 +42,43 @@ const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
  * stray spinner from somewhere else.
  */
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center py-12">
-    <div className="w-6 h-6 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+  <div
+    className="flex min-h-[calc(100dvh-var(--sd-chrome-h))] items-center justify-center"
+    role="status"
+    aria-label="Loading page"
+  >
+    <div
+      aria-hidden="true"
+      className="h-6 w-6 animate-spin rounded-full border-2 border-sky-500/20 border-t-sky-500"
+    />
   </div>
 );
+
+const LegacyRedirect: React.FC<{ pathname: string }> = ({ pathname }) => {
+  const location = useLocation();
+  return <Navigate to={preservedRedirectTarget(pathname, location)} replace />;
+};
+
+const AccessoriesRedirect: React.FC = () => {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.set("tab", "accessories");
+  return (
+    <Navigate
+      to={{
+        pathname: "/profile",
+        search: "?" + params.toString(),
+        hash: location.hash,
+      }}
+      replace
+    />
+  );
+};
 
 const AppWithProviders = () => {
   return (
     <ToastProvider>
+      <WebMcpBridge />
       <Layout />
     </ToastProvider>
   );
@@ -80,11 +112,14 @@ const SharedDesignerRedirect = () => {
   return <Navigate to={sharedDesignerLocation(layoutCode)} replace />;
 };
 
+restoreStaticRoute(window);
+
 const router = createBrowserRouter(
   [
     {
       path: "/",
       element: <ProtectedLayout />,
+      errorElement: <RouteErrorBoundary />,
       children: [
         /*
          * "/" is the landing page AND the grind dashboard, one page:
@@ -115,7 +150,7 @@ const router = createBrowserRouter(
           children: [
             {
               index: true,
-              element: <GreenhouseHashRoute PlannerPage={GreenhousePlannerPage} SolverPage={GreenhouseSolverPage} DesignerPage={GreenhouseDesignerPage} />,
+              element: <GreenhouseHashRoute />,
             },
             {
               path: "designer",
@@ -132,7 +167,7 @@ const router = createBrowserRouter(
           ],
         },
         {
-          path: "items",
+          path: "recipes",
           element: (
             <Suspense fallback={<LoadingSpinner />}>
               <ItemsPage />
@@ -141,7 +176,11 @@ const router = createBrowserRouter(
         },
         {
           path: "crafting",
-          element: <Navigate to="/items" replace />,
+          element: <LegacyRedirect pathname="/recipes" />,
+        },
+        {
+          path: "items",
+          element: <LegacyRedirect pathname="/recipes" />,
         },
         {
           /*
@@ -152,19 +191,43 @@ const router = createBrowserRouter(
            * renders.
            */
           path: "accessories",
-          element: <Navigate to="/island?tab=accessories" replace />,
+          element: <AccessoriesRedirect />,
         },
         {
-          path: "island",
+          path: "profile",
           element: (
             <Suspense fallback={<LoadingSpinner />}>
-              <IslandPage />
+              <ProfilePage />
             </Suspense>
           ),
         },
         {
-          path: "profile",
-          element: <Navigate to="/island" replace />,
+          path: "storage",
+          element: (
+            <Suspense fallback={<LoadingSpinner />}>
+              <StoragePage />
+            </Suspense>
+          ),
+        },
+        {
+          path: "pv",
+          element: (
+            <Suspense fallback={<LoadingSpinner />}>
+              <ProfileViewerPage />
+            </Suspense>
+          ),
+        },
+        {
+          path: "pv/:player",
+          element: (
+            <Suspense fallback={<LoadingSpinner />}>
+              <ProfileViewerPage />
+            </Suspense>
+          ),
+        },
+        {
+          path: "island",
+          element: <LegacyRedirect pathname="/storage" />,
         },
         {
           path: "forge",
@@ -176,11 +239,7 @@ const router = createBrowserRouter(
         },
         {
           path: "fusion",
-          element: (
-            <Suspense fallback={<LoadingSpinner />}>
-              <CalculatorPage />
-            </Suspense>
-          ),
+          element: <LegacyRedirect pathname="/shards" />,
         },
         {
           path: "shards",
@@ -207,10 +266,18 @@ const router = createBrowserRouter(
                   </Suspense>
                 ),
               },
+              {
+                path: "wonder-lab",
+                element: (
+                  <Suspense fallback={<LoadingSpinner />}>
+                    {React.createElement(lazy(() => import("./pages/WonderLabPage")))}
+                  </Suspense>
+                ),
+              },
             ]
           : []),
         {
-          path: "recipes",
+          path: "shard-recipes",
           element: (
             <Suspense fallback={<LoadingSpinner />}>
               <RecipePage />
@@ -269,7 +336,7 @@ const router = createBrowserRouter(
     },
     {
       path: "*",
-      element: <Navigate to="/" replace />,
+      element: <NotFoundRoute />,
     },
   ],
   {

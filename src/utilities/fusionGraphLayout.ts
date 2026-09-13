@@ -146,7 +146,10 @@ export function buildGraphElements(data: Data, graph: FusionGraph): { nodes: Sha
           sourceHandle: "r",
           targetHandle: "l",
           data: { edgeType },
-          type: "bezier",
+          // React Flow's built-in curved edge is its default edge. Supplying
+          // "bezier" asks the custom edge registry for a type that does not
+          // exist, which floods the console while the graph is mounted.
+          type: "default",
         });
       }
     }

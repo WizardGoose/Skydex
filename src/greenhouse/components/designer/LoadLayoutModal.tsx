@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Edit2, FolderOpen, Search, Share2, Trash2, X } from "lucide-react";
+import { Check, Edit2, FolderOpen, Save, Search, Share2, Trash2, X } from "lucide-react";
 import type { SavedLayout } from "../../types/layout";
 import { FOCUS } from "../../../ui/kit";
 import { DesignerLayoutPreview } from "./DesignerLayoutPreview";
@@ -16,6 +16,14 @@ interface LoadLayoutModalProps {
   onShare: (layout: SavedLayout, displayName: string) => void;
   layouts: SavedLayout[];
   mostRecentLayout: SavedLayout | null;
+  title?: string;
+  saveCurrent?: {
+    name: string;
+    onNameChange: (name: string) => void;
+    onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+    disabled: boolean;
+    summary: string;
+  };
 }
 
 const formatDate = (timestamp: number): string =>
@@ -198,7 +206,7 @@ const LayoutCard: React.FC<{
         </span>
       </div>
 
-      <DesignerLayoutPreview layout={layout} className="p-3 sm:p-4" />
+      <DesignerLayoutPreview layout={layout} compact className="p-3 sm:p-4" />
 
       <div className="flex gap-2 border-t border-white/10 bg-black/10 px-3 py-2.5 sm:justify-end sm:px-4">
         <LayoutCardActionButtons
@@ -223,6 +231,8 @@ export const LoadLayoutModal: React.FC<LoadLayoutModalProps> = ({
   onShare,
   layouts,
   mostRecentLayout,
+  title = "Load layout",
+  saveCurrent,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"saved" | "name">("saved");
@@ -279,18 +289,46 @@ export const LoadLayoutModal: React.FC<LoadLayoutModalProps> = ({
           <div className="flex items-center gap-2">
             <FolderOpen className="h-5 w-5 text-emerald-300" />
             <h2 id="load-layout-title" className="text-lg font-semibold text-slate-50">
-              Load layout
+              {title}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close Load layout"
+            aria-label={`Close ${title}`}
             className={`cursor-pointer rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-100 ${FOCUS}`}
           >
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {saveCurrent && (
+          <form
+            className="grid shrink-0 gap-2 border-b border-slate-700/70 bg-black/10 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+            onSubmit={saveCurrent.onSubmit}
+          >
+            <label className="grid min-w-0 gap-1">
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-cyan-300">
+                <Save className="h-3.5 w-3.5" /> Save current plot
+              </span>
+              <input
+                value={saveCurrent.name}
+                onChange={(event) => saveCurrent.onNameChange(event.target.value)}
+                placeholder="Loadout name"
+                aria-label="Name this greenhouse loadout"
+                className={`h-9 w-full rounded-md border border-slate-600/60 bg-slate-800/70 px-3 text-[12px] text-slate-100 placeholder:text-slate-500 ${FOCUS}`}
+              />
+              <small className="text-[11px] text-slate-500">{saveCurrent.summary}</small>
+            </label>
+            <button
+              type="submit"
+              disabled={saveCurrent.disabled}
+              className={`h-9 cursor-pointer rounded-md border border-cyan-400/35 bg-cyan-400/10 px-4 text-[12px] font-semibold text-cyan-200 transition-colors hover:bg-cyan-400/16 disabled:cursor-default disabled:opacity-35 ${FOCUS}`}
+            >
+              Save
+            </button>
+          </form>
+        )}
 
         <div className="shrink-0 border-b border-slate-700/70 px-4 py-3">
           <div className="flex flex-col gap-2 sm:flex-row">

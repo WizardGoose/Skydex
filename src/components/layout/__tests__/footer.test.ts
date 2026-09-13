@@ -2,54 +2,49 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const layout = readFileSync(
-  resolve(process.cwd(), "src/components/layout/Layout.tsx"),
-  "utf8",
-);
+const layout = readFileSync(resolve(process.cwd(), "src/components/layout/Layout.tsx"), "utf8");
 const styles = readFileSync(resolve(process.cwd(), "src/index.css"), "utf8");
 
 describe("footer composition", () => {
-  it("uses the shared frosted footer treatment on every route", () => {
-    expect(layout).toContain('<footer className="sd-footer');
-    expect(layout).not.toContain('curtainless ? "bg-slate-950/70"');
-    expect(styles).toMatch(
-      /\.sd-footer\s*\{[\s\S]*?backdrop-filter:\s*blur\([\s\S]*?-webkit-backdrop-filter:\s*blur\(/,
-    );
-  });
-
-  it("starts the project credits disclosure on its own footer row", () => {
+  it("keeps compact credits and the required Minecraft notice", () => {
     expect(layout).toContain("Skydex Project Credits");
     expect(layout).toContain("Thank you to everyone who helped make Skydex possible.");
-    expect(layout).toMatch(/<details className="basis-full">/);
-    expect(layout).not.toContain("cursor-pointer list-none");
-    expect(layout).toContain("NOT AN OFFICIAL MINECRAFT PRODUCT");
-    expect(layout.indexOf("NOT AN OFFICIAL MINECRAFT PRODUCT")).toBeLessThan(
-      layout.indexOf("Skydex Project Credits"),
-    );
+    expect(layout).toContain("NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.");
+    expect(layout).toContain('<span className="sd-footer-disclaimer">');
+    expect(layout).not.toContain('<strong className="sd-footer-disclaimer">');
+    expect(styles).toMatch(/\.sd-footer-disclaimer\s*\{[^}]*font-weight: 400;/s);
+    expect(styles).toMatch(/\.sd-footer-show\s*\{[^}]*font-weight: 400;/s);
+    expect(layout.match(/NOT AN OFFICIAL MINECRAFT PRODUCT/g)).toHaveLength(1);
+    expect(layout.match(/Skydex Project Credits/g)).toHaveLength(1);
   });
 
-  it("keeps the long data attribution inside the project credits disclosure", () => {
-    const details = layout.slice(
-      layout.indexOf('<details className="basis-full">'),
-      layout.indexOf("</details>") + "</details>".length,
-    );
+  it("collapses verbose credits into a reversible compact source while keeping the Minecraft notice", () => {
+    expect(layout).toContain('const FOOTER_DISMISSED_KEY = "skydex.footer.dismissed.v1"');
+    expect(layout).toContain("localStorage.getItem(FOOTER_DISMISSED_KEY)");
+    expect(layout).toContain('localStorage.setItem(FOOTER_DISMISSED_KEY, "true")');
+    expect(layout).toContain('aria-label={rememberFooterDismissal ? "Collapse footer details and remember this choice" : "Collapse footer details"}');
+    expect(layout).toContain("Don&rsquo;t show details again");
+    expect(layout).toContain("localStorage.removeItem(FOOTER_DISMISSED_KEY)");
+    expect(layout).toContain("Sources: Hypixel Wiki · CC BY-NC-SA 3.0");
+    expect(layout).not.toContain('role="switch"');
 
-    expect(details).toContain("Item, recipe and mutation data and all item images");
-    expect(details).toContain("Hypixel SkyBlock Wiki");
-    expect(details).toContain("CC BY-NC-SA 3.0");
-    expect(details).toContain("Prices from the public Hypixel API.");
+    const dismissibleStart = layout.indexOf("{footerVisible && (");
+    const requiredStart = layout.indexOf('<div className="sd-footer-required');
+    const dismissibleRegion = layout.slice(dismissibleStart, requiredStart);
+    expect(dismissibleRegion).toContain("Item, recipe and mutation data");
+    expect(dismissibleRegion).toContain("Skydex Project Credits");
+    expect(dismissibleRegion).not.toContain("NOT AN OFFICIAL MINECRAFT PRODUCT");
+
+    const copy = layout.slice(layout.indexOf('<div className="sd-footer-copy">'), layout.indexOf('<div className="sd-footer-controls">'));
+    expect(copy.indexOf("Item, recipe and mutation data")).toBeLessThan(copy.indexOf("Skydex Project Credits"));
+
+    const controls = layout.slice(layout.indexOf('<div className="sd-footer-controls">'), requiredStart);
+    expect(controls.indexOf("Don&rsquo;t show details again")).toBeLessThan(controls.indexOf("<X"));
+    expect(controls).not.toContain("<ChevronDown");
   });
 
-  it("keeps the footer readable without transparency support", () => {
-    const noFilter = styles.slice(
-      styles.indexOf("@supports not ((backdrop-filter"),
-      styles.indexOf("@media (prefers-reduced-transparency: reduce)"),
-    );
-    const reduced = styles.slice(styles.indexOf("@media (prefers-reduced-transparency: reduce)"));
-
-    expect(noFilter).toContain(".sd-footer");
-    expect(reduced).toContain(".sd-footer");
-    expect(reduced).toContain("backdrop-filter: none");
-    expect(reduced).toContain("background-color: var(--color-slate-900)");
+  it("does not remount route content for query-only overlay state", () => {
+    expect(layout).not.toContain("key={location.pathname + location.search}");
+    expect(layout.match(/<ErrorBoundary key={location\.pathname}/g)).toHaveLength(2);
   });
 });

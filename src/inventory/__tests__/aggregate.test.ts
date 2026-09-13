@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildOwned, describeSources, dominantSource } from "../aggregate";
 import type { OwnedInput } from "../aggregate";
+import { getInventoryManagement, MANAGED_HOLDING_SOURCES } from "../managementStore";
 import type { SectionKey, SectionProvenance } from "../../island/merge";
 import type { IslandChest, IslandItem, IslandSnapshot } from "../../island/types";
 
@@ -37,6 +38,20 @@ const sectionsWith = (over: Partial<Record<SectionKey, SectionProvenance>> = {})
 });
 
 const captured = (source: "mod" | "api", at = 1_000): SectionProvenance => ({ state: "captured", source, at });
+
+const raw = (id: string, count: number) => ({ Count: count, tag: { ExtraAttributes: { id } } });
+
+const profileWith = (
+  parsed: Record<string, unknown[]>,
+  over: Partial<NonNullable<OwnedInput["profile"]>> = {},
+): NonNullable<OwnedInput["profile"]> => ({
+  parsed,
+  inventoryShared: true,
+  vaultShared: true,
+  museumShared: true,
+  fetchedAt: 2_000,
+  ...over,
+});
 
 const ITEMS = {
   ashwreath: { hypixelId: "ASHWREATH" },
@@ -77,6 +92,118 @@ describe("aggregation across sources", () => {
 
     expect(owned.count("grove")).toBe(100);
     expect(owned.get("grove")?.sources.map((s) => s.source)).toEqual(["island.sacks", "shards"]);
+  });
+
+  it("includes every physical item surface exposed by the cached Hypixel profile", () => {
+    const categories = {
+      inventory: [raw("ASHWREATH", 1)],
+      armor: [raw("ASHWREATH", 2)],
+      equipment: [raw("ASHWREATH", 3)],
+      wardrobe: [raw("ASHWREATH", 4)],
+      accessories: [raw("ASHWREATH", 5)],
+      enderchest: [raw("ASHWREATH", 6)],
+      storage: [raw("ASHWREATH", 7)],
+      personal_vault: [raw("ASHWREATH", 8)],
+      fishing_bag: [raw("ASHWREATH", 9)],
+      potion_bag: [raw("ASHWREATH", 10)],
+      sacks_bag: [raw("ASHWREATH", 11)],
+      quiver: [raw("ASHWREATH", 12)],
+      candy_inventory: [raw("ASHWREATH", 13)],
+      carnival_mask_inventory: [raw("ASHWREATH", 14)],
+      farming_toolkit: [raw("ASHWREATH", 15)],
+      hunting_toolkit: [raw("ASHWREATH", 16)],
+      museum: [raw("ASHWREATH", 17)],
+      sacks: [{ id: "ASHWREATH", amount: 18 }],
+    };
+    const owned = build({ profile: profileWith(categories) });
+
+    expect(owned.count("ashwreath")).toBe(171);
+    expect(owned.get("ashwreath")?.sources.map((source) => source.source)).toEqual([
+      "island.sacks",
+      "island.inventory",
+      "island.enderChest",
+      "island.storage",
+      "profile.armor",
+      "profile.equipment",
+      "profile.wardrobe",
+      "profile.accessories",
+      "profile.personalVault",
+      "profile.fishingBag",
+      "profile.potionBag",
+      "profile.sacksBag",
+      "profile.quiver",
+      "profile.candy",
+      "profile.carnivalMasks",
+      "profile.farmingToolkit",
+      "profile.huntingToolkit",
+      "profile.museum",
+    ]);
+  });
+
+  it("selects one overlapping API or mod container instead of double counting it", () => {
+    const owned = build({
+      island: {
+        snapshot: snapshotWith({ inventory: [item("ASHWREATH", 9)] }),
+        sections: sectionsWith({ inventory: captured("mod", 3_000) }),
+      },
+      profile: profileWith({ inventory: [raw("ASHWREATH", 40)] }, { fetchedAt: 2_000 }),
+    });
+
+    expect(owned.count("ashwreath")).toBe(9);
+    expect(owned.get("ashwreath")?.sources).toEqual([
+      { source: "island.inventory", feed: "mod", count: 9, at: 3_000 },
+    ]);
+  });
+
+  it("unions cached API sacks with the mod view and replaces collisions", () => {
+    const owned = build({
+      island: {
+        snapshot: snapshotWith({ sacks: { ASHWREATH: 7 } }),
+        sections: sectionsWith({ sacks: captured("mod", 3_000) }),
+      },
+      profile: profileWith({
+        sacks: [
+          { id: "ASHWREATH", amount: 100 },
+          { id: "CHOCONUT", amount: 5 },
+        ],
+      }),
+    });
+
+    expect(owned.count("ashwreath")).toBe(7);
+    expect(owned.count("choconut")).toBe(5);
+  });
+
+  it("keeps an API sack counter at zero as known rather than unknown", () => {
+    const owned = build({
+      profile: profileWith({
+        sacks: [
+          { id: "ASHWREATH", amount: 0 },
+          { id: "CHOCONUT", amount: 5 },
+        ],
+      }),
+    });
+
+    expect(owned.get("ashwreath")).toMatchObject({ auto: 0, total: 0 });
+    expect(owned.get("ashwreath")?.sources).toEqual([
+      { source: "island.sacks", feed: "api", count: 0, at: 2_000 },
+    ]);
+    expect(owned.count("wiki-only")).toBeUndefined();
+  });
+
+  it("does not turn private API surfaces into empty holdings", () => {
+    const owned = build({
+      profile: profileWith(
+        {
+          inventory: [raw("ASHWREATH", 4)],
+          personal_vault: [raw("ASHWREATH", 8)],
+          museum: [raw("ASHWREATH", 16)],
+        },
+        { inventoryShared: false, vaultShared: false, museumShared: false },
+      ),
+    });
+
+    expect(owned.has).toBe(false);
+    expect(owned.count("ashwreath")).toBeUndefined();
   });
 
   it("contributes nothing for a shard with no id bridge", () => {
@@ -317,5 +444,65 @@ describe("hypixelId bridging", () => {
       },
     });
     expect(owned.get("odd")).toBeUndefined();
+  });
+});
+
+describe("shared source visibility", () => {
+  it("includes the legacy shard tally by default alongside the island source toggles", () => {
+    const defaultSources = getInventoryManagement().enabledSources;
+    expect([...defaultSources]).toEqual([...MANAGED_HOLDING_SOURCES]);
+    expect(defaultSources.has("shards")).toBe(false);
+
+    const owned = build({
+      items: { grove: { hypixelId: "SHARD_GROVE" } },
+      island: {
+        snapshot: snapshotWith({ inventory: [item("SHARD_GROVE", 2)] }),
+        sections: sectionsWith({ inventory: captured("mod") }),
+      },
+      shards: { counts: { C1: 96 }, ids: { C1: "SHARD_GROVE" } },
+      // This is the default set supplied by useInventoryManagement/useOwned.
+      enabledSources: defaultSources,
+    });
+
+    expect(owned.count("grove")).toBe(98);
+    expect(owned.get("grove")?.sources.map((source) => source.source)).toEqual(["island.inventory", "shards"]);
+    expect(describeSources(owned.get("grove"))).toBe("inventory 2 (mod), shard inventory 96");
+  });
+
+  it("filters planner holdings by the shared source switches without changing the snapshot", () => {
+    const owned = build({
+      island: {
+        snapshot: snapshotWith({ sacks: { ASHWREATH: 5 }, inventory: [item("ASHWREATH", 2)] }),
+        sections: sectionsWith({ sacks: captured("api"), inventory: captured("mod") }),
+      },
+      enabledSources: new Set(["island.sacks"]),
+    });
+    expect(owned.count("ashwreath")).toBe(5);
+    expect(owned.get("ashwreath")?.sources.map((source) => source.source)).toEqual(["island.sacks"]);
+  });
+
+  it("keeps a manual override available even when every automatic source is disabled", () => {
+    const owned = build({
+      island: {
+        snapshot: snapshotWith({ sacks: { ASHWREATH: 5 } }),
+        sections: sectionsWith({ sacks: captured("api") }),
+      },
+      manual: { ashwreath: 7 },
+      enabledSources: new Set(),
+    });
+    expect(owned.count("ashwreath")).toBe(7);
+    expect(owned.get("ashwreath")?.overridden).toBe(true);
+    expect(owned.get("ashwreath")?.sources).toEqual([]);
+  });
+
+  it("keeps the separate shard source when every island container is disabled", () => {
+    const owned = buildOwned({
+      items: { grove: { hypixelId: "SHARD_GROVE" } },
+      shards: { counts: { C1: 96 }, ids: { C1: "SHARD_GROVE" } },
+      enabledSources: new Set(),
+    });
+
+    expect(owned.count("grove")).toBe(96);
+    expect(owned.get("grove")?.sources.map((source) => source.source)).toEqual(["shards"]);
   });
 });

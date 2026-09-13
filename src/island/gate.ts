@@ -85,6 +85,46 @@ export const makeGate = <T>(task: () => Promise<T>, gapMs: number): Gate<T> => {
 };
 
 /**
+ * One floored gate per identity.
+ *
+ * A repeated request for the same profile is the same question and keeps the
+ * normal attach/cooldown protection. A different profile is a different
+ * question and must not inherit the previous profile's cooldown, otherwise a
+ * quick profile switch can be refused with nobody left to retry it.
+ */
+export interface KeyedFloorGate<T> {
+  run: (key: string) => Promise<T | undefined>;
+  cooldownUntil: (key: string) => number;
+  busy: (key: string) => boolean;
+  /** Forget a completed key's floor. An in-flight request is never detached. */
+  reset: (key: string) => void;
+}
+
+export const makeKeyedFloorGate = <T>(
+  task: (key: string) => Promise<T>,
+  gapMs: number,
+): KeyedFloorGate<T> => {
+  const gates = new Map<string, Gate<T>>();
+  const gateFor = (key: string): Gate<T> => {
+    const existing = gates.get(key);
+    if (existing) return existing;
+    const created = makeGate(() => task(key), gapMs);
+    gates.set(key, created);
+    return created;
+  };
+
+  return {
+    run: (key) => gateFor(key).run(),
+    cooldownUntil: (key) => gateFor(key).cooldownUntil(),
+    busy: (key) => gateFor(key).busy(),
+    reset: (key) => {
+      const existing = gates.get(key);
+      if (existing && !existing.busy()) gates.delete(key);
+    },
+  };
+};
+
+/**
  * A gate for a task that takes an argument and should only dedupe against the
  * SAME argument.
  *

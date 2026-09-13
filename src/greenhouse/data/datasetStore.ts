@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import bundledJson from "../../../public/greenhouse/data.json";
 import { withMutationIds } from "../planner/mutationBridge";
 import { readCraftingCache } from "../../items/wikiCrafting";
-import { CACHE_KEY as WIKI_CACHE_KEY, MAX_AGE_MS, applyWikiMutations, fetchWikiMutations, readCache } from "./wikiSync";
+import { CACHE_KEY as WIKI_CACHE_KEY, MAX_AGE_MS, SYNC_REFUSED, applyWikiMutations, fetchWikiMutations, readCache, type WikiSnapshot } from "./wikiSync";
 import type { FieldChange, WikiMutation } from "./wikiSync";
 import type { CropDefinition, MutationDefinition } from "../types/greenhouse";
 import type { ItemIndex } from "../../items/useItemData";
@@ -312,6 +312,13 @@ const applySnapshot = (wikiMutations: Record<string, WikiMutation>, at: number) 
   wiki = { ...wiki, fetchedAt: at, changes };
 };
 
+/** Publish a snapshot fetched by another in-app surface in this same tab. */
+export const publishWikiSnapshot = (snapshot: Pick<WikiSnapshot, "mutations" | "fetchedAt">): void => {
+  applySnapshot(snapshot.mutations, snapshot.fetchedAt);
+  error = null;
+  wiki = { ...wiki, syncing: false, error: null };
+  publish();
+};
 /** Read whatever the last wiki fetch left behind, from this tab or another. */
 const adoptCache = (): boolean => {
   try {
@@ -346,15 +353,13 @@ const runRefresh = () => {
 
   fetchWikiMutations(KNOWN_NAMES)
     .then((snapshot) => {
-      applySnapshot(snapshot.mutations, snapshot.fetchedAt);
-      wiki = { ...wiki, syncing: false, error: null };
-      publish();
+      publishWikiSnapshot(snapshot);
     })
     .catch((e: Error) => {
       // The bundled copy, and possibly a cached wiki copy, is already on
       // screen. A failed refresh is worth reporting and never worth discarding
       // good data over.
-      wiki = { ...wiki, syncing: false, error: e.message };
+      wiki = { ...wiki, syncing: false, error: e.message === SYNC_REFUSED ? null : e.message };
       publish();
     });
 };

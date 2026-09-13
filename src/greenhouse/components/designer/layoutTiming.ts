@@ -1,5 +1,6 @@
 import type { CropDefinition, MutationDefinition } from "../../types/greenhouse";
 import { getDataset } from "../../data/datasetStore";
+import { getUniqueCrops } from "../../data/uniqueCropsStore";
 import { currentPlannerState } from "../../planner/usePlannerState";
 import { resolveSpeedTier } from "../../planner/growthSource";
 import { plantingSeconds, stageSeconds, type GrowthSettings } from "../../planner/time";
@@ -83,14 +84,12 @@ export const buildNameIndex = (data: Dataset): NameIndex => {
 };
 
 /**
- * Distinct crop types this layout puts in the plot.
+ * Distinct crop types this layout puts in its plot.
  *
- * Measured off the layout rather than read from the settings, and that is the
- * site's standing rule rather than a shortcut: the planner already overrides the
- * stated unique crop count with the derived one wherever a solve exists, because
- * a solved plot is evidence and a slider is a guess about some other plot. A
- * layout on its way to the mod is exactly such evidence - it IS the plot being
- * described - so it answers for itself.
+ * This is useful layout metadata, but it is not the growth-speed input. Hypixel
+ * counts unique crops across every Greenhouse plot, so the timer reads the
+ * greenhouse-wide store instead of treating this single layout as the whole
+ * system.
  *
  * Mutations are not counted. The bonus is for crop types standing in the plot,
  * and a mutation cell is where a mutation will appear rather than something
@@ -172,12 +171,12 @@ export const attachSeconds = (
  * stored. Reading it any other way would let the mod show a tier the site is not
  * showing.
  */
-export const resolveLayoutGrowth = (items: readonly LayoutItem[]): GrowthSettings => {
+export const resolveLayoutGrowth = (): GrowthSettings => {
   const growth = currentPlannerState().growth;
   return {
     cropGrowth: growth.cropGrowth,
     speedTier: resolveSpeedTier(growth, currentGreenhouseStats()),
-    uniqueCrops: uniqueCropsIn(items),
+    uniqueCrops: getUniqueCrops(),
   };
 };
 
@@ -202,7 +201,7 @@ export const estimateLayoutSeconds = (items: readonly LayoutItem[]): LayoutItem[
       crops: Object.fromEntries(dataset.crops.map((c) => [c.id, c])),
       mutations: Object.fromEntries(dataset.mutations.map((m) => [m.id, m])),
     };
-    return attachSeconds(items, data, resolveLayoutGrowth(items));
+    return attachSeconds(items, data, resolveLayoutGrowth());
   } catch {
     return items.map((item) => ({ ...item, seconds: null }));
   }

@@ -766,34 +766,18 @@ describe("the renderer's own rules, checked in its source", () => {
     expect(barrel).toMatch(/from\s+"\.\/VectorMark"/);
   });
 
-  it("does not let the component translate anything", () => {
-    /* The renderer is where a translate would be easiest to reintroduce by
-       accident, so the ban is checked in the source rather than trusted. */
+  it("routes spatial movement through the rig instead of ad-hoc component transforms", () => {
     const src = readFileSync(new URL("../VectorMark.tsx", import.meta.url), "utf8");
     const code = src.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
-    expect(code).not.toContain("rotate(");
-    /* The only translates permitted are the pair that pins the mouth's scale
-       to the baseline, and both name BASELINE. Matched to the closing paren so
-       the assertion sees the whole call rather than its first argument. */
-    const translates = code.match(/translate\([^)]*\)/g) ?? [];
-    expect(translates.length).toBeGreaterThan(0);
-    /*
-     * Two permitted translates now, and the second one is the zzz.
-     *
-     * The rule this test protects is "a LETTER never moves", not "the file
-     * contains no translate". The mouth's pair name BASELINE because they pin
-     * its scale to the line. The zzz's names `z.` because it is not part of the
-     * wordmark at all: it is a thing the mark emits, and drifting upward is the
-     * entirety of what it does. A zzz that could not translate would not be a
-     * zzz.
-     *
-     * Matching on `z.` rather than allowing any transform on that element keeps
-     * the assertion sharp: it still fails if anyone gives the letters or the
-     * mouth a translate from a new source.
-     */
-    for (const t of translates) {
-      expect(t, `stray translate: ${t}`).toMatch(/BASELINE|z\./);
-    }
+    expect(code).toContain("sampleRigClip");
+    expect(code).toContain("lerpRigPose");
+    expect(code).toContain("rigTransform");
+    expect(code).toContain("rigRootRef");
+    expect(code).toContain("eyeLGroupRef");
+    expect(code).toContain("eyeRGroupRef");
+    /* There is one renderer and one rAF. Spatial animation must not grow a
+       competing CSS transform loop beside the SVG hierarchy. */
+    expect(code).not.toContain("style.transform");
   });
 
   it("writes every field the mouth geometry hands it", () => {

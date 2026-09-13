@@ -26,6 +26,7 @@ describe("site typography baseline", () => {
   it("uses Profile's medium interface weight as the site-wide floor", () => {
     const bodyRule = css.match(/body\s*\{(?<body>[\s\S]*?)\}/)?.groups?.body ?? "";
 
+    expect(css).toMatch(/--font-sans:\s*"Montserrat"/);
     expect(bodyRule).toMatch(/font-family:\s*var\(--font-sans\)/);
     expect(bodyRule).toMatch(/font-weight:\s*500/);
   });

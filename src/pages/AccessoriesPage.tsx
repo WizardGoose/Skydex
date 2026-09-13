@@ -2,25 +2,22 @@ import React, { useMemo, useState } from "react";
 import { CircleCheck, Gem, Hourglass, KeyRound, PackageSearch, Search, SearchX } from "lucide-react";
 import { SettingsLink } from "../components/layout/SettingsLink";
 import {
+  isNormalAccessory,
   useAccessories,
-  ATTAINABILITY_HINT,
-  ATTAINABILITY_LABEL,
-  GROUP_LABEL,
-  GROUP_ORDER,
-  type AccessoryGroup,
 } from "../accessories";
 import { useShopStock } from "../items/wikiShops";
-import { BTN_QUIET, EmptyState, FOCUS, INPUT, LABEL, NUM, PANEL, RADIUS, Stat } from "../ui/kit";
+import { BTN_QUIET, EmptyState, INPUT, NUM, PANEL, Stat } from "../ui/kit";
 import { AccessorySection } from "../accessories/ui/AccessorySection";
 import { SourceLegend } from "../accessories/ui/SourceTag";
+import type { SourceLegendExample } from "../accessories/ui/SourceTag";
 import { actionablePathOf } from "../accessories/ui/actionable";
 import type { ActionablePath } from "../accessories/ui/sourceMeta";
 import {
   filterEntries,
   filterIsIdle,
   groupForDisplay,
-  toggleGroup,
   toggleSource,
+  ACQUISITION_LABEL,
   type AccessoryFilter,
 } from "../accessories/ui/group";
 import type { SourceCategory } from "../accessories/ui/types";
@@ -75,15 +72,18 @@ export const AccessoriesView: React.FC = () => {
    * See `NO_FILTER` in group.ts for the full reasoning.
    */
   const [showCovered, setShowCovered] = useState(false);
-  const [groups, setGroups] = useState<AccessoryGroup[]>([]);
 
   const filter: AccessoryFilter = useMemo(
-    () => ({ query: query.trim().toLowerCase(), sources, groups, showCovered }),
-    [query, sources, groups, showCovered]
+    () => ({ query: query.trim().toLowerCase(), sources, groups: [], showCovered }),
+    [query, sources, showCovered]
   );
   const idle = filterIsIdle(filter);
 
-  const visible = useMemo(() => filterEntries(snapshot.entries, filter), [snapshot.entries, filter]);
+  const normalEntries = useMemo(
+    () => snapshot.entries.filter(isNormalAccessory),
+    [snapshot.entries],
+  );
+  const visible = useMemo(() => filterEntries(normalEntries, filter), [normalEntries, filter]);
   const grouped = useMemo(
     () => groupForDisplay(visible, snapshot.ownedKnown),
     [visible, snapshot.ownedKnown]
@@ -98,12 +98,12 @@ export const AccessoriesView: React.FC = () => {
   const actionable = useMemo(() => {
     const now = Date.now();
     const map = new Map<string, ActionablePath>();
-    for (const entry of snapshot.entries) {
+    for (const entry of normalEntries) {
       const path = actionablePathOf(entry, shops.index, now);
       if (path !== null) map.set(entry.id, path);
     }
     return map;
-  }, [snapshot.entries, shops.index]);
+  }, [normalEntries, shops.index]);
 
   /**
    * The covered filter only appears once something is actually hidden behind
@@ -113,18 +113,17 @@ export const AccessoriesView: React.FC = () => {
    * missing ones folded behind their line's next step.
    */
   const anyCovered = useMemo(
-    () => snapshot.entries.some((e) => e.coveredByFamily || e.foldedBehind !== null),
-    [snapshot.entries]
+    () => normalEntries.some((e) => e.coveredByFamily || e.foldedBehind !== null),
+    [normalEntries]
   );
 
   const clearFilters = () => {
     setQuery("");
     setSources([]);
-    setGroups([]);
-    setShowCovered(true);
+    setShowCovered(false);
   };
 
-  const { counts, ownedKnown } = snapshot;
+  const { normalCounts, ownedKnown } = snapshot;
   /** Blank, not zero, for anything that needed a profile we could not read. */
   const profileFigure = (n: number) => (ownedKnown ? n.toLocaleString() : "-");
 
@@ -137,20 +136,17 @@ export const AccessoriesView: React.FC = () => {
    * along quietly, so neither number is hidden and the line under the row says
    * what the pair means.
    */
-  const tierFigure = (tier: "now" | "soon" | "long") => {
-    if (!ownedKnown) return "-";
-    const next = snapshot.nextStepCounts[tier];
-    const rungs = snapshot.reachCounts[tier];
-    if (next === rungs) return next.toLocaleString();
-    return (
-      <>
-        {next.toLocaleString()}
-        <span className="text-[10px] text-slate-500"> of {rungs.toLocaleString()}</span>
-      </>
-    );
-  };
+
+  const normalMissing = ownedKnown ? normalCounts.missing + normalCounts.locked : null;
 
   const mp = snapshot.magicalPower;
+  const sourceExamples = useMemo<Partial<Record<SourceCategory, SourceLegendExample>>>(() => {
+    const examples: Partial<Record<SourceCategory, SourceLegendExample>> = {};
+    for (const entry of normalEntries) {
+      if (!examples[entry.source]) examples[entry.source] = { name: entry.name, id: entry.itemId ?? entry.id };
+    }
+    return examples;
+  }, [normalEntries]);
 
   /**
    * The rift sections' honest tallies (the standing rule: transferables
@@ -159,11 +155,6 @@ export const AccessoriesView: React.FC = () => {
    * the dual listing explains itself at the section level as well as on the
    * tile. Counted off the grouped lists, so the numbers are the lists'.
    */
-  const riftNote = (list: readonly { riftTransferable: boolean }[], base: string): string => {
-    const transferable = list.filter((e) => e.riftTransferable).length;
-    if (transferable === 0) return base;
-    return `${base}; ${transferable} rift-transferable, listed here and in their normal sections`;
-  };
 
   /* --- first paint, before anything has arrived -------------------------- */
 
@@ -199,7 +190,7 @@ export const AccessoriesView: React.FC = () => {
   const nothingAtAll = (
     <EmptyState
       title="The catalogue is empty"
-      hint="No accessories were loaded, so there is nothing to compare against. This is a data problem on our side, not a statement about your profile."
+      hint="Accessory catalogue unavailable."
       icon={PackageSearch}
     />
   );
@@ -230,27 +221,10 @@ export const AccessoriesView: React.FC = () => {
          * they have their own band and mixing them back into these numbers
          * would make the header disagree with the sections it summarises.
          */}
-        <Stat label="Catalogue" value={counts.total.toLocaleString()} align="left" />
-        <Stat label="Missing" value={tierFigure("now")} align="left" accent={ownedKnown} />
-        <Stat label="Soon" value={tierFigure("soon")} align="left" />
-        <Stat label="Long haul" value={tierFigure("long")} align="left" />
-        <Stat label="Locked" value={profileFigure(counts.locked - snapshot.riftCounts.locked)} align="left" />
-        <Stat label="Owned" value={profileFigure(counts.owned - snapshot.riftCounts.owned)} align="left" />
-        <Stat
-          label="Rift missing"
-          value={
-            ownedKnown
-              ? (snapshot.riftCounts.missing + snapshot.riftCounts.locked).toLocaleString()
-              : "-"
-          }
-          align="left"
-        />
-        <Stat label="Magical power" value={mp ? mp.total.toLocaleString() : "-"} align="left" />
-        {!ownedKnown && (
-          <span className="text-[10px] leading-snug text-slate-500">
-            Seven of these need a profile we could not read, so they are blank rather than zero.
-          </span>
-        )}
+        <Stat label="Catalogue" value={normalCounts.total.toLocaleString()} align="left" />
+        <Stat label="Missing" value={normalMissing === null ? "-" : normalMissing.toLocaleString()} align="left" accent={ownedKnown} />
+        <Stat label="Owned" value={profileFigure(normalCounts.owned)} align="left" />
+        {mp !== null && <Stat label="MP" value={mp.total.toLocaleString()} align="left" />}
       </div>
 
       {/*
@@ -265,45 +239,7 @@ export const AccessoriesView: React.FC = () => {
        * Abicase whose contact count the profile did not state, or a rarity
        * Hypixel omitted.
        */}
-      {ownedKnown && (snapshot.foldedCount > 0 || mp !== null) && (
-        <p className="px-1 text-[10px] leading-snug text-slate-500">
-          {snapshot.foldedCount > 0 && (
-            <>
-              Tier counts are next steps of rungs: one tile per upgrade line, with{" "}
-              <span className={NUM}>{snapshot.foldedCount.toLocaleString()}</span> higher rungs folded into
-              the rung below them. The rungs toggle shows every one.{" "}
-            </>
-          )}
-          {mp !== null && (
-            <>
-              Magical power counts your highest rung per line at its recombobulated rarity
-              {mp.hegemonyBonus > 0 && <>, doubles the Hegemony Artifact</>}
-              {mp.riftPrism > 0 && <>, includes your consumed Rift Prism</>}
-              {mp.abicaseBonus > 0 && <>, prices your Abicase by its contacts</>}
-              {mp.skipped > 0 && (
-                <>
-                  , and leaves <span className={NUM}>{mp.skipped.toLocaleString()}</span> Abicase out
-                  because your contact count could not be read
-                </>
-              )}
-              {mp.uncatalogued > 0 && (
-                <>
-                  , and prices <span className={NUM}>{mp.uncatalogued.toLocaleString()}</span> bag{" "}
-                  {mp.uncatalogued === 1 ? "item" : "items"} the catalogue lacks at the rarity the item
-                  itself states
-                </>
-              )}
-              {mp.unknownTier > 0 && (
-                <>
-                  , with <span className={NUM}>{mp.unknownTier.toLocaleString()}</span> of unstated rarity
-                  counted as nothing
-                </>
-              )}
-              .
-            </>
-          )}
-        </p>
-      )}
+
 
       {/*
        * The keyless state. `EmptyState` is the primitive for it even though the
@@ -314,12 +250,12 @@ export const AccessoriesView: React.FC = () => {
         <div className={PANEL}>
           <EmptyState
             title="No accessory bag could be read"
-            hint="That is not the same as owning none, so nothing below is marked missing or owned. Everything else on this page works without a profile: the full catalogue is here, with where each accessory comes from."
+            hint="Connect your Minecraft profile to compare owned and missing."
             icon={KeyRound}
             action={
               <SettingsLink section="hypixel" className={BTN_QUIET}>
                 <KeyRound className="h-3 w-3" aria-hidden />
-                Set up the Hypixel profile connection
+                Open Settings
               </SettingsLink>
             }
           />
@@ -333,43 +269,11 @@ export const AccessoriesView: React.FC = () => {
        */}
       <div className={`${PANEL} divide-y divide-slate-800`}>
         <SourceLegend
-          counts={snapshot.sourceCounts}
+          counts={snapshot.normalSourceCounts}
           selected={sources}
           onToggle={(source) => setSources((prev) => toggleSource(prev, source))}
+          examples={sourceExamples}
         />
-
-        {/*
-         * Activity filter.
-         *
-         * Sits under the source key rather than above it because source is the
-         * headline of this page and activity is the narrowing question you ask
-         * second ("show me only the farming ones"). Groups with nothing in them
-         * are not rendered: an activity this game has no accessories for is not
-         * a filter worth offering.
-         */}
-        <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-2">
-          <span className={`${LABEL} mr-0.5`}>Activity</span>
-          {GROUP_ORDER.filter((g) => (snapshot.groupCounts[g] ?? 0) > 0).map((g) => {
-            const active = groups.includes(g);
-            return (
-              <button
-                key={g}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setGroups((prev) => toggleGroup(prev, g))}
-                className={
-                  `inline-flex cursor-pointer items-center gap-1 border px-1.5 py-px text-[10px] leading-[1.5] ${RADIUS.chip} ${FOCUS} ` +
-                  (active
-                    ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-200"
-                    : "border-slate-700 bg-slate-800/70 text-slate-300 hover:border-slate-600 hover:text-slate-100")
-                }
-              >
-                {GROUP_LABEL[g]}
-                <span className={`${NUM} text-slate-400`}>{snapshot.groupCounts[g]}</span>
-              </button>
-            );
-          })}
-        </div>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-2.5 py-2">
           <div className="relative min-w-[12rem] flex-1">
@@ -406,7 +310,7 @@ export const AccessoriesView: React.FC = () => {
           {!idle && (
             <span className="flex items-center gap-2">
               <span className={`text-[10px] ${NUM} text-slate-400`}>
-                {visible.length.toLocaleString()} of {snapshot.entries.length.toLocaleString()}
+                {visible.length.toLocaleString()} of {normalEntries.length.toLocaleString()}
               </span>
               <button type="button" className={BTN_QUIET} onClick={clearFilters}>
                 Clear
@@ -427,24 +331,24 @@ export const AccessoriesView: React.FC = () => {
        */}
       {grouped.mode === "reach" ? (
         <>
-          {grouped.tiers.map(({ tier, entries }) => (
+          {grouped.groups.map(({ group, entries }) => (
             <AccessorySection
-              key={tier}
-              title={ATTAINABILITY_LABEL[tier]}
+              key={group}
+              title={ACQUISITION_LABEL[group]}
               entries={entries}
-              note={ATTAINABILITY_HINT[tier]}
               empty={filteredAway}
               actionable={actionable}
               recombed={snapshot.recombobulated}
+              markTransferable
             />
           ))}
 
-          {grouped.tiers.length === 0 && (
+          {grouped.groups.length === 0 && (
             <EmptyState
               title={idle ? "You are not missing any of these" : "Nothing matches those filters"}
               hint={
                 idle
-                  ? `All ${counts.owned.toLocaleString()} owned accessories are in the collapsed section below. The catalogue only covers what we could index, so this is not a claim that nothing else exists.`
+                  ? `All ${normalCounts.owned.toLocaleString()} owned accessories are in the collapsed section below. The catalogue only covers what we could index, so this is not a claim that nothing else exists.`
                   : undefined
               }
               icon={idle ? CircleCheck : SearchX}
@@ -454,13 +358,13 @@ export const AccessoriesView: React.FC = () => {
           <AccessorySection
             title="Owned"
             entries={grouped.owned}
-            note="already in your bag"
             collapsed
             recombed={snapshot.recombobulated}
+            markTransferable
             empty={
               idle ? (
                 <EmptyState
-                  title="Your accessory bag is empty"
+                  title="Accessory bag is empty"
                   hint="We read it and found nothing in it, which is different from not being able to read it."
                   icon={Gem}
                 />
@@ -470,79 +374,17 @@ export const AccessoriesView: React.FC = () => {
             }
           />
 
-          {/*
-           * The Rift band, last because it is a different dimension in the
-           * literal sense: these work only inside the Rift, grant no Magical
-           * Power out here, and are picked up in there. The split is
-           * missing/owned rather than the reach tiers, because "how far away
-           * is it" is measured in overworld errands and these are not one.
-           */}
-          <AccessorySection
-            title="Rift - missing"
-            entries={grouped.riftMissing}
-            note={riftNote(grouped.riftMissing, "the Rift area; non-transferable pieces work only inside the Rift")}
-            markTransferable
-            empty={
-              idle ? (
-                <EmptyState
-                  title="Every Rift accessory we track is in your bag"
-                  hint="Read from your overworld accessory bag. Pieces stored inside the Rift itself are not in the API's bag data, so they cannot be seen from here."
-                  icon={CircleCheck}
-                />
-              ) : (
-                filteredAway
-              )
-            }
-            actionable={actionable}
-            recombed={snapshot.recombobulated}
-          />
-          <AccessorySection
-            title="Rift - owned"
-            entries={grouped.riftOwned}
-            note={riftNote(grouped.riftOwned, "in your overworld bag")}
-            collapsed
-            markTransferable
-            recombed={snapshot.recombobulated}
-            empty={
-              idle ? (
-                <EmptyState
-                  title="No Rift accessory is in your overworld bag"
-                  hint="That is where this page can read, not a claim about what you hold inside the Rift: the API's bag data does not include the Rift's own inventory."
-                  icon={Gem}
-                />
-              ) : (
-                filteredAway
-              )
-            }
-          />
         </>
       ) : (
-        <>
-          <AccessorySection
-            title="Every accessory"
-            entries={grouped.all}
-            note="no profile, so nothing is marked owned"
-            empty={snapshot.entries.length === 0 ? nothingAtAll : filteredAway}
-            actionable={actionable}
-          />
-          <AccessorySection
-            title="Rift"
-            entries={grouped.rift}
-            note={riftNote(grouped.rift, "the Rift area; non-transferable pieces work only inside the Rift")}
-            markTransferable
-            empty={snapshot.entries.length === 0 ? nothingAtAll : filteredAway}
-            actionable={actionable}
-          />
-        </>
+        <AccessorySection
+          title="Every accessory"
+          entries={grouped.all}
+          empty={normalEntries.length === 0 ? nothingAtAll : filteredAway}
+          actionable={actionable}
+          markTransferable
+        />
       )}
 
-      <p className={`${LABEL} px-1 normal-case tracking-normal text-slate-500`}>
-        Sources come from our own item data where it is certain. Anything we could not classify is marked
-        <span className={`mx-1 ${RADIUS.chip} border border-slate-700 bg-slate-800/70 px-1 py-px font-mono text-slate-300`}>
-          See wiki
-        </span>
-        rather than guessed at.
-      </p>
     </div>
   );
 };

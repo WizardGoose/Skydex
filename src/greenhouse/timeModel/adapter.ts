@@ -1,5 +1,5 @@
 import { decayDaysToCycles } from "./constants";
-import { estimateTime, optimalHarvestWindow } from "./model";
+import { estimateTime, fillCycleEstimate, optimalHarvestWindow } from "./model";
 import { isMechanicOnly, spawnChance, type BioanalysisTier, type Requirement } from "./spawnChance";
 import type { DemandSpec, PlantingSpec, TimeEstimate } from "./types";
 
@@ -26,7 +26,7 @@ export interface MutationFacts {
 /** The subset of a crop or mutation record used to size the input wait. */
 export interface InputFacts {
   growth_stages: number | null;
-  /** Days before this input decays, if it is itself a mutation. 0 or absent = never. */
+  /** Days before this planted input decays. 0 or absent = never. */
   decay?: number;
 }
 
@@ -96,14 +96,76 @@ export interface EstimateResult extends TimeEstimate {
    * mechanic instead.
    */
   mechanicOnly: boolean;
+  /**
+   * The clock the planner should put in front of the player.
+   *
+   * `TimeEstimate` still prices repeated fixed harvest windows, which is the
+   * right throughput model for a demand larger than the standing spawn space.
+   * A demand that fits in one sowing stops as soon as its last required spot
+   * succeeds, so its visible clock comes from the persistent-spot stopping
+   * time instead. Keeping this named prevents a harvest instruction and a
+   * completion estimate from silently becoming the same number again.
+   */
+  completion: {
+    mode: "single-sowing" | "repeated-harvest" | "mechanic";
+    expectedRollCycles: number | null;
+    p50RollCycles: number | null;
+    p90RollCycles: number | null;
+    expectedSeconds: number;
+    varianceSeconds2: number;
+    p50Seconds: number;
+    p90Seconds: number;
+  };
 }
+
+const repeatedCompletion = (estimate: TimeEstimate): EstimateResult["completion"] => ({
+  mode: "repeated-harvest",
+  expectedRollCycles: null,
+  p50RollCycles: null,
+  p90RollCycles: null,
+  expectedSeconds: estimate.expectedSeconds,
+  varianceSeconds2: estimate.varianceSeconds2,
+  p50Seconds: estimate.p50Seconds,
+  p90Seconds: estimate.p90Seconds,
+});
+
+/** Time until a one-sowing goal is actually ready, rather than until its chosen harvest window ends. */
+const singleSowingCompletion = (
+  spec: PlantingSpec,
+  demand: DemandSpec,
+): EstimateResult["completion"] | null => {
+  const plots = Math.max(1, demand.plots);
+  const rollingSpots = spec.spots * plots;
+  if (demand.need <= 0 || demand.need > rollingSpots) return null;
+
+  const fill = fillCycleEstimate(rollingSpots, spec.spawnChance, demand.need);
+  if (!Number.isFinite(fill.expectedCycles)) return null;
+
+  // With real input growth, the first mutation roll lands on the final input
+  // maturation tick. With no growth to ride, the first roll is the next tick.
+  const cyclesBeforeFirstRoll = spec.inputStages > 0 ? spec.inputStages - 1 : 0;
+  const toReady = (rollCycles: number): number =>
+    Math.max(1, cyclesBeforeFirstRoll + rollCycles + spec.mutationStages);
+  const seconds = (rollCycles: number): number => toReady(rollCycles) * spec.stageSeconds;
+
+  return {
+    mode: "single-sowing",
+    expectedRollCycles: fill.expectedCycles,
+    p50RollCycles: fill.p50Cycles,
+    p90RollCycles: fill.p90Cycles,
+    expectedSeconds: seconds(fill.expectedCycles),
+    varianceSeconds2: fill.varianceCycles2 * spec.stageSeconds * spec.stageSeconds,
+    p50Seconds: seconds(fill.p50Cycles),
+    p90Seconds: seconds(fill.p90Cycles),
+  };
+};
 
 /**
  * The longest a planting can usefully sit before decay eats the result.
  *
  * Two clocks, and the tighter one wins: the mutations already spawned start
- * rotting, and any input that is itself a mutation rots too, invalidating the
- * layout. Inputs that never decay impose no limit.
+ * rotting, and planted inputs can expire too, invalidating the layout. Inputs
+ * that never decay impose no limit.
  */
 export const maxHarvestWindow = (mutation: MutationFacts, inputs: InputFacts[], stageSeconds: number): number => {
   const clocks = [mutation.decay, ...inputs.map((i) => i.decay ?? 0)]
@@ -154,7 +216,15 @@ export const estimate = (request: EstimateRequest): EstimateResult => {
   // such rather than dividing by a zero chance and printing "forever".
   if (mechanicOnly || spec.spawnChance <= 0) {
     const flat = estimateTime({ ...spec, spawnChance: 1 }, request.demand);
-    return { ...flat, parts, harvestWindow: 1, maxWindow, spawnChance: 0, mechanicOnly: true };
+    return {
+      ...flat,
+      parts,
+      harvestWindow: 1,
+      maxWindow,
+      spawnChance: 0,
+      mechanicOnly: true,
+      completion: { ...repeatedCompletion(flat), mode: "mechanic" },
+    };
   }
 
   const chosen =
@@ -169,5 +239,6 @@ export const estimate = (request: EstimateRequest): EstimateResult => {
     maxWindow,
     spawnChance: spec.spawnChance,
     mechanicOnly: false,
+    completion: singleSowingCompletion(spec, request.demand) ?? repeatedCompletion(chosen.estimate),
   };
 };

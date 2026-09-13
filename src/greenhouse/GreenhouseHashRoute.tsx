@@ -1,19 +1,24 @@
-import React, { Suspense, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { parseGreenhouseHash, type GreenhouseTool } from "./route";
+import {
+  greenhouseTargetFromLocation,
+  parseGreenhouseHash,
+  type GreenhouseTool,
+} from "./route";
+import { GreenhouseWorkspace } from "./GreenhouseWorkspace";
 
-interface GreenhouseHashRouteProps {
-  PlannerPage: React.ElementType;
-  SolverPage: React.ElementType;
-  DesignerPage: React.ElementType;
+export interface GreenhouseRouteWorkspaceProps {
+  focusTool: GreenhouseTool;
+  linkedTarget: string | null;
 }
 
-/** Selects a Greenhouse tool inside the provider shell from the URL fragment. */
-export const GreenhouseHashRoute: React.FC<GreenhouseHashRouteProps> = ({
-  PlannerPage,
-  SolverPage,
-  DesignerPage,
-}) => {
+interface GreenhouseHashRouteProps {
+  /** Injectable only so the hash adapter stays a small, server-renderable test. */
+  Workspace?: React.ComponentType<GreenhouseRouteWorkspaceProps>;
+}
+
+/** Keeps old fragment links while presenting one plot instead of three modes. */
+export const GreenhouseHashRoute: React.FC<GreenhouseHashRouteProps> = ({ Workspace = GreenhouseWorkspace }) => {
   const location = useLocation();
   const [nativeHash, setNativeHash] = useState<string | null>(null);
 
@@ -27,10 +32,6 @@ export const GreenhouseHashRoute: React.FC<GreenhouseHashRouteProps> = ({
 
   const hash = nativeHash ?? location.hash;
   const tool: GreenhouseTool = parseGreenhouseHash(hash).tool;
-  const Page = tool === "solver" ? SolverPage : tool === "designer" ? DesignerPage : PlannerPage;
-  return (
-    <Suspense fallback={null}>
-      <Page key={hash} />
-    </Suspense>
-  );
+  const linkedTarget = greenhouseTargetFromLocation(hash, location.search);
+  return <Workspace focusTool={tool} linkedTarget={linkedTarget} />;
 };

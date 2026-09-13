@@ -20,16 +20,16 @@ describe("headUrl", () => {
   const REAL = "94a02e1a4dcf7a61558c79cdabb4f78ed37ae82f965541b612af088cfcff2b1b";
 
   it("builds the verified endpoint form", () => {
-    expect(headUrl(REAL)).toBe(`https://mc-heads.net/avatar/${REAL}/64`);
+    expect(headUrl(REAL)).toBe(`https://mc-heads.net/head/${REAL}/64`);
   });
 
   it("lower-cases the hash so one texture is one URL", () => {
-    expect(headUrl(REAL.toUpperCase())).toBe(`https://mc-heads.net/avatar/${REAL}/64`);
+    expect(headUrl(REAL.toUpperCase())).toBe(`https://mc-heads.net/head/${REAL}/64`);
   });
 
   it("accepts the shorter hashes some textures use", () => {
     const short = "a".repeat(32);
-    expect(headUrl(short)).toBe(`https://mc-heads.net/avatar/${short}/64`);
+    expect(headUrl(short)).toBe(`https://mc-heads.net/head/${short}/64`);
   });
 
   it("refuses anything that is not a plain hex hash", () => {
@@ -52,7 +52,7 @@ describe("headUrl", () => {
     // The only interpolation point is the hash, so a rejected hash is a
     // request that never happens.
     const url = headUrl(REAL);
-    expect(url?.startsWith("https://mc-heads.net/avatar/")).toBe(true);
+    expect(url?.startsWith("https://mc-heads.net/head/")).toBe(true);
     expect(headUrl("evil.example/x")).toBeNull();
   });
 });

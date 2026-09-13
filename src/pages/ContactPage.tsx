@@ -33,6 +33,21 @@ const InfoGlyph: React.FC<{ label: string }> = ({ label }) => (
   </span>
 );
 
+// Kept here with the component because this is the page's clipboard boundary.
+// eslint-disable-next-line react-refresh/only-export-components
+export const copyContactValue = async (
+  value: string,
+  clipboard: Pick<Clipboard, "writeText"> | null | undefined = typeof navigator === "undefined" ? null : navigator.clipboard,
+): Promise<boolean> => {
+  if (!clipboard) return false;
+  try {
+    await clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /** A handle you can copy. The tick replaces the copy glyph in place, so the row never moves. */
 const CopyChip: React.FC<{ value: string }> = ({ value }) => {
   const [copied, setCopied] = useState(false);
@@ -40,8 +55,8 @@ const CopyChip: React.FC<{ value: string }> = ({ value }) => {
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const copy = () => {
-    void navigator.clipboard.writeText(value).catch(() => undefined);
+  const copy = async () => {
+    if (!await copyContactValue(value)) return;
     setCopied(true);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setCopied(false), 1200);
@@ -50,7 +65,7 @@ const CopyChip: React.FC<{ value: string }> = ({ value }) => {
   return (
     <button
       type="button"
-      onClick={copy}
+      onClick={() => { void copy(); }}
       aria-label={`Copy ${value}`}
       className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[12px] text-slate-200 transition-colors hover:border-emerald-500/50 hover:text-emerald-200 ${FOCUS}`}
     >

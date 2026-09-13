@@ -6,7 +6,7 @@ import type {
   JobProgress,
   MutationGoal,
 } from "../types/greenhouse";
-import { runSolve } from "../solverClient";
+import { createSolverClient, runSolve } from "../solverClient";
 import { runExpansion } from "../expansion";
 import type { SolverDataset } from "../solver";
 import { getDataset } from "../data/datasetStore";
@@ -50,19 +50,35 @@ export interface SolveJobCallbacks {
   onPreviewUpdate?: (result: SolveResponse) => void;
 }
 
+/*
+ * User-triggered work gets its own worker queue.
+ *
+ * The planner deliberately solves background economics in batches. Those
+ * requests are synchronous once they reach the shared worker, so a four-goal
+ * Auto-arrange posted behind a batch could spend many solver budgets waiting
+ * without emitting its own first progress event. A separate client keeps the
+ * interactive request immediate and also lets Stop terminate that work instead
+ * of leaving it queued behind unrelated calculations. Both clients still use
+ * the same canonical cache, dataset and solver implementation.
+ */
+const interactiveSolverClient = createSolverClient();
+
 /**
  * Solve a plot, reporting progress as it goes.
  *
  * The "WithJob" name is a leftover. This used to POST a job to a queue on
  * api.skyshards.com and poll it every 500ms until it finished. It now runs our
- * own solver in a Web Worker on the visitor's machine: no queue, no polling,
- * no network. The signature is unchanged so the page did not have to move.
+ * own solver in a dedicated Web Worker on the visitor's machine: no remote
+ * service queue, no polling, no network. The worker still has its ordinary
+ * local message queue, isolated above from background planner calculations.
+ * The signature is unchanged so the page did not have to move.
  *
  * Two of the three callbacks are deliberately never called now, and both
  * silences are improvements rather than gaps:
  *
- *   onQueuePosition - there is no queue to be behind any more. A local solve
- *   starts the moment it is asked for.
+ *   onQueuePosition - there is no shared or remote wait position to report.
+ *   Interactive calls have their own worker and begin independently of the
+ *   background planner queue.
  *
  *   onPreviewUpdate - this is the interesting one. The remote streamed partial
  *   layouts while it searched, and the results page renders
@@ -80,7 +96,7 @@ export async function solveGreenhouseWithJob(
   abortSignal?: AbortSignal
 ): Promise<SolveResponse> {
   try {
-    return await runSolve({
+    return await interactiveSolverClient.runSolve({
       cells: request.cells,
       targets: request.targets,
       dataset: solverDataset(),
@@ -93,6 +109,7 @@ export async function solveGreenhouseWithJob(
       options: {
         locks: request.locks,
         priorities: request.priorities,
+        removeUnusedCrops: request.removeUnusedCrops,
       },
       signal: abortSignal,
       onProgress: callbacks?.onProgress,

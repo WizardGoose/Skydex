@@ -4,6 +4,8 @@ import { getShards, subscribeShards } from "./shardsStore";
 import { getShardIds, subscribeShardIds } from "./shardIds";
 import { buildOwned } from "./aggregate";
 import type { OwnedIndex } from "./types";
+import { useInventoryManagement } from "./managementStore";
+import { useEnsureProfileSources, useParsedProfile } from "../networth/useNetworth";
 
 /**
  * What the player owns, from everywhere the site knows to look.
@@ -54,7 +56,10 @@ export interface UseOwnedOptions {
 const noUnsubscribe = () => {};
 
 export const useOwned = ({ items, manual = null, shardIds = null }: UseOwnedOptions): OwnedIndex => {
+  useEnsureProfileSources();
   const { snapshot, sections } = useIsland();
+  const profile = useParsedProfile();
+  const { enabledSources, inventory: managedInventory } = useInventoryManagement();
   const shardCounts = useSyncExternalStore(subscribeShards, getShards, getShards);
 
   /*
@@ -69,14 +74,36 @@ export const useOwned = ({ items, manual = null, shardIds = null }: UseOwnedOpti
 
   const ids = shardIds ?? discovered;
 
+  // Generic local overrides belong to the same shared holdings store as the
+  // source toggles. A page-specific manual layer remains useful for the
+  // greenhouse planner, but it wins only for keys it explicitly names.
+  const effectiveManual = useMemo(() => {
+    const shared = Object.fromEntries(managedInventory);
+    return manual ? { ...shared, ...manual } : shared;
+  }, [managedInventory, manual]);
+
   return useMemo(
     () =>
       buildOwned({
         items,
         island: { snapshot, sections },
+        profile: profile.parsed && profile.coverage && profile.fetchedAt !== null
+          ? {
+              parsed: profile.parsed,
+              inventoryShared: profile.coverage.inventoryShared,
+              sacksShared: profile.coverage.sacksShared,
+              vaultShared: profile.coverage.vaultShared,
+              museumShared: profile.coverage.museumShared,
+              fetchedAt: profile.fetchedAt,
+            }
+          : null,
         shards: ids ? { counts: shardCounts, ids } : null,
-        manual,
+        manual: effectiveManual,
+        // This set contains only the five island-container switches. The
+        // allocator keeps the legacy shard source separate and always includes
+        // it when the bridge is available.
+        enabledSources,
       }),
-    [items, snapshot, sections, shardCounts, ids, manual]
+    [items, snapshot, sections, profile.parsed, profile.coverage, profile.fetchedAt, shardCounts, ids, effectiveManual, enabledSources]
   );
 };

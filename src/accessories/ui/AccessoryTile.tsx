@@ -1,14 +1,16 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { Lock } from "lucide-react";
-import { FOCUS, NUM, RARITY_EDGE, RARITY_FILL, Tag, recombDisplayTier } from "../../ui/kit";
+import { Ban, CircleHelp, Hammer, Lock } from "lucide-react";
+import { FOCUS, NUM, RARITY_EDGE, RARITY_FILL, recombDisplayTier } from "../../ui/kit";
+import { ItemTooltip } from "../../ui/ItemTooltip";
+import { itemStatsFromRecord, type ItemTooltipMetadata, type ItemTooltipSection } from "../../ui/itemTooltipModel";
 import { ItemIcon } from "../../ui/ItemIcon";
-import { wikiArticleUrl } from "../../ui/WikiLink";
+import { fetchCraftingRecipe, type CraftingRecipeLookup } from "../../items/wikiCrafting";
 import { useHeadSrc } from "../headHashes";
-import { blockingLine, openRequirementLines, rarityClass, rarityTileClass } from "./display";
+import { blockingLine, openRequirementLines, rarityClass, readinessSummary } from "./display";
 import { SourceTag } from "./SourceTag";
 import { ACTIONABLE_EDGE, type ActionablePath } from "./sourceMeta";
 import type { AccessoryView } from "./types";
+import { ACQUISITION_LABEL } from "../acquisition";
 
 /**
  * One accessory, as a game slot rather than a card.
@@ -40,142 +42,20 @@ import type { AccessoryView } from "./types";
  *            where you stand, the upgrade line and its folded rungs. Same
  *            pattern as the slot grid's ItemTooltip: pointer-events-none,
  *            above the tile.
- *   click    the one action the card offered. A craftable accessory opens its
- *            crafting tree on Items; anything else opens its wiki article,
- *            through the same URL rule `WikiLink` uses. One destination per
- *            tile, so the whole square is honestly clickable, which the old
- *            card could never be with two links inside it.
+ *   click    pins or dismisses the tooltip. Once pinned, its item-name header
+ *            is the deliberate wiki action. The first click never throws the
+ *            reader out of the collection they were scanning.
  *   corner   only what scanning needs: "+N" when higher rungs of the line
  *            folded behind this tile, and the lock glyph when a measured
  *            requirement blocks it. Nothing else earns a chip.
  */
 
-/** Hairline row inside the hover card. Label quiet, value readable. */
-const CardRow: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <span className="flex items-baseline justify-between gap-3">
-    <span className="shrink-0 text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
-    <span className="text-right text-[11px] text-slate-200">{children}</span>
-  </span>
-);
-
-/**
- * The hover card. Follows `ItemTooltip`'s construction (rarity-tinted header
- * band, tight fact stack, hairlines) but is its own component because the
- * facts are different: an accessory tooltip answers "what stands in the way
- * and where do I go", not "what is this stack worth".
- */
-const AccessoryHoverCard: React.FC<{ entry: AccessoryView; recombed?: boolean }> = ({ entry, recombed = false }) => {
-  const blocked = blockingLine(entry);
-  const open = openRequirementLines(entry);
-  // The band wears the tier the player's copy actually holds: bumped when
-  // their stack is recombed, base otherwise. The words below say why.
-  const displayTier = recombDisplayTier(entry.tier, recombed);
-  // `rarityTileClass` answers a null tier with the kit's neutral cell, so an
-  // unknown tier keeps its own quiet band rather than a guessed tint.
-  const tint = rarityTileClass(displayTier);
-
-  return (
-    <span className="block w-60 overflow-hidden rounded-md border border-white/10 bg-slate-950 text-left shadow-lg">
-      <span className={`block border-b px-2 py-1.5 ${tint}`}>
-        <span className={`block text-[12px] font-medium leading-snug ${rarityClass(displayTier)}`}>
-          {entry.name}
-        </span>
-        {(displayTier || recombed) && (
-          <span className="mt-0.5 flex items-center gap-1.5">
-            {displayTier && (
-              <span className={`text-[10px] font-semibold uppercase tracking-wider ${rarityClass(displayTier)}`}>
-                {displayTier}
-              </span>
-            )}
-            {recombed && (
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-rarity-epic">recombobulated</span>
-            )}
-          </span>
-        )}
-      </span>
-
-      <span className="block space-y-1 px-2 py-1.5">
-        <CardRow label="Source">
-          <SourceTag source={entry.source} />
-        </CardRow>
-
-        {/*
-         * WHY, then where you stand. The blocking requirement leads because it
-         * is the thing to go and clear; the player's own number follows only
-         * when somebody actually measured it. Unknown requirements render as
-         * flat statements about the item, which is most of the value for a
-         * visitor with no key.
-         */}
-        {blocked && (
-          <span className="block text-[11px] leading-snug text-slate-300">
-            <Lock className="mr-1 inline h-2.5 w-2.5 shrink-0 align-[-1px] text-slate-500" aria-hidden />
-            {blocked.label}
-            {blocked.have !== null && (
-              <span className="text-slate-400">
-                , you have <span className={NUM}>{blocked.have}</span>
-              </span>
-            )}
-            <span className="block pl-3.5 text-[10px] text-slate-500">{blocked.how}</span>
-          </span>
-        )}
-
-        {!blocked &&
-          open.map((line) => (
-            <span key={line.label} className="block text-[11px] leading-snug text-slate-400">
-              Requires <span className="text-slate-300">{line.label}</span>
-              <span className="block text-[10px] text-slate-500">{line.how}</span>
-            </span>
-          ))}
-
-        {/* The mechanic in one sentence, wherever a transferable is hovered:
-            the same accessory stands in both areas, and the reader should not
-            have to work out why they saw it twice. */}
-        {entry.riftTransferable && (
-          <span className="block text-[11px] leading-snug text-slate-400">
-            <Tag className="mr-1">transferable</Tag>
-            Works both inside and outside the Rift, so it is listed in both areas.
-          </span>
-        )}
-
-        {entry.coveredByFamily && (
-          <span className="block text-[11px] leading-snug text-slate-400">
-            A higher tier of this line already covers it.
-          </span>
-        )}
-
-        {entry.foldedBehind !== null && (
-          <span className="block text-[11px] leading-snug text-slate-400">
-            Not the next step: a lower rung of this line comes first.
-          </span>
-        )}
-
-        {/*
-         * The folded rungs, in full and in their rarity colours. The "+N" chip
-         * on the tile is the summary; this is the list it stands for, so a
-         * player can see the whole ascent without unfolding anything.
-         */}
-        {entry.foldedHigher.length > 0 && (
-          <span className="block border-t border-white/8 pt-1 text-[10px] leading-snug text-slate-500">
-            Ahead in this line, folded into this tile:
-            <span className="block">
-              {entry.foldedHigher.map((rung, i) => (
-                <span key={rung.id} className={`text-[10px] ${rarityClass(rung.tier)}`}>
-                  {rung.name}
-                  {i < entry.foldedHigher.length - 1 ? <span className="text-slate-600">, </span> : null}
-                </span>
-              ))}
-            </span>
-          </span>
-        )}
-      </span>
-
-      {/* The click is one destination, so the card says which before it happens. */}
-      <span className="block border-t border-white/8 px-2 py-1 text-[10px] text-slate-500">
-        {entry.craftable ? "Click for the crafting tree on Items." : "Click for the wiki article."}
-      </span>
-    </span>
-  );
-};
+const mayHaveRecipe = (entry: AccessoryView): boolean =>
+  entry.craftable
+  || entry.ownedPrerequisite !== null
+  || entry.acquisition.category === "collections"
+  || entry.acquisition.category === "upgradePaths"
+  || entry.acquisition.category === "generalCrafting";
 
 export const AccessoryTile: React.FC<{
   entry: AccessoryView;
@@ -188,13 +68,9 @@ export const AccessoryTile: React.FC<{
   /** True when the player's own copy carries `rarity_upgrades`; the tile then wears the bumped tier. */
   recombed?: boolean;
   /**
-   * True only on the RIFT sections' tiles: a rift-transferable there wears a
-   * small corner mark so a reader understands why the same accessory also
-   * stands in its normal section. The mark says "both" because that is the
-   * fact a scanner needs and the full word "transferable" does not fit a
-   * 3.25rem cell at any honest size; the hover card carries the word and the
-   * sentence. Normal-section tiles skip the mark - there is nothing odd to
-   * explain about an accessory sitting in its own section.
+   * A Rift-transferable wears a small "both" mark so its inclusion on the
+   * normal page is readable at a glance. The full word does not fit a dense
+   * slot; the tooltip carries the precise transferability sentence.
    */
   markTransferable?: boolean;
 }> = ({ entry, actionable = null, recombed = false, markTransferable = false }) => {
@@ -208,6 +84,20 @@ export const AccessoryTile: React.FC<{
    * 59 that do not have a texture hash here. See `headHashes.ts`.
    */
   const headSrc = useHeadSrc(entry.id);
+  const [fallbackRecipe, setFallbackRecipe] = React.useState<CraftingRecipeLookup | null | undefined>(undefined);
+  const [recipeLoading, setRecipeLoading] = React.useState(false);
+  const recipeExpected = mayHaveRecipe(entry);
+  const indexedRecipe = entry.recipe?.length ? entry.recipe : null;
+  const recipe = indexedRecipe ?? fallbackRecipe?.ingredients ?? null;
+
+  const ensureRecipe = () => {
+    if (indexedRecipe || !recipeExpected || recipeLoading || fallbackRecipe !== undefined) return;
+    setRecipeLoading(true);
+    void fetchCraftingRecipe(entry.name)
+      .then((learned) => setFallbackRecipe(learned ?? null))
+      .catch(() => setFallbackRecipe(null))
+      .finally(() => setRecipeLoading(false));
+  };
 
   /*
    * Dimmed, not hidden, for the rungs the toggle revealed: a covered rung the
@@ -227,6 +117,59 @@ export const AccessoryTile: React.FC<{
    * kit's one radius scale.
    */
   const displayTier = recombDisplayTier(entry.tier, recombed);
+  const blocked = blockingLine(entry);
+  const open = openRequirementLines(entry);
+  const sections: ItemTooltipSection[] = [];
+  if (blocked) {
+    sections.push({
+      title: "Requirement",
+      tone: "warning",
+      lines: [
+        <span key="bar">
+          {blocked.label}
+          {blocked.have !== null ? <span className="text-slate-400">, you have <span className={NUM}>{blocked.have}</span></span> : null}
+        </span>,
+        <span key="how" className="text-slate-400">{blocked.how}</span>,
+      ],
+    });
+  } else if (open.length > 0) {
+    sections.push({
+      title: "Requirements",
+      lines: open.flatMap((line) => [
+        <span key={`${line.label}-bar`}>{line.label}</span>,
+        <span key={`${line.label}-how`} className="text-slate-400">{line.how}</span>,
+      ]),
+    });
+  }
+  if (entry.riftTransferable) sections.push({ title: "Transferable", tone: "bonus", lines: ["Works both inside and outside the Rift."] });
+
+  const skyDexSections: ItemTooltipSection[] = [];
+  if (entry.acquisition.detail || entry.acquisition.alternatives.length > 0) {
+    skyDexSections.push({
+      title: "Acquisition",
+      lines: [
+        ...(entry.acquisition.detail ? [entry.acquisition.detail] : []),
+        ...entry.acquisition.alternatives.map((route) => `Alternative: ${route}.`),
+      ],
+    });
+  }
+  if (entry.coveredByFamily) skyDexSections.push({ lines: ["A higher tier of this upgrade line already covers it."], tone: "muted" });
+  if (entry.foldedBehind !== null) skyDexSections.push({ lines: ["A lower rung of this upgrade line comes first."], tone: "muted" });
+  if (entry.foldedHigher.length > 0) skyDexSections.push({
+    title: "Next in this line",
+    lines: [<span key="rungs">{entry.foldedHigher.map((rung,index)=><React.Fragment key={rung.id}>{index>0?<span className="text-slate-600">, </span>:null}<span className={rarityClass(rung.tier)}>{rung.name}</span></React.Fragment>)}</span>],
+    tone: "muted",
+  });
+  if (entry.equivalentAlternatives && entry.equivalentAlternatives.length > 0) skyDexSections.push({
+    title: "Same Accessory Bag slot",
+    lines: [<span key="alternatives">{entry.equivalentAlternatives.map((alternative, index) => <React.Fragment key={alternative.id}>{index > 0 ? <span className="text-slate-600">, </span> : null}<span className={rarityClass(alternative.tier)}>{alternative.name}</span></React.Fragment>)}</span>],
+    tone: "muted",
+  });
+  const metadata: ItemTooltipMetadata[] = [
+    { label: "Acquisition", value: ACQUISITION_LABEL[entry.acquisition.category] },
+    { label: "Status", value: readinessSummary(entry) },
+    { label: "Raw source", value: <SourceTag source={entry.source} /> },
+  ];
   // The fallbacks are the kit's neutral cell (RARITY_TILE_UNKNOWN) split into
   // its halves, because here the border may belong to a different fact.
   const fill = (displayTier && RARITY_FILL[displayTier]) || "bg-white/5";
@@ -235,8 +178,15 @@ export const AccessoryTile: React.FC<{
     : (displayTier && RARITY_EDGE[displayTier]) || "border-white/10";
 
   const className =
-    `group relative flex aspect-square items-center justify-center rounded-md border ` +
+    `profile-accessory-tile group relative flex aspect-square cursor-pointer items-center justify-center rounded-md border ` +
     `${edge} ${fill} hover:ring-1 hover:ring-white/25 ${FOCUS}`;
+  const readinessMark = entry.readiness.kind === "unavailable"
+    ? <Ban className="profile-accessory-tile-signal profile-accessory-tile-signal--unavailable" aria-hidden />
+    : entry.readiness.kind === "unknown"
+      ? <CircleHelp className="profile-accessory-tile-signal profile-accessory-tile-signal--review" aria-hidden />
+      : entry.readiness.kind === "materialsUnknown" || entry.readiness.kind === "nextUpgrade"
+        ? <Hammer className="profile-accessory-tile-signal profile-accessory-tile-signal--recipe" aria-hidden />
+        : null;
 
   const body = (
     <>
@@ -247,62 +197,75 @@ export const AccessoryTile: React.FC<{
         // game's own id, which is what catharsis packs key their textures by.
         hypixelId={entry.id}
         lateSrc={headSrc}
-        size={32}
+        size={36}
         className={dimmed ? "opacity-50" : ""}
       />
 
-      {entry.foldedHigher.length > 0 && (
+      {readinessMark}
+
+      {(entry.foldedHigher.length > 0 || (entry.equivalentAlternatives?.length ?? 0) > 0) && (
         <span
-          className={`absolute right-0 top-0 rounded-[2px] bg-slate-950/85 px-0.5 text-[9px] leading-[1.3] ${NUM} text-slate-300`}
+          className={`profile-item-overlay-text absolute bottom-0.5 right-0.5 text-[9px] leading-[1.3] ${NUM} text-slate-300`}
         >
-          +{entry.foldedHigher.length}
+          +{entry.foldedHigher.length + (entry.equivalentAlternatives?.length ?? 0)}
         </span>
       )}
 
       {entry.blockedBy && (
-        <Lock className="absolute bottom-0.5 left-0.5 h-2.5 w-2.5 text-slate-400" aria-hidden />
+        <Lock className="absolute left-0.5 top-0.5 h-2.5 w-2.5 text-slate-400" aria-hidden />
       )}
 
       {markTransferable && entry.riftTransferable && (
         <span
-          className={`absolute bottom-0 right-0 rounded-[2px] border border-white/12 bg-slate-950/85 px-0.5 text-[9px] leading-[1.3] ${NUM} text-slate-300`}
+          className={`profile-item-overlay-text absolute bottom-0.5 left-0.5 text-[9px] leading-[1.3] ${NUM} text-slate-300`}
         >
           both
         </span>
       )}
 
-      {/* Hover card rather than a `title`: instant, and it carries the rarity
-          band, the requirement stack and the folded line list that a native
-          tooltip cannot. Same geometry as the slot grid's. */}
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1 hidden -translate-x-1/2 group-hover:block group-focus-visible:block">
-        <AccessoryHoverCard entry={entry} recombed={recombed} />
-      </span>
     </>
   );
 
-  /*
-   * Craftable entries hand off to the Items page, which owns the full cost
-   * tree; the query is the display name because that index matches on name.
-   * Everything else goes to its wiki article through the same URL rule
-   * `WikiLink` uses, in a new tab, exactly as every wiki link on the site.
-   */
-  return entry.craftable ? (
-    <Link
-      to={`/items?q=${encodeURIComponent(entry.name)}`}
-      aria-label={`${entry.name}: open the crafting tree`}
+  const trigger = (
+    <button
+      type="button"
+      aria-label={`${entry.name}: toggle item details`}
       className={className}
+      onPointerEnter={ensureRecipe}
+      onPointerDown={ensureRecipe}
+      onFocus={ensureRecipe}
     >
       {body}
-    </Link>
-  ) : (
-    <a
-      href={wikiArticleUrl(entry.name)}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`${entry.name}: open the wiki article`}
-      className={className}
+    </button>
+  );
+
+  const tooltipRecipe = indexedRecipe ? {
+    ingredients: indexedRecipe,
+    yields: entry.recipeYields,
+  } : recipe?.length ? {
+    ingredients: recipe,
+    yields: fallbackRecipe?.yields,
+  } : recipeExpected ? {
+    ingredients: [],
+    pending: recipeLoading || fallbackRecipe === undefined,
+    unavailable: fallbackRecipe === null,
+  } : null;
+
+  return (
+    <ItemTooltip
+      id={entry.id}
+      name={entry.name}
+      tier={entry.tier}
+      extra={recombed ? { recomb: true } : undefined}
+      icon={<ItemIcon name={entry.name} id={entry.itemId ?? undefined} hypixelId={entry.id} lateSrc={headSrc} size={32} />}
+      stats={itemStatsFromRecord(entry.stats)}
+      sections={sections}
+      recipe={tooltipRecipe}
+      metadata={metadata}
+      skyDexSections={skyDexSections}
+      wrapperClassName="profile-accessory-tile-wrap"
     >
-      {body}
-    </a>
+      {trigger}
+    </ItemTooltip>
   );
 };

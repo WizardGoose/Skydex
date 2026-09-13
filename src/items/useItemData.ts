@@ -47,10 +47,10 @@ export interface Item {
   name: string;
   hypixelId: string | null;
   /**
-   * True when this is a plain Minecraft recipe the crafting page hides by
-   * default; the site is for SkyBlock item crafting, not vanilla.
-   * Read off the crafting module's own `-- Vanilla Recipes` section, with a
-   * resource-tier rescue for misfiled entries; see `buildItemIndex`.
+   * True when this is a plain Minecraft recipe excluded from the SkyBlock
+   * catalogue and recipe planner.
+   * Read off the crafting module's own `-- Vanilla Recipes` section, with an
+   * explicit rescue for its misplaced SkyBlock cluster; see `buildItemIndex`.
    */
   vanilla?: boolean;
   /**
@@ -89,6 +89,8 @@ export interface Item {
   /** How many one craft produces. */
   yields: number;
   recipe: RecipeIngredient[] | null;
+  /** A supplemental recipe does not establish the player unlock requirements. */
+  recipeUnlocksUnknown?: boolean;
   /** Collection tiers that grant this item or its recipe. */
   unlocks?: CollectionUnlock[];
   /** Item ids this is an ingredient for, capped for payload size. */
@@ -188,7 +190,12 @@ const ensureRecipes = () => {
   fetchCraftingData()
     .then((snap) => {
       recipesInFlight = false;
-      publishRecipes({ items: snap.items, fetchedAt: snap.fetchedAt, loading: false, error: null });
+      publishRecipes({
+        items: snap.items,
+        fetchedAt: snap.warning ? null : snap.fetchedAt,
+        loading: false,
+        error: snap.warning ?? null,
+      });
     })
     .catch((e: Error) => {
       recipesInFlight = false;
@@ -469,8 +476,19 @@ export const buildCostTree = (
   let allPriced = true;
 
   for (const ing of item.recipe) {
-    const child = buildCostTree(ing.id, ing.qty * crafts, items, prices, ironman, branch, depth + 1, ing.name);
-    if (ing.alternatives) child.alternatives = ing.alternatives;
+    const candidates = [{ id: ing.id, name: ing.name }, ...(ing.alternatives ?? [])].filter(
+      (candidate, index, all) => all.findIndex((entry) => entry.id === candidate.id) === index
+    );
+    const costed = candidates.map((candidate) =>
+      buildCostTree(candidate.id, ing.qty * crafts, items, prices, ironman, branch, depth + 1, candidate.name)
+    );
+    const child = costed.reduce((best, candidate) => {
+      if (best.cost === null && candidate.cost !== null) return candidate;
+      if (candidate.cost !== null && best.cost !== null && candidate.cost < best.cost) return candidate;
+      return best;
+    });
+    const alternatives = candidates.filter((candidate) => candidate.id !== child.id);
+    if (alternatives.length > 0) child.alternatives = alternatives;
     node.children.push(child);
     if (child.cost === null) allPriced = false;
     else craftTotal += child.cost;

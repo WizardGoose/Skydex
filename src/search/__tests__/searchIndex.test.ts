@@ -131,7 +131,7 @@ describe("destination mapping", () => {
 
   it("sends a page query to the page's own family", () => {
     expect(dataRows("planner")[0]).toMatchObject({ destination: "greenhouse", href: "/greenhouse#planner" });
-    expect(dataRows("fusion calc")[0]).toMatchObject({ destination: "shards", href: "/fusion" });
+    expect(dataRows("fusion calc")[0]).toMatchObject({ destination: "shards", href: "/shards" });
     expect(dataRows("dashboard")[0]).toMatchObject({ destination: "site", href: "/dashboard" });
   });
 
@@ -210,7 +210,7 @@ describe("searchSite", () => {
     const out = searchSite(many, "sword");
     expect(out.rows).toHaveLength(MAX_ROWS);
     expect(out.moreInItems).toBe(40 - (MAX_ROWS - 1));
-    expect(out.moreHref).toBe("/items?q=sword");
+    expect(out.moreHref).toBe("/recipes?q=sword");
   });
 
   it("offers no overflow when everything fitted", () => {

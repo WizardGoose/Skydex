@@ -1,4 +1,5 @@
-import type { CollectionUnlock, ItemIndex, ItemRequirement } from "../items/useItemData";
+import { isPlayerItem } from "../items/itemAvailability";
+import type { CollectionUnlock, ItemIndex, ItemRequirement, RecipeIngredient } from "../items/useItemData";
 import { readRequirement, type Requirement } from "./requirements";
 import { norm } from "../items/wikiCrafting";
 import { stripColourCodes } from "../nbt/items";
@@ -48,6 +49,10 @@ export interface AccessoryEntry {
   itemId: string | null;
   /** A grid recipe exists in the wiki crafting index. */
   craftable: boolean;
+  /** Exact ingredients from the shared wiki recipe index, or null when it has none. */
+  recipe: RecipeIngredient[] | null;
+  /** Number produced by one recipe execution. */
+  recipeYields: number;
   /** Collection tiers that grant this item or its recipe, or null when none do. */
   unlocks: CollectionUnlock[] | null;
   /**
@@ -191,6 +196,31 @@ export interface AccessoryCatalogue {
   families: Record<string, AccessoryFamily>;
   stats: CatalogueStats;
 }
+
+/**
+ * Rows Hypixel currently labels as accessories even though they are not part
+ * of the player-facing accessory catalogue.
+ *
+ * This list is intentionally tiny and evidence-led. `OLD_BOOT` is a leather
+ * boot carrying the ACCESSORY category by mistake,
+ * `TEST_BUCKET_PLEASE_IGNORE` is an explicitly named test object, and the
+ * remaining three are the exact ADMIN entries identified by the official wiki
+ * catalogue. Ambiguous retired items stay visible until an authoritative
+ * source proves what should happen to them.
+ */
+export const ACCESSORY_EXCLUSIONS: ReadonlySet<string> = new Set([
+  "OLD_BOOT",
+  "TEST_BUCKET_PLEASE_IGNORE",
+  "ARTIFACT_OF_SPACE",
+  "GRIZZLY_PAW",
+  "TALISMAN_OF_SPACE",
+  "BINGO_HEIRLOOM",
+]);
+
+/** Whether an item belongs on the normal Accessories page. */
+export const isNormalAccessory = (
+  entry: Pick<AccessoryEntry, "rift" | "riftTransferable">
+): boolean => !entry.rift || entry.riftTransferable;
 
 /**
  * One entry of Hypixel's item resource, as far as this module cares.
@@ -363,9 +393,13 @@ export const buildFamilies = (items: HypixelAccessoryItem[]): Record<string, Acc
  */
 export const buildAccessoryCatalogue = (
   hypixelItems: HypixelAccessoryItem[],
-  items: ItemIndex
+  items: ItemIndex,
+  adminNames?: ReadonlySet<string>,
 ): AccessoryCatalogue => {
-  const accessories = hypixelItems.filter((i) => i.category === "ACCESSORY" && i.id);
+  const accessories = hypixelItems.filter(
+    (i) => i.category === "ACCESSORY" && i.id && !ACCESSORY_EXCLUSIONS.has(i.id)
+      && isPlayerItem(i.name ?? "", i.id, adminNames)
+  );
 
   /**
    * Two ways into the wiki index, tried in that order.
@@ -438,6 +472,8 @@ export const buildAccessoryCatalogue = (
       familyRank: usable && split ? split.rank : null,
       itemId,
       craftable: Boolean(indexed?.recipe && indexed.recipe.length > 0),
+      recipe: indexed?.recipe ?? null,
+      recipeYields: indexed?.yields ?? 1,
       unlocks: indexed?.unlocks && indexed.unlocks.length > 0 ? indexed.unlocks : null,
       // A requirement shape too broken to describe is dropped rather than
       // rendered as an empty chip; `readRequirement` answers null for those.

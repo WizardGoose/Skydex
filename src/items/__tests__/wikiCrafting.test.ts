@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { buildItemIndex, hasKnownCraftingRecipe, parseCraftingLua, slug, type HypixelItem, type ParsedRecipe } from "../wikiCrafting";
+import { describe, it, expect, vi } from "vitest";
+import { buildItemIndex, fetchCraftingData, hasKnownCraftingRecipe, parseCollectionLua, parseCraftingLua, slug, type HypixelItem, type ParsedRecipe } from "../wikiCrafting";
 import type { CollectionUnlock } from "../useItemData";
 
 /**
@@ -87,7 +87,7 @@ describe("buildItemIndex", () => {
     expect(index.diamond).toBeUndefined();
   });
 
-  it("keeps fishing nets when the wiki crafting module omits their output", () => {
+  it("fills the Gigantic Fishing Net grid when the wiki crafting module omits its output", () => {
     const index = buildItemIndex(recipes(), noUnlocks, [
       ...hypixel,
       { id: "GIGANTIC_FISHING_NET", name: "Gigantic Fishing Net", category: "FISHING_NET", tier: "LEGENDARY" },
@@ -97,13 +97,40 @@ describe("buildItemIndex", () => {
     expect(net).toBeDefined();
     expect(net.hypixelId).toBe("GIGANTIC_FISHING_NET");
     expect(net.category).toBe("FISHING_NET");
-    expect(net.recipe).toBeNull();
+    expect(net.recipe).toEqual([
+      { id: "enchanted_sea_lumies", name: "Enchanted Sea Lumies", qty: 128 },
+      { id: "reinforced_netting", name: "Reinforced Netting", qty: 1 },
+      { id: "sublime_silk", name: "Sublime Silk", qty: 32 },
+      { id: "turbo_fishing_net", name: "Turbo Fishing Net", qty: 1 },
+      { id: "flexbone", name: "Flexbone", qty: 64 },
+    ]);
     expect(hasKnownCraftingRecipe(net)).toBe(true);
+    expect(index.reinforced_netting.usedIn).toContain("gigantic_fishing_net");
   });
 
   it("does not call an arbitrary recipe-less resource item craftable", () => {
     const index = buildItemIndex(recipes(), noUnlocks, hypixel);
     expect(hasKnownCraftingRecipe(index.ashwreath)).toBe(false);
+  });
+
+  it("keeps every recipe-less accessory id when display names collide", () => {
+    const index = buildItemIndex(recipes(), noUnlocks, [
+      ...hypixel,
+      { id: "BEASTMASTER_CREST_UNCOMMON", name: "Beastmaster Crest", category: "ACCESSORY", tier: "UNCOMMON" },
+      { id: "BEASTMASTER_CREST_RARE", name: "Beastmaster Crest", category: "ACCESSORY", tier: "RARE" },
+      { id: "BEASTMASTER_CREST_EPIC", name: "Beastmaster Crest", category: "ACCESSORY", tier: "EPIC" },
+    ]);
+
+    const ids = Object.values(index)
+      .filter((item) => item.category === "ACCESSORY")
+      .map((item) => item.hypixelId)
+      .sort();
+    expect(ids).toEqual([
+      "BEASTMASTER_CREST_EPIC",
+      "BEASTMASTER_CREST_RARE",
+      "BEASTMASTER_CREST_UNCOMMON",
+    ]);
+    expect(index.beastmaster_crest.name).toBe("Beastmaster Crest");
   });
 
   it("invents nothing when Hypixel has never heard of an item", () => {
@@ -139,24 +166,83 @@ describe("buildItemIndex", () => {
     expect(index.enchanted_clock.tier).toBeNull();
   });
 
-  it("marks a vanilla-section recipe, unless Hypixel itself states a tier for it", () => {
-    // The rescue exists because the module's vanilla section has been edited
-    // wrong: eight real SkyBlock items (Juju Shortbow among them) sit in it,
-    // and Hypixel stating a rarity is the signal that pulls them back.
+  it("keeps the misplaced SkyBlock cluster without rescuing tiered Minecraft recipes", () => {
+    // The wiki's J cluster contains genuine SkyBlock recipes below its vanilla
+    // marker. The explicit rescue must not mistake a Hypixel-assigned rarity on
+    // an ordinary Minecraft object for a SkyBlock crafting grid.
     const withVanilla = new Map<string, ParsedRecipe>([
       ["Mutation Sack", { yields: 1, ingredients: [{ name: "Chocoberry", qty: 8, alternatives: [] }] }],
       ["Plain Door", { yields: 3, ingredients: [{ name: "Chocoberry", qty: 6, alternatives: [] }], vanilla: true }],
-      ["Misfiled Bow", { yields: 1, ingredients: [{ name: "Chocoberry", qty: 1, alternatives: [] }], vanilla: true }],
+      ["Crafting Table", { yields: 1, ingredients: [{ name: "Chocoberry", qty: 4, alternatives: [] }], vanilla: true }],
+      ["Juju Shortbow", { yields: 1, ingredients: [{ name: "Chocoberry", qty: 1, alternatives: [] }], vanilla: true }],
+      ["Jerry Helmet", { yields: 1, ingredients: [{ name: "Chocoberry", qty: 2, alternatives: [] }], vanilla: true }],
     ]);
-    const resource: HypixelItem[] = [...hypixel, { id: "MISFILED_BOW", name: "Misfiled Bow", tier: "EPIC" }];
+    const resource: HypixelItem[] = [
+      ...hypixel,
+      { id: "CRAFTING_TABLE", name: "Crafting Table", tier: "RARE" },
+      { id: "JUJU_SHORTBOW", name: "Juju Shortbow", tier: "EPIC" },
+    ];
     const index = buildItemIndex(withVanilla, noUnlocks, resource);
 
     expect(index.plain_door.vanilla).toBe(true);
-    // Tiered by Hypixel, so the misfile does not hide it.
-    expect(index.misfiled_bow.vanilla).toBeUndefined();
+    expect(index.crafting_table.vanilla).toBe(true);
+    expect(index.juju_shortbow.vanilla).toBeUndefined();
+    // This real SkyBlock recipe has no resource tier and is still rescued.
+    expect(index.jerry_helmet.vanilla).toBeUndefined();
     expect(index.mutation_sack.vanilla).toBeUndefined();
     // Ingredients of a vanilla recipe are not themselves flagged.
     expect(index.chocoberry.vanilla).toBeUndefined();
+    // The reverse index is also a SkyBlock catalogue: neither vanilla output
+    // becomes a destination, while both rescued SkyBlock recipes do.
+    expect(index.chocoberry.usedIn).toEqual(["mutation_sack", "juju_shortbow", "jerry_helmet"]);
+    expect(index.chocoberry.usedInTotal).toBe(3);
+  });
+
+  it("removes Minecraft formatting codes from official item identity", () => {
+    const index = buildItemIndex(new Map(), noUnlocks, [
+      { id: "SHINY_YELLOW_ROCK", name: "§eShiny Yellow Rock", category: "ACCESSORY", tier: "RARE" },
+    ]);
+
+    expect(index.shiny_yellow_rock.name).toBe("Shiny Yellow Rock");
+    expect(index.shiny_yellow_rock.hypixelId).toBe("SHINY_YELLOW_ROCK");
+  });
+});
+
+describe("fetchCraftingData resource fallback", () => {
+  it("keeps the live Hypixel catalogue when the wiki crafting module is unavailable", async () => {
+    const resource = {
+      items: [
+        {
+          id: "LIVE_TEST_ACCESSORY",
+          name: "Live Test Accessory",
+          category: "ACCESSORY",
+          tier: "RARE",
+        },
+      ],
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("api.hypixel.net")) {
+        return new Response(JSON.stringify(resource), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response("", { status: 404 });
+    }));
+
+    try {
+      const snapshot = await fetchCraftingData();
+      expect(snapshot.items.live_test_accessory).toMatchObject({
+        hypixelId: "LIVE_TEST_ACCESSORY",
+        category: "ACCESSORY",
+        tier: "RARE",
+        recipe: null,
+      });
+      expect(snapshot.warning).toBe("Crafting recipes responded 404");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -188,6 +274,25 @@ return {
 }`);
     expect(parsed.get("Sky Sword")?.vanilla).toBeUndefined();
     expect(parsed.size).toBe(1);
+  });
+});
+
+describe("parseCollectionLua indentation", () => {
+  it("does not assign a doubly-indented collection to the preceding block", () => {
+    const lua = `return {
+\t['Rotten Flesh'] = {
+\t\t[1] = { required = 50, reward = {{ 'Zombie Pickaxe', type = 'Recipe' }} },
+\t},
+\t\t['Ruby Veilshroom'] = {
+\t\t\t[3] = { required = 1000, reward = {{ 'Accretion Talisman', type = 'Recipe' }} },
+\t\t},
+}`;
+
+    const parsed = parseCollectionLua(lua);
+    expect(parsed.get("accretiontalisman")).toEqual([
+      { collection: "Ruby Veilshroom", tier: 3, required: 1000, type: "Recipe" },
+    ]);
+    expect(parsed.get("zombiepickaxe")?.[0].collection).toBe("Rotten Flesh");
   });
 });
 

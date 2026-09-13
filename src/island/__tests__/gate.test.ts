@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { makeGate, makeKeyedGate } from "../gate";
+import { makeGate, makeKeyedFloorGate, makeKeyedGate } from "../gate";
 
 /**
  * The one request gate, tested directly.
@@ -196,6 +196,67 @@ describe("makeGate: the floor", () => {
     const gate = makeGate(async () => 1, GAP);
     // Nothing has run, so the window is long past and the button is live.
     expect(gate.cooldownUntil()).toBeLessThanOrEqual(Date.now());
+  });
+});
+
+describe("makeKeyedFloorGate", () => {
+  it("keeps duplicate protection for the same identity", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const gate = makeKeyedFloorGate(async () => {
+        calls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return calls;
+      }, GAP);
+
+      const first = gate.run("profile-a");
+      const attached = gate.run("profile-a");
+      await vi.advanceTimersByTimeAsync(30);
+      expect(await first).toBe(1);
+      expect(await attached).toBe(1);
+      expect(await gate.run("profile-a")).toBeUndefined();
+      expect(calls).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not leave a new profile behind the previous profile's floor", async () => {
+    let calls = 0;
+    const gate = makeKeyedFloorGate(async (profile) => {
+      calls += 1;
+      return profile;
+    }, GAP);
+
+    expect(await gate.run("profile-a")).toBe("profile-a");
+    expect(await gate.run("profile-b")).toBe("profile-b");
+    expect(calls).toBe(2);
+  });
+
+  it("can forget a completed profile floor without detaching in-flight work", async () => {
+    vi.useFakeTimers();
+    try {
+      let calls = 0;
+      const gate = makeKeyedFloorGate(async () => {
+        calls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return calls;
+      }, GAP);
+
+      const first = gate.run("profile-a");
+      gate.reset("profile-a");
+      expect(gate.busy("profile-a")).toBe(true);
+      await vi.advanceTimersByTimeAsync(30);
+      expect(await first).toBe(1);
+
+      gate.reset("profile-a");
+      const second = gate.run("profile-a");
+      await vi.advanceTimersByTimeAsync(30);
+      expect(await second).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

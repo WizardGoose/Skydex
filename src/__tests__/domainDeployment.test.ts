@@ -50,7 +50,7 @@ describe("skydex.ca deployment contract", () => {
     expect(worker).toContain('const ENDPOINTS = {');
     expect(worker).not.toMatch(/HYPIXEL_API_KEY\s*[:=]\s*["'][^"']+["']/);
     expect(transport).toContain('const PRODUCTION_API_ORIGIN = "https://api.skydex.ca"');
-    expect(transport).toContain('new URL("/v1/hypixel/snapshot"');
+    expect(transport).toContain('profileApiUrl("/v1/hypixel/snapshot"');
     expect(transport).not.toContain('import.meta.env.VITE_');
   });
 

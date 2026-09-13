@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  EXPIRY_WARN_MS,
-  expiryLabel,
-  readExpiry,
-  stampExpiry,
-  uuidForName,
-  withoutPersonalApiKey,
-} from "../apiKey";
+import { EXPIRY_WARN_MS, expiryDateForInstant, expiryDateForKey, expiryInstantForDate, expiryInstantForKey, expiryLabel, identityMatches, identityTokenForAccess, readExpiry, stampExpiry, uuidForName, withoutPersonalApiKey } from "../apiKey";
 import type { KeyExpiry } from "../apiKey";
 
 /**
@@ -42,7 +35,7 @@ describe("production credential migration", () => {
       key: "old-personal-key",
       keyState: "valid",
       checkedAt: 123,
-      keyExpiresOn: "2027-03-09",
+      keyExpiresAt: 1_799_600_400_000,
       uuid: "b876ec32e396476ba1158438d83c67d4",
       name: "Wizard",
       profileId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -50,7 +43,7 @@ describe("production credential migration", () => {
       key: "",
       keyState: "unchecked",
       checkedAt: null,
-      keyExpiresOn: null,
+      keyExpiresAt: null,
       uuid: "b876ec32e396476ba1158438d83c67d4",
       name: "Wizard",
       profileId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -274,7 +267,7 @@ describe("uuidForName", () => {
 });
 
 /**
- * The stamp written beside a key the moment one is typed into the tour.
+ * The stamp written beside a key the moment one is typed into either surface.
  *
  * Pure and clock-free like the rest of this file: every `now` below is an
  * absolute UTC instant, because the stamp is a UTC calendar date and pinning
@@ -312,5 +305,55 @@ describe("stampExpiry", () => {
 
   it("is a plain YYYY-MM-DD with nothing of the time left on it", () => {
     expect(stampExpiry(local(2026, 8, 9, 23, 59))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("expiryDateForKey", () => {
+  const now = new Date(2026, 7, 9, 12).getTime();
+
+  it("gives every non-empty key the same 47-hour stamp used by the tutorial", () => {
+    expect(expiryDateForKey("new-key", now)).toBe(stampExpiry(now));
+  });
+
+  it("clears the expiry when the key field is emptied", () => {
+    expect(expiryDateForKey("", now)).toBeNull();
+  });
+});
+
+describe("expiry instants", () => {
+  const lateNight = new Date(2026, 7, 9, 23, 30).getTime();
+
+  it("keeps the full 47-hour window for a late-night paste", () => {
+    const at = expiryInstantForKey("late-key", lateNight);
+    if (at === null) throw new Error("expected a non-empty key to get an expiry instant");
+    expect(at - lateNight).toBe(47 * HOUR);
+    expect(expiryDateForInstant(at)).toBe("2026-08-11");
+    const countdown = readExpiry(at, lateNight);
+    if (countdown === null) throw new Error("expected the exact expiry instant to be readable");
+    expect(countdown.msLeft).toBe(47 * HOUR);
+  });
+
+  it("maps a manual date to local midnight at the start of that day", () => {
+    const at = expiryInstantForDate("2026-08-11");
+    if (at === null) throw new Error("expected a real manual date to parse");
+    expect(at).toBe(midnight("2026-08-11"));
+    expect(expiryDateForInstant(at)).toBe("2026-08-11");
+    const oneMillisecondBefore = readExpiry(at, at - 1);
+    if (oneMillisecondBefore === null) throw new Error("expected the manual date to be readable");
+    expect(oneMillisecondBefore.msLeft).toBe(1);
+    expect(readExpiry(at, at)?.state).toBe("expired");
+  });
+});
+
+describe("identityTokenForAccess", () => {
+  const access = { key: "secret-key", uuid: "aaaaaaaaaaaa4aaaaaaaaaaaaaaaaaaa", profileId: "profile-a" };
+
+  it("is stable and does not expose credential material", () => {
+    const token = identityTokenForAccess(access);
+    expect(token).toBe(identityTokenForAccess(access));
+    expect(token).not.toContain(access.key);
+    expect(identityMatches(token, access)).toBe(true);
+    expect(identityMatches(token, { ...access, profileId: "profile-b" })).toBe(false);
+    expect(identityTokenForAccess({ ...access, key: "other-secret" })).not.toBe(token);
   });
 });

@@ -1,0 +1,61 @@
+.profile-crimson-content { gap: 0.68rem; }
+.profile-crimson-current,
+.profile-crimson-kuudra,
+.profile-crimson-trophies { display: grid; min-width: 0; gap: 0.58rem; padding: 0.72rem; border: 1px solid rgb(255 255 255 / 0.07); border-radius: 0.54rem; background: rgb(6 11 17 / 0.38); }
+.profile-crimson-current > header,
+.profile-crimson-kuudra > header,
+.profile-crimson-trophies > header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 0.7rem; }
+.profile-crimson-current > header > div,
+.profile-crimson-trophies > header > div { display: flex; min-width: 0; align-items: center; gap: 0.48rem; }
+.profile-crimson-current > header svg,
+.profile-crimson-trophies > header svg { width: 0.92rem; height: 0.92rem; color: rgb(229 114 78 / 0.84); }
+.profile-crimson-current > header > div > span { display: grid; min-width: 0; gap: 0.1rem; }
+.profile-crimson-current header small,
+.profile-crimson-kuudra header span,
+.profile-crimson-trophies header span,
+.profile-crimson-trophy-detail header small { color: rgb(158 173 186 / 0.62); font-size: 0.55rem; }
+.profile-crimson-current header strong,
+.profile-crimson-kuudra header strong,
+.profile-crimson-trophies header strong { color: #e5e9ec; font-size: 0.7rem; }
+.profile-crimson-current header b { color: rgb(220 172 147 / 0.78); font-size: 0.56rem; white-space: nowrap; }
+.profile-crimson-reputation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; border: 1px solid rgb(255 255 255 / 0.06); border-radius: 0.42rem; }
+.profile-crimson-reputation > div { display: grid; min-width: 0; gap: 0.2rem; padding: 0.58rem 0.64rem; border-left: 1px solid rgb(255 255 255 / 0.055); background: rgb(7 12 18 / 0.42); }
+.profile-crimson-reputation > div:first-child { border-left: 0; }
+.profile-crimson-reputation > div.is-current { background: rgb(52 20 17 / 0.36); box-shadow: inset 0 2px 0 rgb(224 102 67 / 0.42); }
+.profile-crimson-reputation span { color: rgb(157 174 188 / 0.66); font-size: 0.56rem; }
+.profile-crimson-reputation strong { color: rgb(225 232 237 / 0.86); font-size: 0.75rem; }
+.profile-crimson-kuudra-track { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); min-width: 0; overflow: hidden; border: 1px solid rgb(255 255 255 / 0.065); border-radius: 0.44rem; }
+.profile-crimson-kuudra-track > div { display: grid; min-width: 0; gap: 0.18rem; padding: 0.58rem 0.4rem; border-left: 1px solid rgb(255 255 255 / 0.055); text-align: center; background: rgb(10 12 17 / 0.44); }
+.profile-crimson-kuudra-track > div:first-child { border-left: 0; }
+.profile-crimson-kuudra-track span { color: rgb(231 142 110 / 0.78); font-size: 0.56rem; }
+.profile-crimson-kuudra-track strong { color: rgb(222 230 236 / 0.84); font-size: 0.64rem; overflow-wrap: anywhere; }
+.profile-crimson-trophy-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(14rem, 0.72fr); min-width: 0; align-items: start; gap: 0.58rem; }
+.profile-crimson-trophy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(3.35rem, 1fr)); min-width: 0; gap: 0.34rem; }
+.profile-crimson-trophy-wrap,
+.profile-crimson-trophy-wrap > .profile-item-tile-wrap { display: block; min-width: 0; width: 100%; }
+.profile-crimson-obfuscated-icon { display: grid; width: 2.45rem; height: 2.45rem; place-items: center; border: 1px dashed rgb(255 255 255 / 0.09); border-radius: 0.34rem; color: rgb(137 150 163 / 0.28); background: rgb(3 7 11 / 0.4); }
+.profile-crimson-obfuscated-icon svg { width: 0.9rem; height: 0.9rem; }
+.profile-crimson-trophy-detail { display: grid; min-width: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--rarity-color, #8795a2) 38%, transparent); border-radius: 0.46rem; background: color-mix(in srgb, var(--rarity-color, #8795a2) 6%, rgb(6 10 16 / 0.88)); }
+.profile-crimson-trophy-detail > header { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; min-width: 0; align-items: center; gap: 0.52rem; padding: 0.58rem; border-bottom: 1px solid rgb(255 255 255 / 0.06); }
+.profile-crimson-trophy-detail > header > span { display: grid; width: 3rem; height: 3rem; place-items: center; }
+.profile-crimson-trophy-detail > header > div { display: grid; min-width: 0; gap: 0.1rem; }
+.profile-crimson-trophy-detail h3 { margin: 0; color: #e0e8ed; font-size: 0.66rem; overflow-wrap: anywhere; }
+.profile-crimson-trophy-detail header > strong { color: rgb(234 197 103 / 0.82); font-size: 0.65rem; }
+.profile-crimson-trophy-detail > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.profile-crimson-trophy-detail > div > div { display: grid; gap: 0.12rem; padding: 0.5rem 0.58rem; border-bottom: 1px solid rgb(255 255 255 / 0.052); }
+.profile-crimson-trophy-detail > div > div:nth-child(odd) { border-right: 1px solid rgb(255 255 255 / 0.052); }
+.profile-crimson-trophy-detail > div span { color: rgb(155 172 185 / 0.62); font-size: 0.52rem; text-transform: capitalize; }
+.profile-crimson-trophy-detail > div strong { color: rgb(217 226 233 / 0.82); font-size: 0.61rem; }
+.profile-crimson-trophy-detail > p { margin: 0; padding: 0.48rem 0.58rem; color: rgb(151 166 178 / 0.58); font-size: 0.51rem; }
+.profile-crimson-depth { gap: 0.45rem; }
+.profile-crimson-value-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-width: 0; }
+.profile-crimson-value-row { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.48rem 0.56rem; border-bottom: 1px solid rgb(255 255 255 / 0.052); }
+.profile-crimson-value-row > span { display: flex; min-width: 0; align-items: center; gap: 0.35rem; color: rgb(172 189 201 / 0.72); font-size: 0.56rem; }
+.profile-crimson-value-row svg { width: 0.75rem; height: 0.75rem; color: rgb(224 107 72 / 0.72); }
+.profile-crimson-value-row strong { color: rgb(222 230 236 / 0.84); font-size: 0.61rem; }
+.profile-crimson-contacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); min-width: 0; }
+.profile-crimson-contacts span { display: flex; min-width: 0; align-items: center; gap: 0.35rem; padding: 0.46rem 0.55rem; border-bottom: 1px solid rgb(255 255 255 / 0.052); color: rgb(177 193 204 / 0.72); font-size: 0.56rem; }
+.profile-crimson-contacts svg { width: 0.75rem; height: 0.75rem; color: rgb(224 139 106 / 0.65); }
+@media (max-width: 900px) { .profile-crimson-trophy-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 620px) { .profile-crimson-kuudra-track { grid-template-columns: repeat(2, minmax(0, 1fr)); } .profile-crimson-kuudra-track > div:nth-child(odd) { border-left: 0; } .profile-crimson-kuudra-track > div:nth-child(n + 3) { border-top: 1px solid rgb(255 255 255 / 0.055); } .profile-crimson-value-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 420px) { .profile-crimson-current > header { align-items: flex-start; flex-direction: column; } .profile-crimson-reputation { grid-template-columns: minmax(0, 1fr); } .profile-crimson-reputation > div { border-left: 0; border-top: 1px solid rgb(255 255 255 / 0.055); } .profile-crimson-reputation > div:first-child { border-top: 0; } .profile-crimson-trophy-detail > header { grid-template-columns: 2.7rem minmax(0, 1fr); } .profile-crimson-trophy-detail header > strong { grid-column: 2; } }

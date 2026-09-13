@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { solveGreenhouseDirect } from "../services/greenhouseService";
-import { cropBill, FULL_GRID, PRUNE_UNUSED_CROPS } from "./useSolvedLayout";
+import {
+  cropBill,
+  FULL_GRID,
+  greenhouseCellCacheSuffix,
+  PRUNE_UNUSED_CROPS,
+} from "./useSolvedLayout";
 import { solveGoal } from "../solver/request";
 import type { PlotEconomy } from "./solverPlan";
 import { SIZING_ROUNDS, sameSizing } from "./plotSizing";
@@ -28,13 +33,16 @@ const BATCH = 5;
 /**
  * The cache key for one solve.
  *
- * A maximize answer keys on the mutation alone, which is the key this cache has
- * always used and the one the shipped precompute is filed under, so nothing
- * about the opening burst changes. A right-sized answer is a DIFFERENT question
- * with a different answer, so it gets its own key rather than overwriting the
- * maximize entry that every sizing decision is measured against.
+ * A full 100-cell maximize answer keeps the mutation-only key used by the
+ * shipped precompute. A player's smaller unlocked shape is a different
+ * question, so both maximized and right-sized answers carry that cell shape
+ * rather than borrowing a plausible answer from a different greenhouse.
  */
-const keyFor = (id: string, spots?: number): string => (spots === undefined ? id : `${id}#${spots}`);
+const keyFor = (
+  id: string,
+  spots?: number,
+  cells: readonly [number, number][] = FULL_GRID,
+): string => `${spots === undefined ? id : `${id}#${spots}`}${greenhouseCellCacheSuffix(cells)}`;
 
 export interface SolverEconomies {
   /** The economy to plan with: right-sized where one was asked for. */
@@ -69,9 +77,13 @@ export interface SolverEconomies {
  * preview answer the same question with the same bill, and the test that pins
  * them together drives this function directly.
  */
-export const solveEconomy = async (id: string, spots?: number): Promise<PlotEconomy | null> => {
+export const solveEconomy = async (
+  id: string,
+  spots?: number,
+  cells: [number, number][] = FULL_GRID,
+): Promise<PlotEconomy | null> => {
   try {
-    const res = await solveGreenhouseDirect(FULL_GRID, [solveGoal(id, spots)], undefined, PRUNE_UNUSED_CROPS);
+    const res = await solveGreenhouseDirect(cells, [solveGoal(id, spots)], undefined, PRUNE_UNUSED_CROPS);
     const crops = cropBill(res.placements);
     const yields = res.mutations.length;
     return yields > 0 ? { yield: yields, crops } : null;
@@ -94,15 +106,19 @@ export type RefineSizing = (
 ) => Record<string, number>;
 
 /** Everything the cache knows right now, sized where a size was asked for. */
-const readEconomies = (ids: string[], sizing: Record<string, number>) => {
+const readEconomies = (
+  ids: string[],
+  sizing: Record<string, number>,
+  cells: readonly [number, number][],
+) => {
   const economies: Record<string, PlotEconomy | null> = {};
   const fullYields: Record<string, number> = {};
   for (const id of ids) {
-    const full = cache.get(id);
+    const full = cache.get(keyFor(id, undefined, cells));
     if (full === undefined) continue;
     if (full) fullYields[id] = full.yield;
     const spots = sizing[id];
-    const sized = spots === undefined ? undefined : cache.get(keyFor(id, spots));
+    const sized = spots === undefined ? undefined : cache.get(keyFor(id, spots, cells));
     economies[id] = sized === undefined ? full : sized;
   }
   return { economies, fullYields };
@@ -132,9 +148,18 @@ const readEconomies = (ids: string[], sizing: Record<string, number>) => {
  *                Re-running is cheap when nothing really changed. Round zero is
  *                already cached, `refine` returns the same map, and `sameSizing`
  *                stops the loop before it asks the solver anything.
+ * @param cells    the actual usable Hypixel greenhouse cells. Full-grid callers
+ *                keep using the shipped precompute; other shapes are solved
+ *                and cached under their own canonical cell key.
  */
-export const useSolverEconomies = (ids: string[], refine?: RefineSizing, refineKey = ""): SolverEconomies => {
+export const useSolverEconomies = (
+  ids: string[],
+  refine?: RefineSizing,
+  refineKey = "",
+  cells: [number, number][] = FULL_GRID,
+): SolverEconomies => {
   const signature = [...ids].sort().join("|");
+  const cellScope = greenhouseCellCacheSuffix(cells);
   const [sizing, setSizing] = useState<Record<string, number>>({});
   const [, bump] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -159,6 +184,7 @@ export const useSolverEconomies = (ids: string[], refine?: RefineSizing, refineK
   useEffect(() => {
     if (!signature) return;
     const wanted = signature.split("|");
+    setSizing({});
 
     let cancelled = false;
 
@@ -171,7 +197,7 @@ export const useSolverEconomies = (ids: string[], refine?: RefineSizing, refineK
         for (let i = 0; i < missing.length; i += BATCH) {
           if (cancelled) break;
           const slice = missing.slice(i, i + BATCH);
-          const results = await Promise.all(slice.map((j) => solveEconomy(j.id, j.spots)));
+          const results = await Promise.all(slice.map((j) => solveEconomy(j.id, j.spots, cells)));
           slice.forEach((j, n) => {
             cache.set(j.key, results[n]);
             inFlight.delete(j.key);
@@ -185,9 +211,9 @@ export const useSolverEconomies = (ids: string[], refine?: RefineSizing, refineK
 
     (async () => {
       try {
-        // Round zero: maximize everything. Unchanged, and still the shape the
-        // shipped precompute answers.
-        await run(wanted.map((id) => ({ id, key: keyFor(id) })));
+        // Round zero: maximize everything. A full grid can use the shipped
+        // precompute; a profile-specific shape resolves into its own cache key.
+        await run(wanted.map((id) => ({ id, key: keyFor(id, undefined, cells) })));
         if (cancelled) return;
 
         /*
@@ -198,12 +224,12 @@ export const useSolverEconomies = (ids: string[], refine?: RefineSizing, refineK
          */
         let current: Record<string, number> = {};
         for (let round = 0; round < SIZING_ROUNDS && refineRef.current; round++) {
-          const { economies, fullYields } = readEconomies(wanted, current);
+          const { economies, fullYields } = readEconomies(wanted, current, cells);
           const next = refineRef.current(economies, fullYields);
           if (sameSizing(next, current)) break;
 
           current = next;
-          await run(Object.entries(current).map(([id, spots]) => ({ id, spots, key: keyFor(id, spots) })));
+          await run(Object.entries(current).map(([id, spots]) => ({ id, spots, key: keyFor(id, spots, cells) })));
           if (cancelled) return;
           if (active.current) setSizing(current);
         }
@@ -217,7 +243,7 @@ export const useSolverEconomies = (ids: string[], refine?: RefineSizing, refineK
     return () => {
       cancelled = true;
     };
-  }, [signature, refineKey]);
+  }, [cellScope, signature, refineKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const wanted = signature ? signature.split("|") : [];
   const economies: Record<string, PlotEconomy | null> = {};
@@ -225,7 +251,8 @@ export const useSolverEconomies = (ids: string[], refine?: RefineSizing, refineK
   const loading: string[] = [];
 
   for (const id of wanted) {
-    const full = cache.has(id) ? cache.get(id)! : undefined;
+    const fullKey = keyFor(id, undefined, cells);
+    const full = cache.has(fullKey) ? cache.get(fullKey)! : undefined;
     if (full === undefined) {
       loading.push(id);
       continue;
@@ -239,7 +266,7 @@ export const useSolverEconomies = (ids: string[], refine?: RefineSizing, refineK
      * blanking a row and taking the whole page's unit maps down with it.
      */
     const spots = sizing[id];
-    const sized = spots === undefined ? undefined : cache.get(keyFor(id, spots));
+    const sized = spots === undefined ? undefined : cache.get(keyFor(id, spots, cells));
     economies[id] = sized === undefined ? full : sized;
     if (spots !== undefined && sized === undefined) loading.push(id);
   }

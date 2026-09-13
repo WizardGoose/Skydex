@@ -10,6 +10,8 @@
  * explicit low-level test seam and is never selected by the app.
  */
 
+import { profileApiUrl } from "./profileApiUrl";
+
 export interface HypixelRequest {
   url: string;
   init: RequestInit;
@@ -58,7 +60,10 @@ const PRODUCTION_API_ORIGIN = "https://api.skydex.ca";
 const CLIENT_ID_KEY = "skydex.client.v1";
 const BROWSER_CACHE_NAME = "skydex-hypixel-v1";
 const MAX_BROWSER_RESOURCES = 36;
-const STALE_MS = 24 * 60 * 60 * 1000;
+// A last-good profile remains useful during an outage, but is never fresh.
+const STALE_MS = 30 * 24 * 60 * 60 * 1000;
+const STORAGE_TIMEOUT_MS = 500;
+const SNAPSHOT_TIMEOUT_MS = 10_000;
 
 const RESOURCE_TTL_MS: Record<ResourceName, number> = {
   profiles: 5 * 60 * 1000,
@@ -156,7 +161,7 @@ export const buildHypixelRequest = (
   if (usesProductionHypixelApi(production)) {
     const route = resourceRoute(upstreamUrl);
     const definition = PRODUCTION_ENDPOINTS[upstream.pathname];
-    const url = new URL(`/v1/hypixel/${route.endpoint}`, PRODUCTION_API_ORIGIN);
+    const url = profileApiUrl(`/v1/hypixel/${route.endpoint}`);
     url.searchParams.set(definition.parameter, route.id);
     return {
       url: url.toString(),
@@ -186,6 +191,20 @@ const browserCache = async (): Promise<Cache | null> => {
     return globalThis.caches?.open ? await globalThis.caches.open(BROWSER_CACHE_NAME) : null;
   } catch {
     return null;
+  }
+};
+
+const boundedCacheRead = async <T>(read: Promise<T>, fallback: T): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      read,
+      new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), STORAGE_TIMEOUT_MS); }),
+    ]);
+  } catch {
+    return fallback;
+  } finally {
+    clearTimeout(timer);
   }
 };
 
@@ -253,14 +272,13 @@ const writeBrowserResource = async (
   trimMemoryResources();
   if (route.endpoint === "profiles") rememberProfileOwners(resource.body, route.id);
 
-  const cache = await browserCache();
-  if (!cache) return;
-  try {
+  // Disk is optional and must not delay a successful network response.
+  void (async () => {
+    const cache = await browserCache();
+    if (!cache) return;
     await cache.put(browserCacheRequest(route), responseFor(resource));
     await prunePersistentCache(cache);
-  } catch {
-    // Browser storage is an optimisation. The in-memory copy remains valid.
-  }
+  })().catch(() => undefined);
 };
 
 const readBrowserResource = async (
@@ -271,13 +289,13 @@ const readBrowserResource = async (
   let resource = memoryResources.get(resourceKey(route)) ?? null;
 
   if (!resource) {
-    const cache = await browserCache();
+    const cache = await boundedCacheRead(browserCache(), null);
     try {
-      const stored = cache ? await cache.match(browserCacheRequest(route)) : null;
+      const stored = cache ? await boundedCacheRead(cache.match(browserCacheRequest(route)), undefined) : null;
       if (stored) {
         const body = await stored.text();
         const fetchedAt = Number(stored.headers.get("x-skydex-fetched-at"));
-        if (Number.isFinite(fetchedAt)) {
+        if (Number.isFinite(fetchedAt) && fetchedAt > 0 && fetchedAt <= now) {
           resource = {
             body,
             fetchedAt,
@@ -298,6 +316,10 @@ const readBrowserResource = async (
   if (allowStale && age <= STALE_MS) return responseFor(resource, "browser-stale");
   return null;
 };
+
+/** Read a matching last-good resource without waiting for the network. */
+export const readCachedHypixelResource = (upstreamUrl: string): Promise<Response | null> =>
+  readBrowserResource(resourceRoute(upstreamUrl), true);
 
 const failedRequest = async (response: Response): Promise<FailedRequest> => ({
   status: response.status,
@@ -358,20 +380,21 @@ const storeSnapshot = async (snapshot: ProductionSnapshot) => {
 const loadSnapshot = (
   uuid: string,
   profileId: string | undefined,
-  signal: AbortSignal,
 ): Promise<SnapshotLoad> => {
   const key = `${uuid}:${profileId ?? "selected"}`;
   const existing = pendingSnapshots.get(key);
   if (existing) return existing;
 
   const pending = (async (): Promise<SnapshotLoad> => {
-    const url = new URL("/v1/hypixel/snapshot", PRODUCTION_API_ORIGIN);
+    const url = profileApiUrl("/v1/hypixel/snapshot");
     url.searchParams.set("uuid", uuid);
     if (profileId) url.searchParams.set("profile", profileId);
     const response = await fetch(url.toString(), {
       cache: "no-store",
       headers: productionHeaders(),
-      signal,
+      // The shared request belongs to the cache, not whichever component
+      // mounted first. Unmounting that component must not abort other readers.
+      signal: AbortSignal.timeout(SNAPSHOT_TIMEOUT_MS),
     });
     if (!response.ok) return { ok: false, failure: await failedRequest(response) };
 
@@ -412,6 +435,7 @@ export const fetchProductionHypixelResource = async (
   upstreamUrl: string,
   signal: AbortSignal,
 ): Promise<Response> => {
+  signal.throwIfAborted();
   const route = resourceRoute(upstreamUrl);
   const fresh = await readBrowserResource(route, false);
   if (fresh) return fresh;
@@ -421,11 +445,12 @@ export const fetchProductionHypixelResource = async (
   if (uuid) {
     let snapshot: SnapshotLoad;
     try {
-      snapshot = await loadSnapshot(uuid, route.endpoint === "profiles" ? undefined : route.id, signal);
+      snapshot = await loadSnapshot(uuid, route.endpoint === "profiles" ? undefined : route.id);
     } catch {
       if (stale) return stale;
       throw new Error("Could not reach the Skydex profile API.");
     }
+    signal.throwIfAborted();
     if (snapshot.ok) {
       const seeded = await readBrowserResource(route, true);
       if (seeded) return seeded;

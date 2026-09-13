@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { nbt, writeNbtBlob } from "../../nbt";
-import { parseMemberItems, readCoinBalances, API_CATEGORIES } from "../parseItems";
+import { parseMemberItems, parseMemberItemsWithLayouts, readCoinBalances, API_CATEGORIES } from "../parseItems";
 import blobFixture from "./fixtures/blobs.json";
 
 /**
@@ -36,6 +36,29 @@ const slot = (index: number) => ({ type: 0, data: BLOBS[index % BLOBS.length].ba
 const toolkitSlot = async (id: string) => ({
   type: 0,
   data: await writeNbtBlob("", nbt.compound({ id: nbt.string(id) })),
+});
+
+const positionalContainer = async () => ({
+  type: 0,
+  data: await writeNbtBlob("", nbt.compound({
+    i: nbt.list("compound", [
+      nbt.compound({
+        Count: nbt.byte(3),
+        tag: nbt.compound({
+          ExtraAttributes: nbt.compound({ id: nbt.string("FIRST_ITEM") }),
+          display: nbt.compound({ Name: nbt.string("First Item") }),
+        }),
+      }),
+      nbt.compound(),
+      nbt.compound({
+        Count: nbt.byte(1),
+        tag: nbt.compound({
+          ExtraAttributes: nbt.compound({ id: nbt.string("THIRD_ITEM") }),
+          display: nbt.compound({ Name: nbt.string("Third Item") }),
+        }),
+      }),
+    ]),
+  })),
 });
 
 describe("category assembly", () => {
@@ -104,6 +127,32 @@ describe("category assembly", () => {
       null
     );
     expect(items.storage).toHaveLength(4);
+  });
+
+  it("keeps empty container slots in the profile layout without changing packed valuation items", async () => {
+    const container = await positionalContainer();
+    const parsed = await parseMemberItemsWithLayouts(
+      {
+        leveling: {},
+        inventory: {
+          inv_contents: container,
+          ender_chest_contents: container,
+          backpack_contents: { 7: container },
+          backpack_icons: { 7: slot(0) },
+        },
+      },
+      null,
+    );
+
+    expect(parsed.items.inventory).toHaveLength(2);
+    expect(parsed.inventoryLayouts.containers.inventory).toHaveLength(3);
+    expect(parsed.inventoryLayouts.containers.inventory?.[1]).toBeNull();
+    expect(parsed.inventoryLayouts.containers.enderchest?.[2]?.tag?.ExtraAttributes?.id).toBe("THIRD_ITEM");
+    expect(parsed.inventoryLayouts.storage).toHaveLength(1);
+    expect(parsed.inventoryLayouts.storage[0]).toMatchObject({ id: "7" });
+    expect(parsed.inventoryLayouts.storage[0].slots?.[1]).toBeNull();
+    expect(parsed.inventoryLayouts.storage[0].icon).not.toBeNull();
+    expect(parsed.items.storage).toHaveLength(3);
   });
 
   it("routes each bag to its own category", async () => {
@@ -221,12 +270,16 @@ describe("category assembly", () => {
     expect(items.sacks).toEqual([{ id: "COBBLESTONE", amount: 99 }]);
   });
 
-  it("drops sack entries at zero, which is most of them", async () => {
+  it("keeps every valid sack counter, including known-empty entries", async () => {
     const items = await parseMemberItems(
       { leveling: {}, sacks_counts: { WHEAT: 0, COBBLESTONE: 5, MELON: 0 } },
       null
     );
-    expect(items.sacks).toEqual([{ id: "COBBLESTONE", amount: 5 }]);
+    expect(items.sacks).toEqual([
+      { id: "WHEAT", amount: 0 },
+      { id: "COBBLESTONE", amount: 5 },
+      { id: "MELON", amount: 0 },
+    ]);
   });
 
   it("turns each essence type into its own priced id", async () => {

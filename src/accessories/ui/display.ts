@@ -143,6 +143,27 @@ export function openRequirementLines(entry: AccessoryView): RequirementLine[] {
 }
 
 /**
+ * The profile-specific tooltip fact, without turning missing measurements into
+ * a sentence-long disclaimer. The detailed requirement or recipe sits in its
+ * own section; this row only answers what the loaded profile proves.
+ */
+export function readinessSummary(entry: Pick<AccessoryView, "readiness" | "ownedPrerequisite">): string {
+  switch (entry.readiness.kind) {
+    case "owned": return "Owned";
+    case "collectionLocked": return "Collection locked";
+    case "progressionLocked": return "Progression locked";
+    case "nextUpgrade": return entry.ownedPrerequisite ? `Owns ${entry.ownedPrerequisite.name}` : "Next upgrade";
+    case "materialsUnknown": return "Materials not checked";
+    case "currencyUnknown": return "Funds not checked";
+    case "timeWindow": return "Availability not checked";
+    case "rngUnknown": return "Drop not recorded";
+    case "unavailable": return "Unavailable";
+    case "routeKnown": return "Route known";
+    case "unknown": return "Not available";
+  }
+}
+
+/**
  * Search over the fields a player would actually type: the item's name, and the
  * family it belongs to so that "wolf" finds the whole Wolf line.
  */

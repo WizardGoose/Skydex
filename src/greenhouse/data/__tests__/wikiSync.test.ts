@@ -4,8 +4,8 @@ import { applyWikiMutations, parseWikiMutations } from "../wikiSync";
 /**
  * The multi-surface regression.
  *
- * The wiki writes Lonelily's growth surface as `{{ID|Farmland}}, {{ID|Dirt}}`,
- * and the old parser captured exactly one `{{ID|...}}` template, so everything
+ * The wiki has used both `{{ID|...}}` and `{{Item|...}}` for growth surfaces.
+ * The old parser captured exactly one identity template, so everything
  * after the comma was silently dropped and the site said "farmland only" while
  * the wiki said both. The fix captures every template on the line; these tests
  * pin that mechanism, not the one mutation. Lonelily is merely today's only
@@ -40,6 +40,24 @@ describe("parseWikiMutations, growth surfaces", () => {
 
     expect(parsed.thornshade.ground).toBe("farmland");
     expect(parsed.thornshade.grounds).toEqual(["farmland"]);
+  });
+
+  it("parses the current {{Item|...}} growth and amount markup", () => {
+    const current = row(
+      "Ashwreath",
+      "Common",
+      "{{Item|Soul Sand}}",
+    ).replace(
+      "{{RD|4x Wild Rose}}",
+      "{{Item|Nether Wart|amount=2}} / {{Item|Fire|amount=2}}",
+    );
+    const parsed = parseWikiMutations(page(current), names);
+
+    expect(parsed.ashwreath.grounds).toEqual(["soul_sand"]);
+    expect(parsed.ashwreath.requirements).toEqual([
+      { crop: "nether_wart", count: 2 },
+      { crop: "fire", count: 2 },
+    ]);
   });
 });
 

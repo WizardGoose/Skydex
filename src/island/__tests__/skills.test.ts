@@ -100,6 +100,7 @@ describe("memberSkillKey and the average", () => {
   it("maps the member payload's key onto the resource's", () => {
     expect(memberSkillKey("SKILL_FARMING")).toBe("FARMING");
     expect(memberSkillKey("FARMING")).toBe("FARMING");
+    expect(memberSkillKey(" skill_foraging_extra_level_cap ")).toBe("FORAGING_EXTRA_LEVEL_CAP");
   });
 
   it("averages stated skills and leaves out the cosmetic tracks", () => {
@@ -180,7 +181,7 @@ describe("readProfileFacts", () => {
         tuning: {
           highest_unlocked_slot: 4,
           refund_2: true,
-          slot_0: { strength: 107, health: 0, junk: "no" },
+          slot_0: { strength: 107, health: 0, purchase_ts: 1_800_000_000_000, junk: "no" },
         },
       },
     });
@@ -189,15 +190,82 @@ describe("readProfileFacts", () => {
     expect(facts.tuning.highest_unlocked_slot).toBeUndefined();
   });
 
-  it("reads only explicitly named Heart of the Mountain and Forest trees", () => {
+  it("reads active Heart of the Mountain and Forest trees without dropping future nodes", () => {
     const facts = readProfileFacts({ skill_tree: {
       mining: { custom_name: "Heart of the Mountain 1" },
       foraging: { custom_name: "Heart of the Forest 3" },
+      nodes: {
+        mining: {
+          mining_speed: 50,
+          toggle_mining_speed: true,
+          future_mountain_node: 7,
+          toggle_future_mountain_node: false,
+        },
+        foraging: { center_of_the_forest: 5, toggle_center_of_the_forest: true },
+      },
+      selected_ability: { mining: "mining_speed_boost" },
+      tokens_spent: { mountain: 25, forest: 15 },
+      experience: { mining: 1_247_000, foraging: 370_907.7 },
     } });
     expect(facts.hotmName).toBe("Heart of the Mountain 1");
     expect(facts.hotfName).toBe("Heart of the Forest 3");
+    expect(facts.hotmTree).toEqual({
+      customName: "Heart of the Mountain 1",
+      experience: 1_247_000,
+      tokensSpent: 25,
+      selectedAbility: "mining_speed_boost",
+      nodes: {
+        mining_speed: { level: 50, enabled: true },
+        future_mountain_node: { level: 7, enabled: false },
+      },
+    });
+    expect(facts.hotfTree).toEqual({
+      customName: "Heart of the Forest 3",
+      experience: 370_907.7,
+      tokensSpent: 15,
+      selectedAbility: null,
+      nodes: { center_of_the_forest: { level: 5, enabled: true } },
+    });
     const absent = readProfileFacts({ skill_tree: { mining: {}, foraging: { custom_name: 4 } } });
     expect(absent.hotmName).toBeNull();
     expect(absent.hotfName).toBeNull();
+    expect(absent.hotmTree).toBeNull();
+    expect(absent.hotfTree).toBeNull();
+  });
+
+  it("selects the current numbered tree and retains every shared preset", () => {
+    const facts = readProfileFacts({ skill_tree: {
+      nodes: {
+        mining: { mining_speed: 10, toggle_mining_speed: true },
+        mining_2: { mining_fortune: 20, toggle_mining_fortune: false },
+        foraging: { sweep: 30, toggle_sweep: true },
+        foraging_2: { hunters_luck: 40, toggle_hunters_luck: true },
+      },
+      selected_ability: { mining: "pickobulus", mining_2: "mining_speed_boost" },
+      tokens_spent: { mountain: 5, mountain_2: 7, forest: 9, forest_2: 11 },
+      experience: { mining: 1_247_000, foraging: 547_000 },
+      selected_skill_tree_slot: { mining: 2, foraging: 2 },
+    } });
+
+    expect(facts.hotmSelectedSlot).toBe(2);
+    expect(facts.hotfSelectedSlot).toBe(2);
+    expect(facts.hotmTree).toEqual({
+      customName: null,
+      experience: 1_247_000,
+      tokensSpent: 7,
+      selectedAbility: "mining_speed_boost",
+      nodes: { mining_fortune: { level: 20, enabled: false } },
+    });
+    expect(facts.hotfTree).toEqual({
+      customName: null,
+      experience: 547_000,
+      tokensSpent: 11,
+      selectedAbility: null,
+      nodes: { hunters_luck: { level: 40, enabled: true } },
+    });
+    expect(facts.hotmTrees?.[1]?.nodes.mining_speed).toEqual({ level: 10, enabled: true });
+    expect(facts.hotmTrees?.[2]?.nodes.mining_fortune).toEqual({ level: 20, enabled: false });
+    expect(facts.hotfTrees?.[1]?.nodes.sweep).toEqual({ level: 30, enabled: true });
+    expect(facts.hotfTrees?.[2]?.nodes.hunters_luck).toEqual({ level: 40, enabled: true });
   });
 });

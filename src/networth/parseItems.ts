@@ -1,5 +1,5 @@
 import { readNbtBlob } from "../nbt";
-import { simplifyCompound, simplifyItems } from "./nbtSimplify";
+import { simplifyCompound, simplifyItems, simplifyItemSlots } from "./nbtSimplify";
 import { isRecord, titleCase } from "./helpers";
 import type { BasicItem, Catalogue, ExtraAttributes, PetData, RawItem } from "./types";
 import type { ParsedItems } from "./profileNetworth";
@@ -10,9 +10,9 @@ import type { ParsedItems } from "./profileNetworth";
  * `helper/toolkits.js` (MIT, see NOTICE.md), rewritten onto `src/nbt` because
  * upstream's decoder is Node-only (zlib, Buffer, prismarine-nbt).
  *
- * WHERE EACH FIELD LIVES was verified against docs/hypixel-api-cheatsheet.md,
- * which is a real dump of a real account, and against upstream master. The one
- * that catches people out: the wardrobe is at `member.loadout.armor`, NOT at
+ * Field locations are pinned by the parser fixtures and upstream compatibility
+ * tests. The one that catches people out: the wardrobe is at
+ * `member.loadout.armor`, NOT at
  * `inventory.wardrobe_contents`. Older documentation still says the latter and
  * current payloads do not have it.
  *
@@ -30,16 +30,30 @@ const blobOf = (value: unknown): string => {
   return typeof record?.data === "string" ? record.data : "";
 };
 
-/** One container blob to items. Never throws: a blob we cannot read contributes nothing. */
-const decodeContainer = async (base64: string, signal?: AbortSignal): Promise<RawItem[]> => {
-  if (!base64) return [];
+interface DecodedContainer {
+  items: RawItem[];
+  /** Null means the blob was absent or unreadable; an empty array was decoded. */
+  slots: (RawItem | null)[] | null;
+}
+
+/** One container blob to items and real positions. Never throws. */
+const decodeContainerLayout = async (base64: string, signal?: AbortSignal): Promise<DecodedContainer> => {
+  if (!base64) return { items: [], slots: null };
   try {
     const document = await readNbtBlob(base64, signal);
-    return simplifyItems(document.value);
+    const slots = simplifyItemSlots(document.value);
+    return {
+      items: slots.filter((item): item is RawItem => item !== null),
+      slots,
+    };
   } catch {
-    return [];
+    return { items: [], slots: null };
   }
 };
+
+/** One container blob to packed valuation items. */
+const decodeContainer = async (base64: string, signal?: AbortSignal): Promise<RawItem[]> =>
+  (await decodeContainerLayout(base64, signal)).items;
 
 const toBase64 = (bytes: Uint8Array): string => {
   let binary = "";
@@ -137,7 +151,7 @@ const fillCakeBags = async (items: ParsedItems, signal?: AbortSignal): Promise<v
  * worse than one that is stale in a case nobody has ever observed.
  *
  * Nobody has observed both being present. Current payloads carry only the
- * nested one (verified in docs/hypixel-api-cheatsheet.md), so in practice the
+ * nested one (covered by parser fixtures), so in practice the
  * two orders pick the same object; `tools/networth-parity.mjs` sends a member
  * carrying BOTH, with different contents, so the day that changes the assembly
  * gate fails rather than the number drifting silently.
@@ -147,7 +161,10 @@ const readSacks = (member: Record<string, unknown>): BasicItem[] => {
   const counts = asRecord(member.sacks_counts) ?? asRecord(inventory?.sacks_counts);
   if (!counts) return [];
   return Object.entries(counts)
-    .filter(([, amount]) => typeof amount === "number" && amount > 0)
+    // Hypixel reports the complete sack counter surface, including entries at
+    // zero. Keep those rows: zero means "checked and empty", while omitting the
+    // row would make downstream planners report the item as unknown.
+    .filter(([, amount]) => typeof amount === "number" && Number.isFinite(amount) && amount >= 0)
     .map(([id, amount]) => ({ id, amount: amount as number }));
 };
 
@@ -166,7 +183,7 @@ const readPets = (member: Record<string, unknown>): PetData[] => {
 };
 
 /**
- * The museum, from its own endpoint's `members[uuid]` object.
+ * The museum profile selected from either endpoint response envelope.
  *
  * A borrowed item is somebody else's, so it is skipped. `special` holds the
  * one-off donations that are not keyed by item id.
@@ -203,6 +220,42 @@ export interface ParseOptions {
   signal?: AbortSignal;
 }
 
+export const INVENTORY_LAYOUT_CATEGORIES = [
+  "inventory",
+  "enderchest",
+  "personal_vault",
+  "fishing_bag",
+  "potion_bag",
+  "sacks_bag",
+  "quiver",
+  "candy_inventory",
+  "carnival_mask_inventory",
+] as const;
+
+export type InventoryLayoutCategory = (typeof INVENTORY_LAYOUT_CATEGORIES)[number];
+export type InventoryLayoutSlot = RawItem | null;
+
+export interface StoragePageLayout {
+  /** The profile map key, which is the page identity used by Hypixel. */
+  id: string;
+  slots: InventoryLayoutSlot[] | null;
+  /** The backpack icon is metadata for the page, not one of its content slots. */
+  icon: RawItem | null;
+}
+
+/** Positional inventory data kept beside, never inside, valuation categories. */
+export interface MemberInventoryLayouts {
+  containers: Record<InventoryLayoutCategory, InventoryLayoutSlot[] | null>;
+  storage: StoragePageLayout[];
+}
+
+export const emptyMemberInventoryLayouts = (): MemberInventoryLayouts => ({
+  containers: Object.fromEntries(
+    INVENTORY_LAYOUT_CATEGORIES.map((category) => [category, null]),
+  ) as Record<InventoryLayoutCategory, null>,
+  storage: [],
+});
+
 /** The four wardrobe slots, in the order a body is read: helmet first. */
 export const WARDROBE_SLOTS = ["HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS"] as const;
 
@@ -224,7 +277,7 @@ export interface GearSet {
 
 /**
  * One loadout, exactly as `loadout.loadouts.{n}` states it (verified against
- * docs/hypixel-api-cheatsheet.md, 2026-08-03): a name always, and then only
+ * the schema investigation captured 2026-08-03): a name always, and then only
  * whatever the player assigned. Absent stays null - a loadout with no pet has
  * no pet, and nothing here fills a gap.
  */
@@ -240,11 +293,17 @@ export interface LoadoutStatement {
   powerStone: string | null;
   /** Which `accessory_bag_storage.tuning.slot_N` this loadout uses. */
   tuningSlot: number | null;
+  /** One-based Heart of the Mountain preset selected by this loadout. */
+  miningTreeSlot?: number | null;
+  /** One-based Heart of the Forest preset selected by this loadout. */
+  foragingTreeSlot?: number | null;
 }
 
 export interface MemberLoadouts {
   /** Stored armor sets (the wardrobe), sorted by id. */
   armorSets: GearSet[];
+  /** Active armour set id from `loadout.armor.equipped_set`, with the legacy inventory slot as fallback. */
+  equippedArmorSetId: number | null;
   /** Stored equipment sets (the equipment wardrobe), sorted by id. */
   equipmentSets: GearSet[];
   /** The worn equipment, positional, from `inventory.equipment_contents`. */
@@ -253,6 +312,8 @@ export interface MemberLoadouts {
   equippedEquipmentSetId: number | null;
   /** The named loadouts, sorted by id. Empty when the payload states none. */
   loadouts: LoadoutStatement[];
+  /** Confirmed usable loadout count, or null when profile-level entitlement data was absent. */
+  unlockedSlotCount?: number | null;
 }
 
 const numericSort = (a: string, b: string): number => {
@@ -261,6 +322,9 @@ const numericSort = (a: string, b: string): number => {
   if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
   return a.localeCompare(b);
 };
+
+const presetSlot = (value: unknown): number | null =>
+  typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
 
 /** One set map (`loadout.armor` or `loadout.equipment`) into positional GearSets. */
 const parseSetMap = async (
@@ -280,7 +344,8 @@ const parseSetMap = async (
       const items = await decodeContainer(blobOf(set[slots[i]]), signal);
       pieces[i] = items[0] ?? null;
     }
-    if (!pieces.some((piece) => piece !== null)) continue;
+    // The numbered map key is the exposed-slot signal. Keep an all-null set:
+    // it is an unlocked-empty wardrobe slot, not absence from the payload.
     // The payload carries the set's own `id`; the map key is its string twin.
     // Prefer the stated id, fall back to the key, and drop a set with neither
     // rather than inventing an identity a loadout could then reference.
@@ -299,9 +364,10 @@ const parseSetMap = async (
  * wardrobe as numbered equipment sets - Hypixel genuinely stores equipment in
  * loadout structure, "Equipment is a wardrobe. Just like armour!" is in the
  * data - and the named loadouts that tie a set of each to a pet, a power
- * stone and a tuning slot. Only what is stated survives: an all-empty set is
- * dropped, an unassigned reference is null, and a member with no `loadout`
- * object at all yields empty lists.
+ * stone, a tuning slot, and progression-tree presets. Only what is stated
+ * survives: a numbered all-empty set remains an unlocked-empty slot, an
+ * unassigned reference is null, and a member with no `loadout` object at all
+ * yields empty lists.
  */
 export const parseMemberLoadouts = async (member: unknown, signal?: AbortSignal): Promise<MemberLoadouts> => {
   const record = asRecord(member);
@@ -318,6 +384,15 @@ export const parseMemberLoadouts = async (member: unknown, signal?: AbortSignal)
   // position is by list order of what survives; with all four worn (the
   // common case) the positions are exact.
   const wornEquipment: MemberLoadouts["wornEquipment"] = [worn[0] ?? null, worn[1] ?? null, worn[2] ?? null, worn[3] ?? null];
+  const armorMap = asRecord(loadout?.armor);
+  const modernArmorSet = armorMap?.equipped_set;
+  const legacyArmorSlot = inventory?.wardrobe_equipped_slot;
+  const equippedArmorSetId =
+    typeof modernArmorSet === "number" && Number.isInteger(modernArmorSet) && modernArmorSet > 0
+      ? modernArmorSet
+      : typeof legacyArmorSlot === "number" && Number.isInteger(legacyArmorSlot) && legacyArmorSlot >= 0
+        ? legacyArmorSlot + 1
+        : null;
   const equipmentMap = asRecord(loadout?.equipment);
   const equippedEquipmentSetId =
     equipmentMap && typeof equipmentMap.equipped_set === "number" && Number.isInteger(equipmentMap.equipped_set)
@@ -340,11 +415,13 @@ export const parseMemberLoadouts = async (member: unknown, signal?: AbortSignal)
         petUuid: typeof entry.pet === "string" && entry.pet ? entry.pet : null,
         powerStone: typeof entry.power_stone === "string" && entry.power_stone ? entry.power_stone : null,
         tuningSlot: typeof entry.tuning_points_slot === "number" ? entry.tuning_points_slot : null,
+        miningTreeSlot: presetSlot(entry.mining_core_selected_slot),
+        foragingTreeSlot: presetSlot(entry.foraging_core_selected_slot),
       });
     }
   }
 
-  return { armorSets, equipmentSets, wornEquipment, equippedEquipmentSetId, loadouts };
+  return { armorSets, equippedArmorSetId, equipmentSets, wornEquipment, equippedEquipmentSetId, loadouts };
 };
 
 /** Every category the API can fill, in the order the UI lists them. */
@@ -371,14 +448,19 @@ export const API_CATEGORIES = [
   "essence",
 ] as const;
 
-export const parseMemberItems = async (
+export interface ParsedMemberItems {
+  items: ParsedItems;
+  inventoryLayouts: MemberInventoryLayouts;
+}
+
+export const parseMemberItemsWithLayouts = async (
   member: unknown,
   museum: unknown,
   options: ParseOptions = {}
-): Promise<ParsedItems> => {
+): Promise<ParsedMemberItems> => {
   const { catalogue = {}, signal } = options;
   const record = asRecord(member);
-  if (!record) return {};
+  if (!record) return { items: {}, inventoryLayouts: emptyMemberInventoryLayouts() };
 
   const inventory = asRecord(record.inventory) ?? {};
   const bags = asRecord(inventory.bag_contents) ?? {};
@@ -386,6 +468,7 @@ export const parseMemberItems = async (
   const loadout = asRecord(record.loadout) ?? {};
 
   const single = async (value: unknown): Promise<RawItem[]> => decodeContainer(blobOf(value), signal);
+  const container = async (value: unknown): Promise<DecodedContainer> => decodeContainerLayout(blobOf(value), signal);
 
   /** Every blob under a map of blobs, flattened into one category. */
   const flatten = async (value: unknown, keys?: string[]): Promise<RawItem[]> => {
@@ -404,22 +487,47 @@ export const parseMemberItems = async (
     return out;
   };
 
+  const storagePages = async (): Promise<{
+    layouts: StoragePageLayout[];
+    contents: RawItem[];
+    icons: RawItem[];
+  }> => {
+    const contentsMap = asRecord(inventory.backpack_contents) ?? {};
+    const iconsMap = asRecord(inventory.backpack_icons) ?? {};
+    const keys = [...new Set([...Object.keys(contentsMap), ...Object.keys(iconsMap)])].sort(numericSort);
+    const decoded = await Promise.all(keys.map(async (id) => {
+      const [contents, icon] = await Promise.all([
+        container(contentsMap[id]),
+        container(iconsMap[id]),
+      ]);
+      return {
+        layout: { id, slots: contents.slots, icon: icon.items[0] ?? null } satisfies StoragePageLayout,
+        contents: contents.items,
+        icons: icon.items,
+      };
+    }));
+    return {
+      layouts: decoded.map((page) => page.layout),
+      contents: decoded.flatMap((page) => page.contents),
+      icons: decoded.flatMap((page) => page.icons),
+    };
+  };
+
   const [
     armor,
     equipmentWorn,
     equipmentLoadout,
-    inventoryItems,
-    enderchest,
+    inventoryContainer,
+    enderchestContainer,
     accessories,
-    personalVault,
-    fishingBag,
-    potionBag,
-    sacksBag,
-    quiver,
-    candy,
-    carnivalMask,
-    backpacks,
-    backpackIcons,
+    personalVaultContainer,
+    fishingBagContainer,
+    potionBagContainer,
+    sacksBagContainer,
+    quiverContainer,
+    candyContainer,
+    carnivalMaskContainer,
+    storage,
     wardrobe,
     museumItems,
     farmingToolkit,
@@ -428,19 +536,17 @@ export const parseMemberItems = async (
     single(inventory.inv_armor),
     single(inventory.equipment_contents),
     flatten(loadout.equipment, ["EQUIPMENT_SLOT_1", "EQUIPMENT_SLOT_2", "EQUIPMENT_SLOT_3", "EQUIPMENT_SLOT_4"]),
-    single(inventory.inv_contents),
-    single(inventory.ender_chest_contents),
+    container(inventory.inv_contents),
+    container(inventory.ender_chest_contents),
     single(bags.talisman_bag),
-    single(inventory.personal_vault_contents),
-    single(bags.fishing_bag),
-    single(bags.potion_bag),
-    single(bags.sacks_bag),
-    single(bags.quiver),
-    single(shared.candy_inventory_contents),
-    single(shared.carnival_mask_inventory_contents),
-    flatten(inventory.backpack_contents),
-    // The icon on a backpack is itself an item somebody paid for.
-    flatten(inventory.backpack_icons),
+    container(inventory.personal_vault_contents),
+    container(bags.fishing_bag),
+    container(bags.potion_bag),
+    container(bags.sacks_bag),
+    container(bags.quiver),
+    container(shared.candy_inventory_contents),
+    container(shared.carnival_mask_inventory_contents),
+    storagePages(),
     flatten(loadout.armor, ["HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS"]),
     parseMuseumItems(museum, signal),
     parseToolkit(asRecord(record.garden_player_data)?.farming_toolkit, catalogue, signal),
@@ -448,20 +554,21 @@ export const parseMemberItems = async (
   ]);
 
   const items: ParsedItems = {
-    inventory: inventoryItems,
+    inventory: inventoryContainer.items,
     armor,
     equipment: [...equipmentWorn, ...equipmentLoadout],
     wardrobe,
     accessories,
-    enderchest,
-    storage: [...backpacks, ...backpackIcons],
-    personal_vault: personalVault,
-    fishing_bag: fishingBag,
-    potion_bag: potionBag,
-    sacks_bag: sacksBag,
-    quiver,
-    candy_inventory: candy,
-    carnival_mask_inventory: carnivalMask,
+    enderchest: enderchestContainer.items,
+    // The icon on a backpack is itself an item somebody paid for.
+    storage: [...storage.contents, ...storage.icons],
+    personal_vault: personalVaultContainer.items,
+    fishing_bag: fishingBagContainer.items,
+    potion_bag: potionBagContainer.items,
+    sacks_bag: sacksBagContainer.items,
+    quiver: quiverContainer.items,
+    candy_inventory: candyContainer.items,
+    carnival_mask_inventory: carnivalMaskContainer.items,
     farming_toolkit: farmingToolkit,
     hunting_toolkit: huntingToolkit,
     museum: museumItems,
@@ -471,8 +578,31 @@ export const parseMemberItems = async (
   };
 
   await fillCakeBags(items, signal);
-  return items;
+  return {
+    items,
+    inventoryLayouts: {
+      containers: {
+        inventory: inventoryContainer.slots,
+        enderchest: enderchestContainer.slots,
+        personal_vault: personalVaultContainer.slots,
+        fishing_bag: fishingBagContainer.slots,
+        potion_bag: potionBagContainer.slots,
+        sacks_bag: sacksBagContainer.slots,
+        quiver: quiverContainer.slots,
+        candy_inventory: candyContainer.slots,
+        carnival_mask_inventory: carnivalMaskContainer.slots,
+      },
+      storage: storage.layouts,
+    },
+  };
 };
+
+/** Packed compatibility surface used by valuation and its parity gates. */
+export const parseMemberItems = async (
+  member: unknown,
+  museum: unknown,
+  options: ParseOptions = {},
+): Promise<ParsedItems> => (await parseMemberItemsWithLayouts(member, museum, options)).items;
 
 /** Purse, co-op bank and personal bank, from the two places they live. */
 export const readCoinBalances = (member: unknown, bankBalance: unknown) => {

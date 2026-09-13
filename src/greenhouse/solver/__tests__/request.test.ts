@@ -15,7 +15,12 @@ import {
   precomputeCanonical,
   precomputeGoal,
 } from "../../solverClient/precomputeProfile.ts";
-import { FULL_GRID, PRUNE_UNUSED_CROPS } from "../../planner/useSolvedLayout.ts";
+import {
+  FULL_GRID,
+  greenhouseCellCacheSuffix,
+  greenhouseCellKey,
+  PRUNE_UNUSED_CROPS,
+} from "../../planner/useSolvedLayout.ts";
 
 /**
  * The Planner showed Soggybud 46 while the economies table showed 51 for the
@@ -88,6 +93,14 @@ describe("the full plot is one list", () => {
     expect(canonicalRequest(FULL_PLOT, [solveGoal("gloomgourd")], shippedSolveOptions(true))).toBe(
       precomputeCanonical("gloomgourd", true)
     );
+  });
+
+  it("keeps a profile cell shape stable without sharing the full-grid cache", () => {
+    const profileCells: [number, number][] = [[9, 7], [0, 1], [0, 0], [0, 1]];
+    expect(greenhouseCellKey(profileCells)).toBe("0.1.97");
+    expect(greenhouseCellKey([...profileCells].reverse())).toBe("0.1.97");
+    expect(greenhouseCellCacheSuffix(profileCells)).toBe("@cells:0.1.97");
+    expect(greenhouseCellCacheSuffix(FULL_GRID)).toBe("");
   });
 });
 

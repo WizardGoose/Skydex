@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { accessoriesFromIndex, buildAccessoryCatalogue, buildFamilies } from "../catalogue";
+import {
+  accessoriesFromIndex,
+  buildAccessoryCatalogue,
+  buildFamilies,
+  isNormalAccessory,
+} from "../catalogue";
 import type { ItemIndex } from "../../items/useItemData";
 
 /**
@@ -110,6 +115,25 @@ describe("buildAccessoryCatalogue", () => {
 
     const catalogue = buildAccessoryCatalogue(accessoriesFromIndex(index), index);
     expect(catalogue.entries.map((e) => e.id)).toStrictEqual(["BIOANALYSIS_RING"]);
+  });
+
+  it("removes confirmed category mistakes and explicit test items", () => {
+    const index: ItemIndex = {
+      boot: item("Old Boot", "OLD_BOOT", "RARE"),
+      test: item("Test Bucket Please Ignore", "TEST_BUCKET_PLEASE_IGNORE", "UNCOMMON"),
+      adminTalisman: item("Talisman of Space", "TALISMAN_OF_SPACE", "ADMIN"),
+      adminPaw: item("Grizzly Paw", "GRIZZLY_PAW", "ADMIN"),
+      adminArtifact: item("Artifact of Space", "ARTIFACT_OF_SPACE", "ADMIN"),
+      real: item("Wolf Talisman", "WOLF_TALISMAN", "UNCOMMON"),
+    };
+    const catalogue = buildAccessoryCatalogue(accessoriesFromIndex(index), index);
+    expect(catalogue.entries.map((entry) => entry.id)).toEqual(["WOLF_TALISMAN"]);
+  });
+
+  it("keeps Rift-origin transferables on the normal page", () => {
+    expect(isNormalAccessory({ rift: true, riftTransferable: false })).toBe(false);
+    expect(isNormalAccessory({ rift: true, riftTransferable: true })).toBe(true);
+    expect(isNormalAccessory({ rift: false, riftTransferable: false })).toBe(true);
   });
 
   it("marks an accessory craftable only when a recipe really exists", () => {

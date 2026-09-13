@@ -64,5 +64,16 @@ export {
 } from "./adornments";
 export type { BlushName, Zzz } from "./adornments";
 
+export {
+  RIG_CLIPS,
+  RIG_PARTS,
+  RIG_TRANSITION_MS,
+  lerpRigPose,
+  resolveRigMode,
+  rigTransform,
+  sampleRigClip,
+} from "./rig";
+export type { RigClip, RigPart, RigTransform, WonderRigMode, WonderRigPose, WonderRigState } from "./rig";
+
 export { VectorMark } from "./VectorMark";
 export type { ForcedState, MouthTone } from "./VectorMark";

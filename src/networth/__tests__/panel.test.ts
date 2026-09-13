@@ -25,7 +25,7 @@ import type { IslandChest } from "../../island/types";
  *
  * `currentAccess()` reads a localStorage that does not exist in this
  * environment, so the store lands on its blank record and the panel takes the
- * "no connected account" path. That is exactly the path a new visitor sees.
+ * "no connected profile" path. That is exactly the path most visitors see.
  */
 
 const ABSENT: SectionProvenance = { state: "absent", source: null, at: null };
@@ -33,7 +33,7 @@ const CAPTURED: SectionProvenance = { state: "captured", source: "mod", at: Date
 
 describe("the Networth panel", () => {
   // Wrapped in a router because the panel points at the Settings page, which
-  // is the whole answer it gives somebody with no connected account.
+  // is the whole answer it gives somebody with no connected profile.
   const markup = renderToStaticMarkup(
     createElement(MemoryRouter, null, createElement(NetworthPanel, { chests: [], chestProvenance: ABSENT }))
   );
@@ -43,8 +43,9 @@ describe("the Networth panel", () => {
   });
 
   it("says what is missing and how to get it, rather than showing a zero", () => {
-    expect(markup).toContain("connected Minecraft account");
+    expect(markup).toContain("Connect your Minecraft profile in Settings");
     expect(markup).toContain('href="/?settings=1&amp;settingsSection=hypixel"');
+    expect(markup).toContain("Open Settings");
   });
 
   it("never renders NaN", () => {
@@ -52,15 +53,14 @@ describe("the Networth panel", () => {
   });
 
   it("does not claim a total it has not earned", () => {
-    // No account means no profile, so there must be no Total line at all
-    // rather than a Total of zero.
+    // No profile means no data, so there must be no Total line at all rather
+    // than a Total of zero.
     expect(markup).not.toContain(">Total<");
   });
 
-  it("describes the shared production connection without asking for a key", () => {
-    expect(markup).toContain("shared Hypixel connection");
-    expect(markup).not.toContain("API key");
+  it("keeps transport/privacy detail out of the Profile panel", () => {
     expect(markup).not.toContain("api.hypixel.net");
+    expect(markup).not.toContain("Everything it values lives on your profile");
   });
 });
 
@@ -119,7 +119,7 @@ describe("the Networth panel with numbers in it", () => {
 
   it("shows a dash for a bank Hypixel will not share, not a zero", () => {
     expect(markup).toContain(">-<");
-    expect(markup).toContain("co-op bank is not shared");
+    expect(markup).toContain("Co-op bank private");
   });
 
   it("carries the honesty note about island chests, without needing anything expanded", () => {

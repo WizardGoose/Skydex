@@ -1,11 +1,15 @@
 # Skydex
 
-A passive Fabric **client** mod for Hypixel SkyBlock that captures the storage
-data the Hypixel API does not reliably expose — island chests, sacks, ender
-chest, storage backpacks and your inventory — and hands it to the **Skydex**
-website.
+A passive Fabric **client** mod for Hypixel SkyBlock that fills gaps in the
+Hypixel API. It captures island-chest contents and the observed greenhouse board
+for the **Skydex** website. API-backed sacks and player inventories come from
+Hypixel instead.
 
-Minecraft **26.1.2 or 26.2** · Fabric Loader 0.19.3+ · Fabric API · Java 25
+Minecraft **26.1.2 and 26.2** · Fabric Loader 0.19.3+ · Fabric API · Java 25
+
+**Skydex 1.1** adds the Greenhouse placement helper and native interface. Earlier
+local development builds used 1.2.x labels; the public release sequence is 1.0,
+then 1.1. Existing settings, captured data and saved loadouts remain compatible.
 
 ---
 
@@ -14,10 +18,6 @@ Minecraft **26.1.2 or 26.2** · Fabric Loader 0.19.3+ · Fabric API · Java 25
 | Section | How | Notes |
 |---|---|---|
 | **Island chests** | Open a chest on your private island | Keyed by block position, so re-opening updates that chest instead of duplicating it |
-| **Sacks** | Open any sack (`Farming Sack`, `Gemstones Sack`, …) | Real totals come from the item lore, because sack slots clamp their stack size to 64. Gemstone sacks record every cut separately, including Flawless |
-| **Ender chest** | Open any ender chest page | Stored per page — opening page 1 does not wipe pages 2–9 |
-| **Storage / backpacks** | Open a storage page or backpack | Same per-page rule |
-| **Inventory** | Automatically while on SkyBlock | Re-read every few seconds |
 | **Greenhouse board** | Automatically while standing in your greenhouse | The full 10x10 grid of crops and mutations. See below |
 
 Nothing is captured off SkyBlock, and island chests are only recorded while
@@ -51,8 +51,6 @@ separate entries rather than being added together.
 Empty slots are simply absent from the data rather than sent as blanks — the
 gaps are the slot numbers that aren't there.
 
-Sacks are the exception: they are totals for the whole sack, not a layout, so
-they never carry a slot.
 
 ### Menu furniture is not recorded
 
@@ -66,19 +64,12 @@ which matters, because a real island genuinely contained stored *Green Stained
 Glass Pane* and a set of *Backwater* armour. Anything with a real id is always
 kept, so nothing you actually own can be filtered out by accident.
 
-### A note on sacks
+### API-backed data
 
-Sack counts are read from the sack screen you have open, so a sack is recorded
-the first time you open it and updated every time after. There is no way for a
-mod to read every sack at once without asking Hypixel's servers for it, which
-would stop it being passive — so if a category has never been opened, it is
-simply not in the data yet. Opening the sack once fixes it permanently, and
-nothing you have already recorded is ever lost by opening a different sack.
-
-Connecting a Minecraft profile on the site also makes sacks available there in bulk.
-
-The Runes sack is skipped on purpose: rune items carry no usable item id, and
-recording plausible-but-wrong ids is worse than recording nothing.
+The mod no longer tracks sacks, player inventory, ender chest or backpacks.
+Older local snapshots remain readable and are not deleted, but those sections
+are excluded from both the live feed and new export codes. If the API omits a
+private section, the site must treat it as unavailable rather than empty.
 
 ## How do you use Skydex?
 
@@ -118,20 +109,10 @@ as soon as you click it.
 
 ### What goes in the export code
 
-The code carries **sacks and island chests** — the things the Hypixel API
-cannot give the site. It leaves out your **inventory, ender chest and storage**,
-because the API already exposes those and they are the bulk of the code's size.
-Dropping them roughly halves it.
-
-**Include inventory in export code** in `/skydex` controls this, and it
-follows your site mode until you touch it: **on** for GitHub Pages, because the
-hosted site has no other way to get those sections, and **off** for Locally
-Hosted, because the live feed already carries them. Once you pick a side
-yourself, your choice sticks in both modes.
-
-This only affects the clipboard code. In **Locally Hosted** mode the live feed
-always carries everything — it is fresher than the API and has no rate limit, so
-the site uses the mod's data instead.
+The code carries the selected **island chests** and **greenhouse board** sections.
+The **Included data** dropdown controls those two sections. API-backed sacks,
+inventory, ender chest and backpacks are not sent, including from older saved
+snapshots. The live feed follows the same API-versus-mod boundary.
 
 Item names are left off the code when the site can work them out itself — either
 from the item id (`ENCHANTED_BREAD` → "Enchanted Bread") or from the reforge
@@ -140,15 +121,15 @@ that genuinely differ — starred items, renamed items — are always sent.
 
 ### What the code looks like
 
-The mod builds both lossless representations and copies whichever is shorter:
-`SKYDEX2-` is the compact binary format, while `SKYDEX-` is gzipped minified
-JSON. Both use unpadded base64url and maximum gzip compression. On the realistic
-test island, binary reduces the 7,807-character JSON code to 6,407 characters;
-on unusually diverse data where pooling loses, the JSON form wins automatically.
+Every code this mod copies starts with `SKYDEX-`, followed by base64url of the
+gzipped JSON. There is no version digit in that prefix. The schema number rides
+inside the payload instead, which is where the site reads it and where a format
+change would actually show up.
 
-The site reads both current formats and the older `SKYDEX1.` and `SKYINDEX1.`
-JSON forms. The primary command and chat tag are now `/skydex` and `[Skydex]`;
-`/skyindex` remains as a compatibility alias for existing players.
+Codes from previous releases remain readable. The migration changes the name,
+not the saved data or the contents of codes already copied to the clipboard.
+
+The mod command is `/skydex`.
 
 ## Greenhouse board detection
 
@@ -272,8 +253,8 @@ actually built. Also off until you turn it on.
 | Marker | Meaning |
 |---|---|
 | Green tile | The world already matches here. Nothing to do. |
-| Blue ghost block | A crop goes here and is not placed yet |
-| Amber ghost block | A mutation goes here and is not placed yet |
+| Cyan-outlined ghost | An input crop goes here and is not placed yet |
+| Gold-outlined head | A mutation goes here and is not placed yet |
 | Small white square inside a tile | This cell needs a specific ground block |
 
 The ground marker turns white while the progress view is on, because green now
@@ -287,6 +268,22 @@ mistake.
 
 The comparison reads your own loaded chunks once a second. Nothing is sent to
 the server, and nothing is ever placed for you.
+
+### Head previews in 1.1
+
+Custom crops and all 40 mutations use their textured Minecraft heads. Wheat,
+carrot, potato, nether wart, sugar cane, fire and dead plants use native block
+models. All 50 custom-head skins ship in the JAR, so previews work without a
+nearby specimen, a saved plant model, or a texture download.
+
+Each complete 2x2 or 3x3 plant footprint gets one head at its centre. Its floor
+markers still show every occupied cell. A completed plant's ghost disappears
+when all its planned cells match; **Show mutations** hides mutation previews
+while leaving input-crop guidance visible.
+
+This release displays head icons rather than the full grown plant assemblies.
+Automatic assembly recording and replay are inactive. Existing plant archives
+are preserved, and the manual diagnostic capture command remains available.
 
 **There is no timer on the cells, deliberately.** Nothing the mod can see
 supports an honest one: a pushed layout carries no time field, and the only
@@ -313,31 +310,49 @@ The layout, its anchor and its rotation are saved in
 ## Install (Prism Launcher)
 
 1. Create or open a **Fabric** instance on Minecraft **26.1.2** or **26.2**.
-   - Prism: *Add Instance* → choose the Minecraft version → *Mod Loader* → **Fabric**.
-   - Java: both versions require **Java 25**. In Prism, *Edit Instance →
-     Settings → Java*, point it at a JDK/JRE 25.
+   - Prism: *Add Instance* → choose the matching Minecraft version → *Mod Loader* → **Fabric**.
+   - Java: this version of Minecraft requires **Java 25**. In Prism, *Edit
+     Instance → Settings → Java*, point it at a JDK/JRE 25.
 2. Install the matching **Fabric API** into the instance's `mods` folder.
-3. Drop the matching release asset into the same folder:
-   `skydex-1.0+26.1.2.jar` or `skydex-1.0+26.2.jar`.
+3. Drop the matching `skydex-1.1+26.1.2.jar` or
+   `skydex-1.1+26.2.jar` into the same folder. Remove the old Skydex jar first.
 4. Launch, join Hypixel, go to your island and open some chests.
-5. Run `/skydex` and pick which Skydex you use.
+5. Run `/skydex` to open the interface.
 
-Build for 26.1.2 with `./gradlew build`, or for 26.2 with
-`./gradlew build -Pminecraft_version=26.2 -Pfabric_api_version=0.156.0+26.2`.
-The versioned JAR lands in `build/libs/`. Gradle downloads a matching JDK 25
-automatically, so you do not need one on your PATH to compile.
+The interface uses native Minecraft input and cached Java 2D artwork with the
+Skydex fonts. It does not run a browser or download a UI runtime. Labels are not
+selectable; the share-code input supports selection and clipboard shortcuts.
+Fabric API must be at least
+`0.155.2+26.1.2` or `0.158.0+26.2`, respectively.
+
+Imported layouts and layouts sent by the website are retained locally as named
+loadouts. Sending the same name updates that loadout. This does not independently
+read the browser's saved-layout library: those layouts still need to be imported
+or sent through the site's existing mod connection.
+
+Build 26.1.2 with `./gradlew build`. Build 26.2 from PowerShell with
+`.\gradlew.bat build "-Pminecraft_version=26.2" "-Pfabric_api_version=0.158.0+26.2"`.
+The jars land in `build/libs/`. Gradle downloads a matching JDK 25 automatically,
+so you do not need one on your PATH to compile.
 
 ## Where your data lives
 
 ```
-config/skydex/config.json                  settings
-config/skydex/layout.json                  greenhouse layout, anchor, overlay state
-config/skydex/<uuid>_<profile>.json        one store per profile
+config/skydex/config.json                    settings
+config/skydex/layout.json                    saved loadouts, active layout, anchor, helper state
+config/skydex/<uuid>_<profile>.json          one store per profile
 ```
 
 Profiles are kept separate — an ironman profile's chests never merge into your
 main. Chests you have not opened in **30 days** are dropped automatically, so a
 rebuilt island does not haunt the export forever.
+
+Existing settings, profile snapshots, layouts and plant archives migrate into
+`config/skydex` automatically. When both directories already exist, current
+files win, missing files are restored, and the complete older directory is
+preserved under `config/skydex/migration-backups`.
+A notification confirms the conversion at the title screen, followed by a
+one-time chat message when you join. No manual folder renaming is required.
 
 ### Settings (`config/skydex/config.json`)
 
@@ -354,8 +369,8 @@ rebuilt island does not haunt the export forever.
 
 Your data never leaves your machine unless you send it yourself.
 
-- The local server binds to loopback only, is **read-only**, and serves nothing
-  but your own island contents.
+- The local server binds to loopback only. It serves your captured data and
+  accepts greenhouse layouts you choose to send from the linked website.
 - The export code goes to your clipboard. Where it goes next is entirely your
   choice.
 - Nothing is uploaded, phoned home, or shared with any third party.
@@ -378,9 +393,9 @@ That puts it in the same category as SkyOcean, Skyblocker and NEU.
 
 ## Implementation notes
 
-- **No mixins, no access widener.** Everything needed is reachable through
-  public API (`CustomData.copyTag()`) and Fabric's screen/interaction events.
-  That is the main reason this should survive Minecraft updates.
+- **Client-only rendering.** Capture uses public APIs and Fabric events. The
+  native interface includes a Skydex-scoped text-rendering mixin; no access
+  widener or browser runtime is needed.
 - **No third-party runtime dependencies.** The HTTP and SSE server is the JDK's
   own `com.sun.net.httpserver`; JSON goes through the Gson that Minecraft
   already ships; the settings screen is drawn with vanilla GUI primitives
@@ -404,10 +419,9 @@ reads the new file at the old offsets and the game crashes — usually minutes
 later, when you happen to open a screen that touches a class it had not loaded
 yet.
 
-Close the game first, then copy the jar. `tools/deploy.ps1` does this for you:
-it checks for a running instance and, if it finds one, stages the file as
-`skyindex-<version>.jar.staged` next to the target and tells you to swap it
-after quitting, rather than overwriting anything.
+Close the game, move the old Skydex JAR into a backup folder outside `mods`,
+then copy in the new JAR for your Minecraft version. Keep exactly one Skydex
+JAR in `mods`. Existing settings and recorded data migrate automatically.
 
 ## Licence
 

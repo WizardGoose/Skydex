@@ -58,10 +58,13 @@ const API = "https://hypixelskyblock.minecraft.wiki/api.php";
  * The one key this module owns. Holds resolved thumbnail URLs and proven
  * misses, nothing the user typed. Never enumerated, never cleared.
  */
-const CACHE_KEY = "wizardsky.icons.v1";
+// v2: mob and NPC renders on the official wiki are frequently GIF files.
+// A v1 null only proved that the PNG spelling was absent, so it cannot be
+// reused after adding the GIF rung.
+const CACHE_KEY = "wizardsky.icons.v2";
 
-/** MediaWiki caps a titles query at 50. */
-const BATCH = 50;
+/** MediaWiki caps a titles query at 50; every logical title asks PNG + GIF. */
+const BATCH = 25;
 
 /** Long enough to collect a whole grid of misses into one request. */
 const DEBOUNCE_MS = 120;
@@ -548,9 +551,13 @@ export const fetchIconUrls = async (titles: string[], px = 64, signal?: AbortSig
   for (let i = 0; i < titles.length; i += BATCH) {
     const slice = titles.slice(i, i + BATCH);
 
+    const fileTitles = slice.flatMap((title) => {
+      const file = title.replace(/ /g, "_");
+      return [`File:${file}.png`, `File:${file}.gif`];
+    });
     const url = `${API}?${new URLSearchParams({
       action: "query",
-      titles: slice.map((t) => `File:${t.replace(/ /g, "_")}.png`).join("|"),
+      titles: fileTitles.join("|"),
       prop: "imageinfo",
       iiprop: "url",
       iiurlwidth: String(px),
@@ -572,9 +579,12 @@ export const fetchIconUrls = async (titles: string[], px = 64, signal?: AbortSig
     for (const page of json.query?.pages ?? []) {
       if (!page.title) continue;
       // Comes back as "File:Boots of Divan.png"; we key on the bare name.
-      const bare = page.title.replace(/^File:/i, "").replace(/\.png$/i, "");
+      const bare = page.title.replace(/^File:/i, "").replace(/\.(?:png|gif)$/i, "");
       const info = page.imageinfo?.[0];
-      learned[titleKey(bare)] = info?.thumburl ?? info?.url ?? null;
+      const key = titleKey(bare);
+      const resolved = info?.thumburl ?? info?.url;
+      if (resolved) learned[key] = resolved;
+      else if (!(key in learned)) learned[key] = null;
     }
 
     // Anything the API did not echo back at all is a miss too.
@@ -756,6 +766,7 @@ export const chooseIconSource = ({
   failed,
   src,
   packSrc,
+  resourceSrc,
   lateSrc,
   known,
   px,
@@ -777,6 +788,8 @@ export const chooseIconSource = ({
    * is undefined and this function is byte-identical to before.
    */
   packSrc?: string;
+  /** Exact in-game texture from Hypixel's item resource. */
+  resourceSrc?: string;
   lateSrc?: string;
   /**
    * Per-title cache read, normally `readTitle`: a URL, `null` for a proven
@@ -797,6 +810,7 @@ export const chooseIconSource = ({
 
   add(src);
   add(packSrc);
+  add(resourceSrc);
   if (display) {
     for (const title of nameLadder(display, resourceName)) {
       const answer = known?.(title);

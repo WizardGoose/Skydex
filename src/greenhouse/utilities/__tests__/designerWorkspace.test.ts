@@ -117,6 +117,104 @@ describe("designer timeline", () => {
       });
     }
     expect(timeline.past).toHaveLength(50);
+    expect(timeline.pastCellEdits).toHaveLength(50);
+  });
+
+  it("keeps occupied and empty land edits aligned through undo and redo", () => {
+    const initial = createDesignerTimeline(workspace("occupied"));
+    const occupiedEdit = pushDesignerTimeline(initial, {
+      ...initial.present,
+      inputPlacements: [],
+    }, {
+      cellEdit: {
+        before: ["2,4", "3,4"],
+        after: ["3,4"],
+        beforeSource: "hypixel",
+        afterSource: "browser",
+      },
+    });
+    const emptyEdit = pushDesignerTimeline(occupiedEdit, occupiedEdit.present, {
+      cellEdit: {
+        before: ["3,4"],
+        after: ["3,4", "3,5"],
+        beforeSource: "browser",
+        afterSource: "browser",
+      },
+    });
+
+    expect(emptyEdit.past).toHaveLength(2);
+    expect(emptyEdit.pastCellEdits).toHaveLength(2);
+    expect(emptyEdit.present.savedLayouts).toEqual([namedLayout("saved")]);
+    const undoEmpty = undoDesignerTimeline(emptyEdit);
+    expect(undoEmpty.future).toHaveLength(1);
+    expect(undoEmpty.futureCellEdits).toHaveLength(1);
+    expect(undoEmpty.present.inputPlacements).toEqual([]);
+    expect(undoEmpty.futureCellEdits[0]?.before).toEqual(["3,4"]);
+    const undoOccupied = undoDesignerTimeline(undoEmpty);
+    expect(undoOccupied.future).toHaveLength(2);
+    expect(undoOccupied.futureCellEdits).toHaveLength(2);
+    expect(undoOccupied.present.inputPlacements[0].id).toBe("occupied");
+    expect(undoOccupied.futureCellEdits[0]?.before).toEqual(["2,4", "3,4"]);
+    expect(undoOccupied.futureCellEdits[0]?.beforeSource).toBe("hypixel");
+    const redoOccupied = redoDesignerTimeline(undoOccupied);
+    expect(redoOccupied.past).toHaveLength(1);
+    expect(redoOccupied.pastCellEdits).toHaveLength(1);
+    expect(redoOccupied.present.inputPlacements).toEqual([]);
+    expect(redoOccupied.pastCellEdits.at(-1)?.after).toEqual(["3,4"]);
+    const redoEmpty = redoDesignerTimeline(redoOccupied);
+    expect(redoEmpty.past).toHaveLength(2);
+    expect(redoEmpty.pastCellEdits).toHaveLength(2);
+    expect(redoEmpty.futureCellEdits).toEqual([]);
+    expect(redoEmpty.pastCellEdits.at(-1)?.after).toEqual(["3,4", "3,5"]);
+  });
+
+  it("invalidates land redo alongside workspace redo after a new edit", () => {
+    const initial = createDesignerTimeline(workspace("before-land-edit"));
+    const landEdit = pushDesignerTimeline(initial, initial.present, {
+      cellEdit: {
+        before: ["3,4"],
+        after: ["3,4", "3,5"],
+        beforeSource: "browser",
+        afterSource: "browser",
+      },
+    });
+    const undone = undoDesignerTimeline(landEdit);
+    const replanted = pushDesignerTimeline(undone, {
+      ...undone.present,
+      inputPlacements: [placement("new-plant", "melon")],
+    });
+
+    expect(replanted.future).toEqual([]);
+    expect(replanted.futureCellEdits).toEqual([]);
+    expect(redoDesignerTimeline(replanted)).toBe(replanted);
+  });
+
+  it("restores the pruned plant, cells, and named loadouts around a starter preset", () => {
+    const initial = createDesignerTimeline(workspace("outer-plant"));
+    const starter = pushDesignerTimeline(initial, {
+      ...initial.present,
+      inputPlacements: [],
+    }, {
+      cellEdit: {
+        before: ["0,0", "3,4"],
+        after: ["3,4"],
+        beforeSource: "hypixel",
+        afterSource: "browser",
+      },
+    });
+
+    expect(starter.present.savedLayouts).toEqual([namedLayout("saved")]);
+    const undone = undoDesignerTimeline(starter);
+    expect(undone.present.inputPlacements[0].id).toBe("outer-plant");
+    expect(undone.present.savedLayouts).toEqual([namedLayout("saved")]);
+    expect(undone.futureCellEdits[0]).toMatchObject({
+      before: ["0,0", "3,4"],
+      beforeSource: "hypixel",
+    });
+    const redone = redoDesignerTimeline(undone);
+    expect(redone.present.inputPlacements).toEqual([]);
+    expect(redone.present.savedLayouts).toEqual([namedLayout("saved")]);
+    expect(redone.pastCellEdits.at(-1)?.after).toEqual(["3,4"]);
   });
 });
 
@@ -130,14 +228,17 @@ describe("designer keyboard shortcuts", () => {
     target,
   });
 
-  it("maps Ctrl+Z to undo and Ctrl+U to redo", () => {
+  it("maps the standard undo and redo shortcuts", () => {
     expect(designerShortcut(key("z"))).toBe("undo");
-    expect(designerShortcut(key("U"))).toBe("redo");
+    expect(designerShortcut(key("Y"))).toBe("redo");
+    expect(designerShortcut({ ...key("z"), shiftKey: true })).toBe("redo");
   });
 
   it("leaves typing fields and modified shortcuts alone", () => {
     expect(designerShortcut(key("z", { tagName: "INPUT" }))).toBeNull();
-    expect(designerShortcut({ ...key("u"), shiftKey: true })).toBeNull();
+    expect(designerShortcut(key("u"))).toBeNull();
+    expect(designerShortcut({ ...key("y"), shiftKey: true })).toBeNull();
+    expect(designerShortcut({ ...key("z"), altKey: true })).toBeNull();
   });
 });
 

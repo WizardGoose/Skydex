@@ -1,0 +1,264 @@
+.profile-minion-family-stack {
+  display: grid;
+  min-width: 0;
+}
+
+.profile-minion-family-stack.is-expanded > .profile-minion-family {
+  border-bottom-color: rgb(73 197 228 / 0.26);
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.profile-minion-family-stack > .profile-minion-tier-disclosure {
+  margin: -1px 0 0;
+  border-color: rgb(73 197 228 / 0.26);
+  border-top-right-radius: 0;
+  border-top-left-radius: 0;
+  background: rgb(3 8 13 / 0.36);
+}
+
+.profile-minion-tier-disclosure {
+  min-width: 0;
+  margin: 0.08rem 0 0.28rem;
+  border: 1px solid rgb(255 255 255 / 0.085);
+  border-radius: 0.58rem;
+  background: rgb(3 8 13 / 0.24);
+  overflow: hidden;
+}
+
+.profile-minion-tier-disclosure > header {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 0.42rem 0.52rem;
+}
+
+.profile-minion-tier-disclosure > header > strong {
+  color: rgb(226 233 239 / 0.9);
+  font-size: 0.68rem;
+  font-weight: 680;
+}
+
+.profile-minion-tier-summary {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.72rem;
+  padding: 0.38rem 0.58rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.065);
+  color: rgb(182 197 209 / 0.76);
+  font-size: 0.65rem;
+}
+
+.profile-minion-tier-summary strong {
+  color: rgb(214 224 232 / 0.86);
+  font-size: inherit;
+  font-weight: 650;
+}
+
+.profile-minion-tier-ladder {
+  display: grid;
+  min-width: 0;
+  padding: 0 0.48rem 0.28rem;
+}
+
+.profile-minion-tier-row {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr);
+  min-width: 0;
+  align-items: center;
+  gap: 0.48rem;
+  padding: 0.5rem 0.22rem;
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.profile-minion-tier-row:first-child {
+  border-top: 0;
+}
+
+.profile-minion-tier-marker {
+  display: grid;
+  width: 1.6rem;
+  justify-items: end;
+  color: rgb(185 200 212 / 0.82);
+  font-size: 0.61rem;
+  font-weight: 720;
+}
+
+.profile-minion-tier-row--crafted .profile-minion-tier-marker {
+  border-color: rgb(70 205 137 / 0.35);
+  color: rgb(112 225 164 / 0.9);
+}
+
+.profile-minion-tier-row--missing .profile-minion-tier-marker {
+  border-color: rgb(240 181 66 / 0.35);
+  color: rgb(236 196 106 / 0.9);
+}
+
+.profile-minion-tier-copy {
+  display: block;
+  min-width: 0;
+}
+
+.profile-minion-tier-copy strong,
+.profile-minion-tier-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-minion-tier-copy strong {
+  color: rgb(220 229 236 / 0.9);
+  font-size: 0.7rem;
+  font-weight: 670;
+}
+
+.profile-minion-tier-copy small {
+  color: var(--profile-muted);
+  font-size: 0.58rem;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.profile-minion-tier-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+  color: rgb(181 194 205 / 0.72);
+  font-size: 0.6rem;
+  font-weight: 650;
+}
+
+.profile-minion-tier-state svg {
+  width: 0.72rem;
+  height: 0.72rem;
+  stroke-width: 2.4;
+}
+
+.profile-minion-tier-state--crafted {
+  color: rgb(105 220 157 / 0.88);
+}
+
+.profile-minion-tier-state--missing {
+  color: rgb(231 190 99 / 0.86);
+}
+
+.profile-minion-tier-materials {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.28rem 0.72rem;
+}
+
+.profile-minion-tier-materials > span {
+  display: inline-grid;
+  grid-template-columns: 1.18rem minmax(0, auto) auto;
+  align-items: center;
+  gap: 0.28rem;
+  color: rgb(206 211 199 / 0.82);
+  font-size: 0.6rem;
+}
+
+.profile-minion-tier-materials > span > span:first-child {
+  display: grid;
+  width: 1.18rem;
+  height: 1.18rem;
+  place-items: center;
+}
+
+.profile-minion-tier-materials b {
+  color: rgb(239 201 117 / 0.94);
+}
+
+.profile-minion-tier-complete {
+  margin: 0;
+  padding: 0.46rem;
+  color: rgb(113 218 161 / 0.82);
+  font-size: 0.62rem;
+}
+
+.profile-minion-material-total {
+  display: grid;
+  min-width: 0;
+  gap: 0.48rem;
+  padding: 0.52rem 0.58rem 0.58rem;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(1 5 9 / 0.22);
+}
+
+.profile-minion-material-total > div:first-child {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.profile-minion-material-total > div:first-child strong {
+  color: rgb(220 229 236 / 0.9);
+  font-size: 0.64rem;
+  font-weight: 680;
+}
+
+.profile-minion-material-total > div:first-child small,
+.profile-minion-material-total > p {
+  color: var(--profile-muted);
+  font-size: 0.55rem;
+}
+
+.profile-minion-material-total > p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.profile-minion-material-total-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+  min-width: 0;
+  gap: 0.28rem 0.45rem;
+}
+
+.profile-minion-material-total-grid > span {
+  display: grid;
+  grid-template-columns: 1.35rem minmax(0, 1fr) auto;
+  min-width: 0;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0.26rem 0.34rem;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 0.34rem;
+  background: rgb(8 13 19 / 0.5);
+  color: rgb(204 216 225 / 0.82);
+  font-size: 0.58rem;
+}
+
+.profile-minion-material-total-grid > span > span:first-child {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+}
+
+.profile-minion-material-total-grid > span > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-minion-material-total-grid b {
+  color: rgb(239 201 117 / 0.94);
+  font-size: 0.58rem;
+}
+
+@media (max-width: 26.25rem) {
+  .profile-minion-tier-summary {
+    display: grid;
+    gap: 0.16rem;
+  }
+}
+
+@media (max-width: 24.375rem) {
+  .profile-minion-tier-ladder {
+    padding-inline: 0.56rem;
+  }
+}

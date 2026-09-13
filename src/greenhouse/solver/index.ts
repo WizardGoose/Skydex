@@ -8,7 +8,7 @@ import type {
 import { SPECIALS } from "../planner/specials.ts";
 import { anneal, polish } from "./anneal.ts";
 import { Field } from "./field.ts";
-import { colOf, rowOf } from "./grid.ts";
+import { colOf, ringCells, rowOf } from "./grid.ts";
 import { selectBlocks } from "./inner.ts";
 import { BadRequestError, compileProblem, isLayoutImpossible, upperBoundFor } from "./problem.ts";
 import type { Problem, SolverDataset } from "./problem.ts";
@@ -285,6 +285,110 @@ const minimizeSupports = (field: Field, problem: Problem, chosen: number[]): voi
       budget--;
     }
   }
+};
+
+/**
+ * Builds one seed that honours every finite target before the joint search
+ * tries to improve it. A sum-only objective can otherwise spend the whole
+ * plot on the largest request: 37 Veilshroom + 1 Magic Jellybean returned 37
+ * Veilshroom and a half-built Jellybean ring. More iterations cannot cross
+ * that valley because temporarily losing one Veilshroom is scored as a loss.
+ *
+ * The rigid targets go first. Their solved crops are pinned while the next
+ * target is laid out, and their spawn cells are removed from the remaining
+ * plot. The finished crop field is then handed back to the ordinary joint
+ * selector and validator; this is a seed, not a second source of truth.
+ */
+const buildRequiredSequenceSeed = (
+  cells: [number, number][],
+  problem: Problem,
+  cappedBounds: number[],
+  dataset: SolverDataset,
+  options: LocalSolveOptions,
+  iterationBudget: number,
+  deadline: number,
+): Int16Array | null => {
+  if (
+    problem.targets.length < 2 ||
+    problem.targets.some((target) => target.required <= 0) ||
+    (options.locks?.length ?? 0) > 0
+  ) {
+    return null;
+  }
+
+  const stages = problem.targets
+    .map((target, index) => ({ target, index, count: Math.floor(cappedBounds[index]) }))
+    .filter((stage) => stage.count > 0)
+    .sort((left, right) => {
+      const leftRigidity = left.target.zeroAdjacent ? 2 : left.target.fullRing ? 1 : 0;
+      const rightRigidity = right.target.zeroAdjacent ? 2 : right.target.fullRing ? 1 : 0;
+      return (
+        rightRigidity - leftRigidity ||
+        right.target.size - left.target.size ||
+        left.count - right.count ||
+        right.target.reqSum - left.target.reqSum ||
+        left.index - right.index
+      );
+    });
+  if (stages.length !== problem.targets.length) return null;
+
+  const reserved = new Set<number>();
+  let available = cells.slice();
+  let locks: LockDefinition[] = [];
+  const stageIterations = Math.max(50_000, Math.floor(iterationBudget / stages.length));
+
+  for (const { target, count } of stages) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) return null;
+    const result = solveLocal(
+      available,
+      [{ mutation: target.id, maximize: false, count }],
+      dataset,
+      {
+        seed: options.seed ?? DEFAULTS.seed,
+        iterations: stageIterations,
+        timeBudgetMs: remainingMs,
+        removeUnusedCrops: true,
+        locks,
+      },
+    );
+    const produced = result.mutations.filter((mutation) => mutation.mutation === target.id);
+    if (produced.length < count) return null;
+
+    locks = result.placements.map((placement) => ({
+      name: placement.crop,
+      size: placement.size,
+      position: placement.position,
+    }));
+    for (const mutation of produced.slice(0, count)) {
+      const [row, col] = mutation.position;
+      for (let dr = 0; dr < mutation.size; dr++) {
+        for (let dc = 0; dc < mutation.size; dc++) reserved.add((row + dr) * 10 + col + dc);
+      }
+      if (target.zeroAdjacent) {
+        for (const cell of ringCells(row, col, mutation.size)) reserved.add(cell);
+      }
+    }
+    available = cells.filter(([row, col]) => !reserved.has(row * 10 + col));
+  }
+
+  const field = new Field(problem);
+  for (const lock of locks) {
+    const crop = problem.paletteIndex.get(lock.name);
+    if (crop === undefined) continue;
+    const [row, col] = lock.position;
+    for (let dr = 0; dr < lock.size; dr++) {
+      for (let dc = 0; dc < lock.size; dc++) {
+        const cell = (row + dr) * 10 + col + dc;
+        if (problem.plantableMask[cell]) field.set(cell, crop);
+      }
+    }
+  }
+
+  const selection = selectBlocks(field, problem);
+  return problem.targets.every((_, index) => selection.perTarget[index] >= cappedBounds[index])
+    ? field.snapshot()
+    : null;
 };
 
 /**
@@ -600,6 +704,16 @@ export const solveLocal = (
   const compound = coupledTarget;
 
   const forced: Int16Array[] = [];
+  const requiredSequenceSeed = buildRequiredSequenceSeed(
+    cells,
+    problem,
+    cappedBounds,
+    dataset,
+    options,
+    iterationBudget,
+    deadline,
+  );
+  if (requiredSequenceSeed) forced.push(requiredSequenceSeed);
   if (plannable.length > 1) {
     /**
      * FULL QUALITY, HIGHEST BOUND FIRST.

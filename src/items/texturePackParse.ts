@@ -74,6 +74,21 @@ import { unzipSync, gunzipSync } from "fflate";
  * are counted and skipped rather than half-supported.
  */
 
+/**
+ * The first frame of a Minecraft animated texture inside its source sheet.
+ *
+ * Browsers do not understand `<texture>.png.mcmeta`; without this rectangle
+ * they draw the whole vertical sheet and shrink every frame into one icon.
+ */
+export interface PackTextureFrame {
+  sheetWidth: number;
+  sheetHeight: number;
+  frameX: number;
+  frameY: number;
+  frameWidth: number;
+  frameHeight: number;
+}
+
 /** One texture the pack states, keyed by the id form below. */
 export interface PackTexture {
   /** Raw PNG bytes, exactly as stored in the pack. */
@@ -81,7 +96,9 @@ export interface PackTexture {
   /** Where in the pack it came from, for the summary and for debugging. */
   path: string;
   /** Which layer recognised it. */
-  source: "catharsis" | "vanilla";
+  source: "catharsis" | "hypixel" | "vanilla";
+  /** Crop to apply when the PNG is an animation sheet. */
+  frame?: PackTextureFrame;
 }
 
 export interface PackCounts {
@@ -91,6 +108,8 @@ export interface PackCounts {
   recognised: number;
   /** ...of which came from the catharsis layer. */
   catharsis: number;
+  /** ...of which came from Hypixel's official item-model definitions. */
+  hypixel: number;
   /** ...of which came from the vanilla item-texture layer. */
   vanilla: number;
   /** Catharsis definitions whose model chain never reached a PNG in the pack. */
@@ -156,13 +175,20 @@ export const foldPackKey = (s: string): string =>
  * this codebase: it is the game's own spelling, while a name is decorated,
  * reforged and occasionally shared.
  */
-export const packKeyCandidates = (id?: string | null, name?: string | null): string[] => {
+export const packModelKey = (model: string): string => `MODEL:${model.trim().toLowerCase()}`;
+
+export const packKeyCandidates = (
+  id?: string | null,
+  name?: string | null,
+  itemModel?: string | null,
+): string[] => {
   const out: string[] = [];
   for (const raw of [id, name]) {
     if (!raw) continue;
     const key = foldPackKey(raw);
     if (key && !out.includes(key)) out.push(key);
   }
+  if (itemModel) out.push(packModelKey(itemModel));
   return out;
 };
 
@@ -269,6 +295,95 @@ const parseJson = (bytes: Uint8Array): unknown | null => {
   }
 };
 
+/** Read the IHDR dimensions without decoding the PNG. */
+const pngDimensions = (bytes: Uint8Array): { width: number; height: number } | null => {
+  if (
+    bytes.length < 24 ||
+    bytes[0] !== 0x89 ||
+    bytes[1] !== 0x50 ||
+    bytes[2] !== 0x4e ||
+    bytes[3] !== 0x47 ||
+    bytes[4] !== 0x0d ||
+    bytes[5] !== 0x0a ||
+    bytes[6] !== 0x1a ||
+    bytes[7] !== 0x0a
+  ) {
+    return null;
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+  return width > 0 && height > 0 ? { width, height } : null;
+};
+
+/**
+ * Resolve the initial frame described by a PNG's Minecraft animation metadata.
+ *
+ * Minecraft defaults an undeclared frame size to the largest square that fits
+ * the sheet (normally a 16px-wide vertical strip). An explicit `frames` list
+ * may start elsewhere, so the first valid declared index is the representative
+ * frame SkyDex shows. Static PNGs and malformed metadata deliberately return
+ * undefined and keep the old whole-image behaviour.
+ */
+const animationFrame = (png: Uint8Array, metadata?: Uint8Array): PackTextureFrame | undefined => {
+  if (!metadata) return undefined;
+  const dimensions = pngDimensions(png);
+  const parsed = parseJson(metadata) as {
+    animation?: {
+      width?: unknown;
+      height?: unknown;
+      frames?: unknown;
+    };
+  } | null;
+  const animation = parsed?.animation;
+  if (!dimensions || !animation || typeof animation !== "object") return undefined;
+
+  const positiveInt = (value: unknown): number | null =>
+    typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+  const statedWidth = positiveInt(animation.width);
+  const statedHeight = positiveInt(animation.height);
+  const frameWidth = statedWidth ?? (statedHeight ? dimensions.width : Math.min(dimensions.width, dimensions.height));
+  const frameHeight = statedHeight ?? (statedWidth ? dimensions.height : Math.min(dimensions.width, dimensions.height));
+
+  if (
+    frameWidth > dimensions.width ||
+    frameHeight > dimensions.height ||
+    dimensions.width % frameWidth !== 0 ||
+    dimensions.height % frameHeight !== 0
+  ) {
+    return undefined;
+  }
+
+  const columns = dimensions.width / frameWidth;
+  const frameCount = columns * (dimensions.height / frameHeight);
+  if (frameCount <= 1) return undefined;
+
+  let frameIndex = 0;
+  if (Array.isArray(animation.frames)) {
+    for (const entry of animation.frames) {
+      const rawIndex =
+        typeof entry === "number"
+          ? entry
+          : entry && typeof entry === "object"
+            ? (entry as { index?: unknown }).index
+            : null;
+      if (typeof rawIndex === "number" && Number.isInteger(rawIndex) && rawIndex >= 0 && rawIndex < frameCount) {
+        frameIndex = rawIndex;
+        break;
+      }
+    }
+  }
+
+  return {
+    sheetWidth: dimensions.width,
+    sheetHeight: dimensions.height,
+    frameX: (frameIndex % columns) * frameWidth,
+    frameY: Math.floor(frameIndex / columns) * frameHeight,
+    frameWidth,
+    frameHeight,
+  };
+};
+
 /**
  * Walk an Item Model Definition to the one model reference the base look
  * uses. Predicates are out of scope, so every dispatch node contributes its
@@ -309,6 +424,8 @@ const splitRef = (ref: string): [string, string] => {
 
 /** The catharsis definition folder, inside any root. */
 const ITEMS_DIR = "assets/skyblock/items/";
+/** Exact item definitions shipped by Hypixel's official SkyBlock pack. */
+const HYPIXEL_ITEMS_DIR = "assets/hypixel_skyblock/items/item/";
 /** Sub-identifier folders this site cannot key per icon. Counted, not guessed at. */
 const SPECIAL_SUBDIRS = new Set(["attributes", "enchantments", "potions", "runes"]);
 
@@ -445,7 +562,7 @@ export const parseTexturePack = (zipBytes: Uint8Array): ParsedPack => {
     defPath: string,
     defBytes: Uint8Array,
     preferRoot: string
-  ): { data: Uint8Array; path: string; walked: string[] } | null => {
+  ): { data: Uint8Array; path: string; walked: string[]; frame?: PackTextureFrame } | null => {
     const def = parseJson(defBytes);
     if (!def) return null;
     const modelRef = firstModelRef((def as Record<string, unknown>).model ?? def);
@@ -467,7 +584,10 @@ export const parseTexturePack = (zipBytes: Uint8Array): ParsedPack => {
     const png = lookup(`assets/${tns}/textures/${tpath}.png`, preferRoot);
     if (!png) return null;
     walked.push(png.path);
-    return { data: png.bytes, path: png.path, walked };
+    const metadataPath = `${png.path}.mcmeta`;
+    const frame = animationFrame(png.bytes, entries[metadataPath]);
+    if (frame) walked.push(metadataPath);
+    return { data: png.bytes, path: png.path, walked, frame };
   };
 
   /* ---- the catharsis layer ----------------------------------------------- */
@@ -524,12 +644,54 @@ export const parseTexturePack = (zipBytes: Uint8Array): ParsedPack => {
         unresolvedDefs.add(p);
         continue;
       }
-      textures.set(key, { data: resolved.data, path: resolved.path, source: "catharsis" });
+      textures.set(key, { data: resolved.data, path: resolved.path, source: "catharsis", frame: resolved.frame });
       for (const w of resolved.walked) consumed.add(w);
     }
   }
 
   const catharsisCount = textures.size;
+
+  /* ---- Hypixel's official item-model layer ------------------------------ */
+
+  let hypixelCount = 0;
+  for (const root of roots) {
+    const prefix = root ? `${root}/${HYPIXEL_ITEMS_DIR}` : HYPIXEL_ITEMS_DIR;
+    for (const p of paths) {
+      if (!p.startsWith(prefix) || !p.endsWith(".json")) continue;
+
+      const definition = parseJson(entries[p]);
+      const modelRef = definition
+        ? firstModelRef((definition as Record<string, unknown>).model ?? definition)
+        : null;
+      if (!modelRef) {
+        unresolved++;
+        unresolvedDefs.add(p);
+        continue;
+      }
+
+      const key = packModelKey(modelRef);
+      if (textures.has(key)) {
+        altDefs.add(p);
+        continue;
+      }
+
+      const resolved = resolveDefinition(p, entries[p], root);
+      if (!resolved) {
+        unresolved++;
+        unresolvedDefs.add(p);
+        continue;
+      }
+
+      textures.set(key, {
+        data: resolved.data,
+        path: resolved.path,
+        source: "hypixel",
+        frame: resolved.frame,
+      });
+      hypixelCount += 1;
+      for (const walked of resolved.walked) consumed.add(walked);
+    }
+  }
 
   /* ---- the vanilla layer ------------------------------------------------- */
 
@@ -541,13 +703,18 @@ export const parseTexturePack = (zipBytes: Uint8Array): ParsedPack => {
    * modern ones write `textures/item/`.
    */
   const vanillaRe = /(?:^|\/)assets\/minecraft\/textures\/items?\/([a-z0-9_]+)\.png$/;
+  let vanillaCount = 0;
   for (const p of paths) {
     const m = vanillaRe.exec(p);
     if (!m) continue;
     const key = foldPackKey(m[1]);
     if (!key || textures.has(key)) continue;
-    textures.set(key, { data: entries[p], path: p, source: "vanilla" });
+    const metadataPath = `${p}.mcmeta`;
+    const frame = animationFrame(entries[p], entries[metadataPath]);
+    textures.set(key, { data: entries[p], path: p, source: "vanilla", frame });
+    vanillaCount += 1;
     consumed.add(p);
+    if (frame) consumed.add(metadataPath);
   }
 
   /* ---- naming what was left over ----------------------------------------- */
@@ -593,7 +760,8 @@ export const parseTexturePack = (zipBytes: Uint8Array): ParsedPack => {
       files: totalFiles,
       recognised: textures.size,
       catharsis: catharsisCount,
-      vanilla: textures.size - catharsisCount,
+      hypixel: hypixelCount,
+      vanilla: vanillaCount,
       unresolved,
       special,
       ignored: totalFiles - consumed.size,

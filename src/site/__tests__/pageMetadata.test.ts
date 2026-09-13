@@ -19,7 +19,8 @@ describe("public page link metadata", () => {
   it("covers every primary navigation URL with a distinct page label", () => {
     expect(PUBLIC_PAGE_METADATA.map(({ path }) => path)).toEqual([
       "/profile",
-      "/crafting",
+      "/recipes",
+      "/storage",
       "/forge",
       "/greenhouse",
       "/shards",
@@ -27,7 +28,8 @@ describe("public page link metadata", () => {
 
     expect(PUBLIC_PAGE_METADATA.map(({ label }) => label)).toEqual([
       "Profile",
-      "Crafting",
+      "Recipes",
+      "Storage",
       "Forge",
       "Greenhouse",
       "Shards",

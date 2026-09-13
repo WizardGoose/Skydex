@@ -1,5 +1,6 @@
 /**
  * Crafting data, fetched from the wiki at runtime.
+ * The current crafting_recipes table replaces the former Crafting/Data module.
  *
  * WHY THIS EXISTS
  * ---------------
@@ -14,14 +15,15 @@
  * in the footer.
  *
  * Two things make this cheap:
- *   - `Module:Crafting/Data` is 135 KB of Lua and comes back with
+ *   - the public crafting API comes back with
  *     `Access-Control-Allow-Origin: *`
  *   - image URLs are derivable from the item name, so icons need no API lookup
  *     at all and are loaded straight from the wiki by the browser
  */
 
-import type { Item, ItemIndex, CollectionUnlock, ItemRequirement } from "./useItemData";
+import type { Item, ItemIndex, CollectionUnlock, ItemRequirement, RecipeIngredient } from "./useItemData";
 import { adoptResourceItems } from "./itemResource";
+import { fetchCraftingBucket } from "./wikiCraftingBucket";
 
 const WIKI = "https://hypixelskyblock.minecraft.wiki";
 // v2: v1 only indexed items that appear in a grid recipe, which dropped 25 of
@@ -52,8 +54,8 @@ const WIKI = "https://hypixelskyblock.minecraft.wiki";
 // a v5 snapshot after the key bump but before the field landed, which is
 // exactly the poisoned-cache shape this list exists for, so it is retired the
 // same way.
-// v7: the cached item now carries `vanilla` (vanilla recipes are hidden
-// by default; this index is for SkyBlock item crafting). The flag
+// v7: the cached item now carries `vanilla` (vanilla recipes are excluded
+// from the SkyBlock catalogue). The flag
 // is read off the crafting module's own `-- Vanilla Recipes` section marker,
 // so a v6 snapshot has no way to say which side of that line a recipe came
 // from and would keep Acacia Doors in the list for up to a day. Same rule as
@@ -111,7 +113,32 @@ const WIKI = "https://hypixelskyblock.minecraft.wiki";
 // update, but Module:Crafting/Data contains Bee Saliva and no Gigantic Fishing
 // Net key. A v15 snapshot has already discarded it before search can run, so
 // it must be rebuilt rather than kept for the remainder of its one-day TTL.
-export const CACHE_KEY = "wizardsky.crafting.v16";
+// v17: recipe-less resource items that share one display name now retain one
+// index row per Hypixel id. The live accessory resource currently has five
+// Beastmaster Crest ids under the same name; v16 collapsed them to one before
+// the accessory catalogue could see them.
+// v18: invalidate any v17 snapshot written while that parser fix was arriving
+// through hot reload. A partially rebuilt snapshot otherwise survives the
+// daily TTL and makes live catalogue counts appear randomly incomplete.
+// v19: the Collections drill-down now consumes the recipe attached to each
+// tier reward, and module reads use MediaWiki's revision API rather than the
+// raw index route. A v18 development snapshot was verified with the Fire
+// Talisman unlock present but its recipe absent; retaining it would prevent
+// both the revised module read and the article-level material fallback from
+// taking effect until the daily TTL expired. No user-entered state lives here.
+// v20: vanilla classification no longer treats a Hypixel rarity as proof that
+// a Minecraft grid belongs in the SkyBlock recipe catalogue. The explicit
+// misplaced SkyBlock cluster is retained, while tiered Crafting Tables and
+// diamond tools stay vanilla. Minecraft formatting codes are also removed from
+// stored display names. Both changes alter cached item rows, so v19 must retire.
+// v21: Gigantic Fishing Net now carries its direct five-part grid recipe. The
+// wiki module omits that one output, and the article infobox only exposes its
+// flattened Sea Lumies subtotal, which erased the other four ingredients from
+// the planner. A v20 snapshot therefore has to be rebuilt rather than serving
+// the incomplete fallback for another day.
+// v22: the wiki replaced its crafting Lua module with the crafting_recipes
+// table. Rebuild the derived index with its current recipes and exact variants.
+export const CACHE_KEY = "wizardsky.crafting.v22";
 const STALE_KEYS = [
   "wizardsky.crafting.v1",
   "wizardsky.crafting.v2",
@@ -128,17 +155,41 @@ const STALE_KEYS = [
   "wizardsky.crafting.v13",
   "wizardsky.crafting.v14",
   "wizardsky.crafting.v15",
+  "wizardsky.crafting.v16",
+  "wizardsky.crafting.v17",
+  "wizardsky.crafting.v18",
+  "wizardsky.crafting.v19",
+  "wizardsky.crafting.v20",
+  "wizardsky.crafting.v21",
 ];
 
 /** Refresh the parsed database at most once a day. */
 export const CRAFTING_TTL = 24 * 60 * 60 * 1000;
 
-export const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+const stripMinecraftFormatting = (value: string): string => value.replace(/§[0-9a-fk-or]/gi, "").trim();
+
+export const norm = (s: string) => stripMinecraftFormatting(s).toLowerCase().replace(/[^a-z0-9]/g, "");
 export const slug = (s: string) =>
-  s
+  stripMinecraftFormatting(s)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "");
+
+/** Genuine SkyBlock recipes currently misplaced below the wiki's vanilla marker. */
+const SKYBLOCK_RECIPES_IN_VANILLA_SECTION = new Set(
+  [
+    "Jacob's Participation Medal",
+    "Jalapeno Book",
+    "Jasper Power Scroll",
+    "Jerry Helmet",
+    "Jinxed Voodoo Doll",
+    "Juicy Healing Melon",
+    "Juicy Nozzle",
+    "Juju Shortbow",
+    "Jumbo Backpack",
+    "Jungle Biome Stick",
+  ].map(norm)
+);
 
 /**
  * Wiki image URL for an item, built straight from its name.
@@ -155,6 +206,18 @@ export const slug = (s: string) =>
 export const wikiIconUrl = (name: string, px = 64): string => {
   const file = encodeURIComponent(name.replace(/ /g, "_")) + ".png";
   return `${WIKI}/images/thumb/${file}/${px}px-${file}`;
+};
+
+/**
+ * The wiki's original image asset, without asking its thumbnail service to
+ * generate dozens of sizes at once. Dense identity grids such as owned pets
+ * can otherwise overwhelm that service and fall through to generic heads even
+ * though the exact artwork exists. The browser still scales this file inside
+ * ItemIcon's fixed box.
+ */
+export const wikiImageUrl = (name: string): string => {
+  const file = encodeURIComponent(name.replace(/ /g, "_")) + ".png";
+  return `${WIKI}/images/${file}`;
 };
 
 /** Slots a Quick Recipe Syntax spec covers. Rows A-C, columns 1-3, `*` = all. */
@@ -344,23 +407,61 @@ export const parseCraftingLua = (lua: string): Map<string, ParsedRecipe> => {
  */
 export const parseCollectionLua = (lua: string): Map<string, CollectionUnlock[]> => {
   const unlocks = new Map<string, CollectionUnlock[]>();
-  const blocks = [...lua.matchAll(/\n\t\['([^']+)'\]\s*=\s*\{/g)];
+  /** Return one Lua table without depending on the editor's indentation. */
+  const tableAt = (open: number): string => {
+    let depth = 0;
+    let quote: "'" | '"' | null = null;
+    let escaped = false;
+    for (let i = open; i < lua.length; i++) {
+      const char = lua[i];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quote) quote = null;
+        continue;
+      }
+      if (char === "'" || char === '"') {
+        quote = char;
+        continue;
+      }
+      if (char === "{") depth += 1;
+      else if (char === "}" && --depth === 0) return lua.slice(open + 1, i);
+    }
+    return lua.slice(open + 1);
+  };
 
-  for (let i = 0; i < blocks.length; i++) {
-    const collection = blocks[i][1];
-    const start = blocks[i].index!;
-    const end = i + 1 < blocks.length ? blocks[i + 1].index! : lua.length;
-    const body = lua.slice(start, end);
+  /*
+   * The live module contains a top-level collection indented with two tabs
+   * while most use one. The previous exact-one-tab matcher skipped that block,
+   * then let its rewards bleed into the preceding collection. String-keyed
+   * collection tables are found at any indentation and bounded by braces, so
+   * formatting can no longer change which collection owns a reward.
+   */
+  const blocks = [...lua.matchAll(/^[\t ]*\['([^']+)'\]\s*=\s*\{/gm)];
 
-    const tiers = [...body.matchAll(/\[(\d+)\]\s*=\s*\{\s*required\s*=\s*(\d+)([\s\S]*?)(?=\n\t\t\[\d+\]\s*=|\n\t\}|$)/g)];
-    for (const [, tierStr, requiredStr, rest] of tiers) {
+  for (const block of blocks) {
+    const collection = block[1];
+    const open = lua.indexOf("{", block.index!);
+    if (open < 0) continue;
+    const body = tableAt(open);
+
+    const tiers = [...body.matchAll(/^[\t ]*\[(\d+)\]\s*=\s*\{/gm)];
+    for (const tier of tiers) {
+      const tierOpen = body.indexOf("{", tier.index!);
+      if (tierOpen < 0) continue;
+      // `tableAt` closes over `lua`, so offset this tier back into the source.
+      const absoluteTierOpen = open + 1 + tierOpen;
+      const rest = tableAt(absoluteTierOpen);
+      const requiredStr = rest.match(/\brequired\s*=\s*(\d+)/)?.[1];
+      if (!requiredStr) continue;
+
       for (const [, rewardName, type] of rest.matchAll(/\{\s*'([^']+)',\s*type\s*=\s*'([^']+)'\s*\}/g)) {
         if (type !== "Recipe" && type !== "Trade" && type !== "Dwarven Forge Recipe") continue;
         const k = norm(rewardName);
         if (!unlocks.has(k)) unlocks.set(k, []);
         unlocks.get(k)!.push({
           collection,
-          tier: Number(tierStr),
+          tier: Number(tier[1]),
           required: Number(requiredStr),
           type: type as CollectionUnlock["type"],
         });
@@ -372,14 +473,109 @@ export const parseCollectionLua = (lua: string): Map<string, CollectionUnlock[]>
 };
 
 const rawModule = async (page: string, signal?: AbortSignal): Promise<string> => {
-  const res = await fetch(`${WIKI}/index.php?title=${encodeURIComponent(page)}&action=raw`, { signal });
+  const query = new URLSearchParams({
+    action: "query",
+    titles: page,
+    prop: "revisions",
+    rvprop: "content",
+    rvslots: "main",
+    format: "json",
+    formatversion: "2",
+    origin: "*",
+  });
+  const res = await fetch(`${WIKI}/api.php?${query}`, { signal });
   if (!res.ok) throw new Error(`${page} responded ${res.status}`);
-  return res.text();
+  const body = (await res.json()) as {
+    query?: { pages?: { revisions?: { slots?: { main?: { content?: string } } }[] }[] };
+  };
+  const content = body.query?.pages?.[0]?.revisions?.[0]?.slots?.main?.content;
+  if (!content) throw new Error(`${page} returned no module content`);
+  return content;
+};
+
+export interface CraftingRecipeLookup {
+  yields: number;
+  ingredients: RecipeIngredient[];
+}
+
+let liveCraftingRecipes: Map<string, ParsedRecipe> | null = null;
+let liveCraftingRecipesInFlight: Promise<Map<string, ParsedRecipe>> | null = null;
+
+const currentCraftingRecipes = async (signal?: AbortSignal): Promise<Map<string, ParsedRecipe>> => {
+  try {
+    return await fetchCraftingBucket(signal);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    // Retain compatibility with the former module while the wiki migrates.
+    try {
+      const recipes = parseCraftingLua(await rawModule("Module:Crafting/Data", signal));
+      if (recipes.size) return recipes;
+    } catch { /* Keep the current source's error for the existing recovery UI. */ }
+    if (signal?.aborted || !import.meta.env.DEV || import.meta.env.MODE === "test") throw error;
+    // The local snapshot remains development-only and never enters production.
+    return parseCraftingLua((await import("../../data/wiki/modules/Module_Crafting_Data.lua?raw")).default);
+  }
+};
+
+const collectionModule = async (signal?: AbortSignal): Promise<string> => {
+  try {
+    return await rawModule("Module:Collection/Data", signal);
+  } catch (error) {
+    if (!import.meta.env.DEV || import.meta.env.MODE === "test") throw error;
+    // Same development-only boundary as `tooltipCraftingModule`: the checked-in
+    // snapshot keeps local review representative without changing what ships.
+    return (await import("../../data/wiki/modules/Module_Collection_Data.lua?raw")).default;
+  }
+};
+
+/**
+ * Retry the authoritative grid-recipe source for one tooltip.
+ *
+ * The shared item index normally already carries this data. This seam exists
+ * for its honest resource-only fallback: if the larger crafting module failed
+ * while the page loaded, opening one recipe may retry it without replacing a
+ * grid recipe with an article's fully expanded raw-material total.
+ */
+export const fetchCraftingRecipe = async (
+  name: string,
+  signal?: AbortSignal,
+): Promise<CraftingRecipeLookup | null> => {
+  if (!liveCraftingRecipes) {
+    if (!liveCraftingRecipesInFlight) {
+      liveCraftingRecipesInFlight = currentCraftingRecipes(signal)
+        .then((recipes) => {
+          liveCraftingRecipes = recipes;
+          return recipes;
+        })
+        .finally(() => {
+          liveCraftingRecipesInFlight = null;
+        });
+    }
+    await liveCraftingRecipesInFlight;
+  }
+
+  const parsed = liveCraftingRecipes?.get(name)
+    ?? [...(liveCraftingRecipes?.entries() ?? [])].find(([candidate]) => norm(candidate) === norm(name))?.[1]
+    ?? null;
+  if (!parsed) return null;
+  return {
+    yields: parsed.yields,
+    ingredients: parsed.ingredients.map((ingredient) => ({
+      id: slug(ingredient.name),
+      name: ingredient.name,
+      qty: ingredient.qty,
+      ...(ingredient.alternatives.length > 0 ? {
+        alternatives: ingredient.alternatives.map((alternative) => ({ id: slug(alternative), name: alternative })),
+      } : {}),
+    })),
+  };
 };
 
 export interface CraftingSnapshot {
   fetchedAt: number;
   items: ItemIndex;
+  /** Present when the resource index is usable but the wiki recipe layer was unavailable. */
+  warning?: string | null;
 }
 
 const readCache = (): CraftingSnapshot | null => {
@@ -439,6 +635,8 @@ export interface HypixelItem {
    * `itemResource`, which does read it.
    */
   skin?: { value?: string } | null;
+  /** Exact model id in Hypixel's official SkyBlock resource pack. */
+  item_model?: string;
 }
 
 /**
@@ -474,6 +672,35 @@ export interface HypixelItem {
  * linkable from `/items`, which is what the page's cross-links point at.
  */
 const RECIPELESS_CATEGORIES = new Set(["MUTATION", "ACCESSORY", "FISHING_NET"]);
+
+/**
+ * Exact grid recipes missing from `Module:Crafting/Data`, keyed by Hypixel id.
+ *
+ * The module remains the primary source and wins whenever it gains the row.
+ * This narrow supplement exists because the same omission already forces
+ * FISHING_NET outputs into the index above. Without the grid, the article-level
+ * material fallback turns Gigantic Fishing Net into only 26,912 Sea Lumies:
+ * that is the correctly flattened Lumies branch, but it drops Reinforced
+ * Netting, Sublime Silk, Turbo Fishing Net and Flexbone entirely.
+ *
+ * The five direct ingredients were cross-checked against the current NEU item
+ * record, a source Skydex already uses and credits for gaps in public metadata.
+ */
+const CRAFTING_MODULE_GAPS = new Map<string, ParsedRecipe>([
+  [
+    "GIGANTIC_FISHING_NET",
+    {
+      yields: 1,
+      ingredients: [
+        { name: "Enchanted Sea Lumies", qty: 128, alternatives: [] },
+        { name: "Reinforced Netting", qty: 1, alternatives: [] },
+        { name: "Sublime Silk", qty: 32, alternatives: [] },
+        { name: "Turbo Fishing Net", qty: 1, alternatives: [] },
+        { name: "Flexbone", qty: 64, alternatives: [] },
+      ],
+    },
+  ],
+]);
 
 /**
  * Whether the item belongs behind the Craftable only filter.
@@ -514,7 +741,8 @@ export const buildItemIndex = (
   >();
   for (const it of hypixelItems) {
     if (!it.name) continue;
-    const k = norm(it.name);
+    const itemName = stripMinecraftFormatting(it.name);
+    const k = norm(itemName);
     if (!meta.has(k)) {
       meta.set(k, {
         id: it.id,
@@ -549,43 +777,47 @@ export const buildItemIndex = (
   };
 
   const seen = new Set<string>();
+  const recipesByDisplayName = new Map<string, ParsedRecipe>();
   for (const [name, r] of recipes) {
-    seen.add(name);
-    for (const i of r.ingredients) seen.add(i.name);
+    const itemName = stripMinecraftFormatting(name);
+    seen.add(itemName);
+    if (!recipesByDisplayName.has(itemName)) recipesByDisplayName.set(itemName, r);
+    for (const i of r.ingredients) seen.add(stripMinecraftFormatting(i.name));
+  }
+  // Supplement ingredients must be index rows too, or held-item ids and rarity
+  // metadata cannot meet the tree even though the root recipe is now complete.
+  for (const recipe of CRAFTING_MODULE_GAPS.values()) {
+    for (const ingredient of recipe.ingredients) seen.add(stripMinecraftFormatting(ingredient.name));
   }
   // Names Hypixel itself gives us for things no recipe mentions.
   for (const it of hypixelItems) {
-    if (it.name && it.category && RECIPELESS_CATEGORIES.has(it.category)) seen.add(it.name);
+    if (it.name && it.category && RECIPELESS_CATEGORIES.has(it.category)) seen.add(stripMinecraftFormatting(it.name));
   }
 
   const items: ItemIndex = {};
   for (const name of seen) {
     const id = slug(name);
     const m = resolve(name);
-    const r = recipes.get(name);
+    const r = recipesByDisplayName.get(name) ?? (m ? CRAFTING_MODULE_GAPS.get(m.id) : undefined);
 
     /*
      * VANILLA, AND THE RESCUE THAT MAKES THE FLAG TRUSTWORTHY
      * -------------------------------------------------------
-     * Vanilla recipes are hidden by default; this index is for SkyBlock
-     * item crafting. The module's own section marker
+     * Vanilla recipes are excluded from the SkyBlock catalogue. The module's
+     * own section marker
      * is the classifier (see `ParsedRecipe.vanilla`), but it is a page other
-     * people edit, and edited it has been: eight real SkyBlock items (Juju
-     * Shortbow, Jasper Power Scroll, the whole misfiled J-cluster) sit in the
+     * people edit, and edited it has been: a real SkyBlock cluster (Juju
+     * Shortbow, Jasper Power Scroll, and their neighbouring J entries) sits in the
      * vanilla section because someone inserted them alphabetically into the
      * wrong half. So the marker alone would hide a dungeon bow.
      *
-     * The rescue is Hypixel's word against the misfile: an item the resource
-     * states a rarity for is one the game treats as a SkyBlock item, whatever
-     * section its recipe was typed into. Measured live 2026-08-03: the rescue
-     * recovers all 8 misfiled items plus 9 vanilla-shaped ones Hypixel itself
-     * tiers (Diamond tools UNCOMMON, Crafting Table and Ender Chest RARE),
-     * which stay visible on exactly that stated ground. Two misfiled items
-     * have no resource tier (Jerry Helmet, Jungle Biome Stick) and stay
-     * behind the toggle; hidden is stated, never silent, so they are one
-     * click away rather than gone.
+     * Hypixel rarity is not a safe rescue signal because SkyBlock assigns
+     * rarities to several ordinary Minecraft objects too. The explicit set
+     * above follows the current misplaced cluster instead: it keeps the real
+     * SkyBlock recipes, including untiered Jerry Helmet and Jungle Biome Stick,
+     * without restoring Crafting Table, Ender Chest, or diamond-tool grids.
      */
-    const vanilla = Boolean(r?.vanilla) && !m?.tier;
+    const vanilla = Boolean(r?.vanilla) && !SKYBLOCK_RECIPES_IN_VANILLA_SECTION.has(norm(name));
 
     items[id] = {
       name,
@@ -602,19 +834,59 @@ export const buildItemIndex = (
       recipe:
         r?.ingredients.map((i) => ({
           id: slug(i.name),
-          name: i.name,
+          name: stripMinecraftFormatting(i.name),
           qty: i.qty,
-          ...(i.alternatives.length ? { alternatives: i.alternatives.map((a) => ({ id: slug(a), name: a })) } : {}),
+          ...(i.alternatives.length
+            ? { alternatives: i.alternatives.map((a) => ({ id: slug(a), name: stripMinecraftFormatting(a) })) }
+            : {}),
         })) ?? null,
       ...(unlocks.has(norm(name)) ? { unlocks: unlocks.get(norm(name)) } : {}),
     } as Item;
   }
 
-  // Reverse index: what each item feeds into. Capped so staples do not carry
-  // a list of hundreds.
+  /*
+   * A display name is not a primary key. Hypixel legitimately gives several
+   * resource ids the same visible name (the Beastmaster Crest rarities are a
+   * live example). `seen` is name-based because wiki recipes are name-based,
+   * but the accessory catalogue and player holdings are id-based. Preserve
+   * every recipe-less resource id after the normal wiki-name pass; the first
+   * keeps the friendly name slug and colliding ids use their stable Hypixel id
+   * as the internal key. Nothing user-facing is renamed.
+   */
+  const representedIds = new Set(
+    Object.values(items)
+      .map((item) => item.hypixelId)
+      .filter((id): id is string => Boolean(id))
+  );
+  for (const raw of hypixelItems) {
+    if (!raw.id || !raw.name || !raw.category || !RECIPELESS_CATEGORIES.has(raw.category) || representedIds.has(raw.id)) continue;
+
+    const itemName = stripMinecraftFormatting(raw.name);
+    const friendlyKey = slug(itemName);
+    const key = items[friendlyKey] ? slug(raw.id) : friendlyKey;
+    items[key] = {
+      name: itemName,
+      hypixelId: raw.id,
+      tier: raw.tier && raw.tier !== "UNOBTAINABLE" ? raw.tier : null,
+      category: raw.category,
+      npcSell: typeof raw.npc_sell_price === "number" ? raw.npc_sell_price : null,
+      requirements: Array.isArray(raw.requirements) && raw.requirements.length > 0 ? raw.requirements : null,
+      stats: raw.stats && typeof raw.stats === "object" ? raw.stats : null,
+      origin: typeof raw.origin === "string" && raw.origin ? raw.origin : null,
+      ...(raw.rift_transferrable === true ? { riftTransferable: true } : {}),
+      yields: 1,
+      recipe: null,
+      ...(unlocks.has(norm(raw.name)) ? { unlocks: unlocks.get(norm(raw.name)) } : {}),
+    } as Item;
+    representedIds.add(raw.id);
+  }
+
+  // Reverse index: which SkyBlock recipes each item feeds into. Vanilla grids
+  // remain parseable source data, but never become user-facing destinations.
+  // Capped so staples do not carry a list of hundreds.
   const USED_IN_CAP = 40;
   for (const [id, it] of Object.entries(items)) {
-    if (!it.recipe) continue;
+    if (!it.recipe || it.vanilla) continue;
     for (const ing of it.recipe) {
       const target = items[ing.id];
       if (!target) continue;
@@ -635,15 +907,23 @@ export const buildItemIndex = (
  * sell price. Nothing here is shipped with the app.
  */
 export const fetchCraftingData = async (signal?: AbortSignal): Promise<CraftingSnapshot> => {
-  const [craftLua, collLua, hypixel] = await Promise.all([
-    rawModule("Module:Crafting/Data", signal),
-    rawModule("Module:Collection/Data", signal).catch(() => ""),
+  const [crafting, collLua, hypixel] = await Promise.all([
+    currentCraftingRecipes(signal)
+      .then((recipes) => ({ recipes, error: null as Error | null }))
+      .catch((cause: unknown) => ({
+        recipes: new Map<string, ParsedRecipe>(),
+        error: cause instanceof Error ? cause : new Error("The crafting module could not be read."),
+      })),
+    collectionModule(signal).catch(() => ""),
     fetch("https://api.hypixel.net/v2/resources/skyblock/items", { signal })
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .catch(() => ({ items: [] as unknown[] })),
   ]);
 
   const resourceItems = (hypixel as { items?: HypixelItem[] }).items ?? [];
+  if (!crafting.recipes.size && resourceItems.length === 0) {
+    throw crafting.error ?? new Error("The item catalogue could not be read.");
+  }
 
   // The icon ladder needs two more columns of this same response: Hypixel's own
   // display name for ids that do not spell it, and the `skin.value` that draws
@@ -653,13 +933,19 @@ export const fetchCraftingData = async (signal?: AbortSignal): Promise<CraftingS
   adoptResourceItems(resourceItems);
 
   const items = buildItemIndex(
-    parseCraftingLua(craftLua),
+    crafting.recipes,
     collLua ? parseCollectionLua(collLua) : new Map<string, CollectionUnlock[]>(),
     resourceItems
   );
 
-  const snap: CraftingSnapshot = { fetchedAt: Date.now(), items };
-  writeCache(snap);
+  const snap: CraftingSnapshot = {
+    fetchedAt: Date.now(),
+    items,
+    warning: crafting.error?.message ?? null,
+  };
+  // A resource-only index keeps profile views useful, but it is not the full
+  // crafting database and must not block a later retry behind the daily TTL.
+  if (!snap.warning) writeCache(snap);
   return snap;
 };
 

@@ -1,4 +1,4 @@
-name: Build companion mod
+name: Build Skydex mod
 
 on:
   push:
@@ -28,9 +28,9 @@ jobs:
       matrix:
         include:
           - minecraft: "26.1.2"
-            fabric_api: "0.145.4+26.1.2"
+            fabric_api: "0.155.2+26.1.2"
           - minecraft: "26.2"
-            fabric_api: "0.156.0+26.2"
+            fabric_api: "0.158.0+26.2"
 
     defaults:
       run:
@@ -52,6 +52,19 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      - name: Read and verify release version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(sed -n 's/^mod_version=//p' gradle.properties | tr -d '\r')
+          test -n "$version"
+          if [ -n "$RELEASE_TAG" ] && [ "$RELEASE_TAG" != "v$version" ]; then
+            echo "Release tag $RELEASE_TAG does not match mod version $version" >&2
+            exit 1
+          fi
+          echo "mod=$version" >> "$GITHUB_OUTPUT"
+
       - name: Test and build mod
         run: >-
           ./gradlew build --no-daemon
@@ -62,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: skydex-mod-minecraft-${{ matrix.minecraft }}-${{ github.sha }}
-          path: mod/build/libs/skydex-1.0+${{ matrix.minecraft }}.jar
+          path: mod/build/libs/skydex-${{ steps.version.outputs.mod }}+${{ matrix.minecraft }}.jar
           if-no-files-found: error
           retention-days: 14
 
@@ -83,8 +96,13 @@ jobs:
           merge-multiple: true
           path: release-assets
 
+      - name: Create checksums
+        run: |
+          cd release-assets
+          sha256sum *.jar > SHA256SUMS.txt
+
       - name: Attach JARs to published Release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$RELEASE_TAG" release-assets/*.jar --clobber --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "$RELEASE_TAG" release-assets/*.jar release-assets/SHA256SUMS.txt --clobber --repo "$GITHUB_REPOSITORY"

@@ -29,11 +29,36 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// Real-client GUI captures live in their own mod/source set. They use Minecraft's
+// renderer, fonts, textures and input path, but none of the test classes or
+// approved screenshots are packaged in the release jar.
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = 'skydex-gui-test'
+		enableGameTests = false
+		eula = true
+	}
+}
+
+loom {
+	runs {
+		clientGameTest {
+			if (project.hasProperty('testDataMigration')) vmArg '-Dskydex.test.migration=true'
+			if (project.hasProperty('plantCaptureDir')) vmArg "-Dskydex.test.captures=${project.property('plantCaptureDir')}"
+			vmArg "-Dskydex.visual.output=${layout.buildDirectory.dir('gui-visual/actual').get().asFile.absolutePath}"
+		}
+	}
+}
+
 java {
-	// Both supported Minecraft releases are compiled for and require Java 25.
+	// Both supported Minecraft targets are compiled for and require Java 25.
 	toolchain.languageVersion = JavaLanguageVersion.of(25)
 	withSourcesJar()
 }
+
+// HTML is retained as design-reference source only; no browser assets ship.
+sourceSets.main.resources.exclude('assets/skydex/ui/**')
 
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 25
@@ -42,25 +67,71 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.withType(ProcessResources).configureEach {
 	def version = project.version
-	def minecraftDependency = project.minecraft_version.toString()
+	def minecraftVersion = project.minecraft_version
+	def fabricApiVersion = project.fabric_api_version
 	inputs.property 'version', version
-	inputs.property 'minecraftDependency', minecraftDependency
+	inputs.property 'minecraft_version', minecraftVersion
+	inputs.property 'fabric_api_version', fabricApiVersion
 
 	filesMatching('fabric.mod.json') {
-		expand 'version': version, 'minecraft_dependency': minecraftDependency
+		expand 'version': version, 'minecraft_version': minecraftVersion, 'fabric_api_version': fabricApiVersion
 	}
 }
 
 test {
 	useJUnitPlatform()
-	systemProperty 'minecraftVersion', project.minecraft_version
 	testLogging {
 		events 'passed', 'skipped', 'failed'
 	}
 }
 
+def guiVisualStates = [
+	'empty',
+	'loaded',
+	'long_share_link',
+	'presets_open',
+	'presets_after_outside_click',
+	'included_data_open'
+]
+
+tasks.register('guiVisualPreview') {
+	group = 'verification'
+	description = 'Captures the real Skydex GUI for Wizard review.'
+	dependsOn tasks.named('runClientGameTest')
+}
+
+tasks.register('verifyGuiBaselines') {
+	group = 'verification'
+	description = 'Refuses release verification until every GUI state has an approved image.'
+	doLast {
+		def target = project.minecraft_version.replaceAll('[^A-Za-z0-9]+', '_')
+		def templateDir = file('src/gametest/resources/templates')
+		def missing = guiVisualStates.findAll { state ->
+			!new File(templateDir, "skydex_gui_${target}_${state}.png").isFile()
+		}
+		if (!missing.isEmpty()) {
+			throw new GradleException(
+					"GUI release check has no Wizard-approved baseline for: ${missing.join(', ')}")
+		}
+	}
+}
+
+tasks.register('guiVisualCheck') {
+	group = 'verification'
+	description = 'Compares the real Skydex GUI with Wizard-approved images.'
+	dependsOn tasks.named('verifyGuiBaselines')
+	dependsOn tasks.named('runClientGameTest')
+}
+
+tasks.named('runClientGameTest') {
+	mustRunAfter tasks.named('verifyGuiBaselines')
+}
+
 jar {
 	from('LICENSE') {
 		rename { "${it}_${project.base.archivesName.get()}" }
+	}
+	from('THIRD_PARTY_NOTICES.md') {
+		rename { "THIRD_PARTY_NOTICES_${project.base.archivesName.get()}.md" }
 	}
 }

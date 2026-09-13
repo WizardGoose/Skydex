@@ -78,7 +78,7 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /** True when the only thing standing in the way is a missing API key. */
+  /** True when the only thing standing in the way is profile authentication. */
   const [errorNeedsKey, setErrorNeedsKey] = useState(false);
   const [profileData, setProfileData] = useState<HypixelProfileResponse | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
@@ -91,7 +91,8 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
    * fusions" - must not look the same, because only one of them justifies
    * writing zeros over numbers the player entered by hand.
    */
-  const [importGaps, setImportGaps] = useState<{ attributes: boolean; unmappedShards: number }>({
+  const [importGaps, setImportGaps] = useState<{ shards: boolean; attributes: boolean; unmappedShards: number }>({
+    shards: false,
     attributes: false,
     unmappedShards: 0,
   });
@@ -164,11 +165,11 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
   }, [attrsLockOpen]);
 
   // shards from useShards() is already ShardWithKey[]
-  const shardsArray = shards ?? [];
+  const shardsArray = useMemo(() => shards ?? [], [shards]);
 
   // Filtered + sorted shards (same logic as BrowseAllShardsModal)
   const filteredShards = useMemo(() => {
-    // When no query and no rarity filter, only show inventory items
+    // When no query and no rarity filter, only show saved shard quantities
     const baseFilter = !shardsQuery.trim() && shardsRarity === "all"
       ? shardsArray.filter((s) => inventory.has(s.key))
       : filterShards(shardsArray, {
@@ -189,7 +190,7 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
       if (!aStarts && bStarts) return 1;
       return sortShardsByNameWithPrefixAwareness(a, b);
     });
-  }, [shards, shardsQuery, shardsRarity, inventory]);
+  }, [shardsArray, shardsQuery, shardsRarity, inventory]);
 
   // Build a map from shard key (e.g. "L51") to shard name (e.g. "Scarf") for attribute search
   const shardKeyToName = useMemo(() => {
@@ -303,7 +304,9 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
       { shardId: "R45", rarity: "rare", formKey: "crocodileLevel" },
     ];
 
-    onInventoryChange(newInventory);
+    if (profileData.shardsRead) {
+      onInventoryChange(newInventory);
+    }
 
     /**
      * Everything below this line is derived from the per-shard fused counts,
@@ -333,6 +336,7 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
     }
 
     setImportGaps({
+      shards: !profileData.shardsRead,
       attributes: !profileData.attributesRead,
       unmappedShards: profileData.unmappedShards,
     });
@@ -441,7 +445,7 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
   };
 
   const handleClearAll = () => {
-    if (confirm("Are you sure you want to clear all inventory data?")) {
+    if (confirm("Are you sure you want to clear all shard quantities and attributes?")) {
       onInventoryChange(new Map());
       onOwnedAttributesChange(new Map());
       onDisabledShardsChange(new Set());
@@ -450,7 +454,7 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
       setProfileData(null);
       setSelectedProfileId(null);
       setImportSuccess(false);
-      setImportGaps({ attributes: false, unmappedShards: 0 });
+      setImportGaps({ shards: false, attributes: false, unmappedShards: 0 });
       clearHypixelProfileMeta();
       clearDisabledShards();
     }
@@ -472,13 +476,13 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-purple-400" />
-              <h2 className="text-lg font-semibold text-white">Inventory</h2>
+              <h2 className="text-lg font-semibold text-white">Shard quantities</h2>
             </div>
             <div className="flex items-center gap-1">
               {(inventory.size > 0 || ownedAttributes.size > 0) && (
                 <button
                   onClick={handleClearAll}
-                  title="Clear all inventory"
+                  title="Clear shard quantities and attributes"
                   className="p-2 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-5 h-5 text-red-400" />
@@ -553,14 +557,18 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
               counts that did not, and the player's own attribute numbers have
               deliberately been left exactly as they were.
             */}
-            {importSuccess && (importGaps.attributes || importGaps.unmappedShards > 0) && (
+            {importSuccess && (importGaps.shards || importGaps.attributes || importGaps.unmappedShards > 0) && (
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
                 <span className="text-amber-200 text-sm">
-                  {importGaps.attributes && (
-                    <>Shard counts imported. Hypixel sent no fused-attribute data for this profile, so your attribute levels were left untouched rather than reset to zero.</>
+                  {importGaps.shards && (
+                    <>Hypixel sent no loose-shard inventory for this profile, so your saved shard quantities were left untouched.</>
                   )}
-                  {importGaps.attributes && importGaps.unmappedShards > 0 && " "}
+                  {importGaps.shards && importGaps.attributes && " "}
+                  {importGaps.attributes && (
+                    <>Hypixel sent no fused-attribute data for this profile, so your attribute levels were left untouched rather than reset to zero.</>
+                  )}
+                  {(importGaps.shards || importGaps.attributes) && importGaps.unmappedShards > 0 && " "}
                   {importGaps.unmappedShards > 0 && (
                     <>
                       {importGaps.unmappedShards} shard{importGaps.unmappedShards === 1 ? "" : "s"} on your profile
@@ -696,7 +704,7 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
               <div className="text-xs text-slate-400">
                 {shardsQuery.trim() || shardsRarity !== "all"
                   ? `Showing ${filteredShards.length} of ${shardsArray.length} shards`
-                  : `${inventory.size} shard${inventory.size !== 1 ? "s" : ""} in inventory`}
+                  : `${inventory.size} saved shard${inventory.size !== 1 ? " quantities" : " quantity"}`}
               </div>
 
               {filteredShards.length === 0 ? (
@@ -706,7 +714,7 @@ export const InventoryManagementModal: React.FC<InventoryManagementModalProps> =
                   ) : (
                     <>
                       <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p>No shards in inventory</p>
+                      <p>No saved shard quantities</p>
                       <p className="text-sm mt-1">Enter your username above to import</p>
                     </>
                   )}

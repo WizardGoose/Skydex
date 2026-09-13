@@ -6,6 +6,7 @@ import LandingPage from "../../../pages/LandingPage";
 import {
   foreignFields,
   load,
+  normaliseTargetQuantity,
   refreshPlannerState,
   snapshotUnchanged,
   writeState,
@@ -322,6 +323,12 @@ describe("per-mutation sizing", () => {
 });
 
 describe("the state shape", () => {
+  it("keeps billion-scale goal quantities instead of capping them at 999", () => {
+    expect(normaliseTargetQuantity(2_000_000_000)).toBe(2_000_000_000);
+    expect(normaliseTargetQuantity(4.9)).toBe(4);
+    expect(normaliseTargetQuantity(0)).toBe(1);
+  });
+
   /** Every field added to the snapshot has to be optional, or old blobs break. */
   it("keeps the new snapshot fields optional", () => {
     const old: PlanSnapshot = {

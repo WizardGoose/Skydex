@@ -16,6 +16,8 @@ import { MAX_QUANTITIES } from "../constants";
 
 const INVENTORY_ENABLED_KEY = "skyshards_use_inventory";
 
+// The shared holdings drawer inspects raw profile containers; the legacy shard editor keeps its typed index separately.
+
 const CalculatorFormWithContext: React.FC<{
   onSubmit: (data: CalculationFormData, setForm: (data: CalculationFormData) => void) => void;
   inventory?: Map<string, number>;
@@ -335,7 +337,7 @@ const CalculatorPageContent: React.FC = () => {
   const [ownedAttributes, setOwnedAttributes] = useState<Map<string, number>>(loadOwnedAttributes);
   const [disabledShards, setDisabledShards] = useState<Set<string>>(loadDisabledShards);
   const [showInventoryModal, setShowInventoryModal] = useState(false);
-  const [inventoryResult, setInventoryResult] = useState<InventoryCalculationResult | null>(null);
+const [inventoryResult, setInventoryResult] = useState<InventoryCalculationResult | null>(null);
   const [invCalculationData, setInvCalculationData] = useState<Data | null>(null);
   const [invCurrentParams, setInvCurrentParams] = useState<CalculationParams | null>(null);
   const [expandedStates] = useState<Map<string, boolean>>(new Map());
@@ -386,7 +388,7 @@ const CalculatorPageContent: React.FC = () => {
     } catch (error) {
       console.error("Failed to load shard from key:", error);
     }
-  }, [form, setForm, setTargetShardName, customRates, recipeOverrides, ownedAttributes]);
+  }, [form, setForm, setTargetShardName, customRates, recipeOverrides, ownedAttributes, setResult, setCalculationData]);
 
   // Handler for importing shard levels from profile
   const handleShardLevelsImport = useCallback((levels: {
@@ -648,7 +650,6 @@ const CalculatorPageContent: React.FC = () => {
     if (isValidForm) {
       debouncedCalculate(currentForm, 150).catch(console.error);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customRates, recipeOverrides, inventory, useInventory, debouncedCalculate]);
 
   // Initialize params from form for inventory mode display
@@ -758,15 +759,17 @@ const CalculatorPageContent: React.FC = () => {
                 only what the maps actually hold, and an empty inventory says
                 so in words rather than showing a zero.
               */}
+
               <InventoryPanel
+                title="Shard quantities"
                 icon={Package}
                 count={inventory.size > 0 ? `${inventory.size} shard${inventory.size !== 1 ? "s" : ""}` : null}
                 summary={
                   inventory.size === 0 ? (
-                    <span className="text-slate-400">No inventory imported.</span>
+                    <span className="text-slate-400">No shard quantities saved.</span>
                   ) : (
                     <>
-                      <span className="text-slate-100 font-medium">{inventory.size}</span> shard type{inventory.size !== 1 ? "s" : ""} in inventory
+                      <span className="text-slate-100 font-medium">{inventory.size}</span> saved shard type{inventory.size !== 1 ? "s" : ""}
                       {ownedAttributes.size > 0 && (
                         <span className="ml-2">
                           • <span className="text-slate-100 font-medium">{ownedAttributes.size}</span> attribute{ownedAttributes.size !== 1 ? "s" : ""}
@@ -778,7 +781,7 @@ const CalculatorPageContent: React.FC = () => {
               >
                 <button onClick={() => setShowInventoryModal(true)} className={`${BTN_PRIMARY} w-full justify-center`}>
                   <Package className="w-4 h-4" />
-                  <span>Manage Inventory</span>
+                  <span>Edit shard quantities</span>
                 </button>
               </InventoryPanel>
 

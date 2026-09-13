@@ -6,8 +6,8 @@
  * the playtest that would settle it. Nothing gets to be here just because it
  * felt about right.
  *
- * Full write-up, including the reasoning behind the assumptions and the
- * unresolved ambiguities, lives in `docs/greenhouse-time-research.md`.
+ * Keep each assumption beside the constant it governs so behavior and
+ * provenance cannot drift apart.
  */
 
 /** How a constant earned its place. */
@@ -47,11 +47,8 @@ export const BASE_STAGE_SECONDS: SourcedValue<number> = {
 };
 
 /**
- * Decay timers are in DAYS, and they apply to the fully grown mutation.
- *
- * This is the answer to "do my crops last about 3 days?" - near enough, but
- * the clock is on the mutation, not the crops around it. See the research doc
- * for the full verdict, because the distinction changes what you replant.
+ * Decay timers are in DAYS. Mutations keep their own timers, while base crops
+ * share the fixed 72-hour timer introduced on August 20, 2026.
  */
 export const DECAY_UNIT: SourcedValue<"days"> = {
   value: "days",
@@ -61,6 +58,14 @@ export const DECAY_UNIT: SourcedValue<"days"> = {
     'even if fully hydrated or placed by the player. Different mutations can have different decay timers. The ' +
     'lowest is 3 days, and certain mutations do not have any decay at all." Corroborated by ' +
     'Changelog/2026/February 2: "Increased Noctilume\'s decay period from 5 to 6 days."',
+};
+
+/** Base crops expire 72 hours after they are planted. */
+export const BASE_CROP_DECAY_DAYS: SourcedValue<number> = {
+  value: 3,
+  provenance: "cited",
+  source:
+    'Hypixel SkyBlock August 20, 2026 patch notes, Greenhouse section: "Base crops now decay after 72 hours."',
 };
 
 /**

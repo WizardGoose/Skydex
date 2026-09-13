@@ -88,7 +88,7 @@ const DEBOUNCE_MS = 110;
  * because it is a `useMemo` dependency inside `usePinnedTarget`, and a fresh
  * string every render would rebuild the row every render.
  */
-const PIN_HINT = "Your target";
+const PIN_HINT = "Target";
 
 /** One thing Enter can land on. A row to open, or an action to run in place. */
 interface Option {

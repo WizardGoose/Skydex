@@ -12,9 +12,14 @@ export const PUBLIC_PAGE_METADATA: readonly PublicPageMetadata[] = [
       "View Hypixel SkyBlock profiles, stats, accessories, island progress, and net worth.",
   },
   {
-    path: "/crafting",
-    label: "Crafting",
-    description: "Browse recipes and plan Hypixel SkyBlock crafting with Skydex.",
+    path: "/recipes",
+    label: "Recipes",
+    description: "Compare Hypixel SkyBlock crafting, Forge, shop, market, and acquisition routes with Skydex.",
+  },
+  {
+    path: "/storage",
+    label: "Storage",
+    description: "Browse inventory, sacks, backpacks, and island chests captured by the Skydex mod.",
   },
   {
     path: "/forge",

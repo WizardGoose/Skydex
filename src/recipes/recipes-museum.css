@@ -1,0 +1,24 @@
+.recipes-museum { min-width: 0; border-radius: .62rem; }
+.recipes-museum:has(.profile-progression-filter-menu[open]) { position: relative; z-index: 46; }
+.recipes-museum-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1rem; padding: 1rem; border-bottom: 1px solid var(--profile-border); }
+.recipes-museum-heading h2 { font-size: 1.06rem; font-weight: 730; }
+.recipes-museum-heading > span { font-size: .75rem; color: var(--profile-label); }
+.recipes-museum-filters { padding: .75rem 1rem; }
+.recipes-museum-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(100%,20rem),1fr)); align-items: start; align-content: start; gap: 0 1.5rem; padding: 0 1rem 1rem; max-height: 29rem; overflow: auto; scrollbar-gutter: stable; overscroll-behavior-y: contain; }
+.recipes-museum-unit { min-width: 0; border-bottom: 1px solid var(--profile-border); }
+.recipes-museum-unit > summary { display: flex; align-items: center; gap: .65rem; padding: .7rem 0; cursor: pointer; list-style: none; }
+.recipes-museum-unit > summary::-webkit-details-marker { display: none; }
+.recipes-museum-unit[open] > summary > svg { transform: rotate(180deg); }
+.recipes-museum-unit > summary > svg { flex: none; color: var(--profile-label); }
+.recipes-museum-art { flex: none; }
+.recipes-museum .profile-item-tile-wrap,.recipes-museum .profile-item-tile { width: 2.2rem; height: 2.2rem; }
+.recipes-museum .profile-item-tile-icon { width: 28px; height: 28px; }
+.recipes-museum-copy { flex: 1; min-width: 0; }
+.recipes-museum-copy strong,.recipes-museum-piece a { font-size: .75rem; font-weight: 600; }
+.recipes-museum-copy small,.recipes-museum-piece small { display: block; color: var(--profile-label); font-size: .6875rem; line-height: 1.5; }
+.recipes-museum-pieces { padding: 0 0 .7rem .5rem; }
+.recipes-museum-piece { display: flex; align-items: center; gap: .6rem; padding: .45rem 0; }
+.recipes-museum-piece > span { flex: 1; min-width: 0; }
+.recipes-museum-piece > button { flex: none; width: 2rem; height: 2rem; display: grid; place-items: center; }
+.recipes-museum-plan { display: flex; align-items: center; gap: .4rem; color: var(--profile-accent); font-size: .75rem; padding: .6rem 0 .2rem; }
+.recipes-museum-empty { padding: 1rem; font-size: .75rem; color: var(--profile-label); }

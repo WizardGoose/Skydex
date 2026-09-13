@@ -5,19 +5,23 @@ import {
   UNDERSCORE_W,
   ZZZ_COUNT,
   ZZZ_PEAK_OPACITY,
+  ZZZ_VIEWPORT,
   blushCentres,
   underscoreSpan,
   zzzAt,
 } from "../adornments";
 import {
+  MARK_WAKE_PADDING_PX,
   PET_TRAVEL_PX,
   PET_WINDOW_MS,
   TIMING,
+  WAKE_PADDING_PX,
   YAWN_CHANCE,
   YAWN_CLOSE_MS,
   YAWN_OPEN_MS,
   YAWN_TOTAL_MS,
   blinkDuration,
+  nearField,
   petTravel,
   resolveEye,
   shouldYawn,
@@ -77,6 +81,24 @@ const chain = (s: FaceState) => {
   const face = facePoseFor(glyph, s.petted, s.yawning);
   return { glyph, nameL, nameR, face, mouth: mouthGeometry(MOUTH_POSES[face].hollow) };
 };
+
+describe("the attentive region", () => {
+  const rect = { left: 100, top: 200, right: 300, bottom: 240 };
+
+  it("uses a tight region around the search field", () => {
+    expect(nearField(rect, rect.left - WAKE_PADDING_PX, 220)).toBe(true);
+    expect(nearField(rect, rect.right + WAKE_PADDING_PX, 220)).toBe(true);
+    expect(nearField(rect, rect.left - WAKE_PADDING_PX - 0.01, 220)).toBe(false);
+    expect(nearField(rect, 200, rect.bottom + WAKE_PADDING_PX + 0.01)).toBe(false);
+  });
+
+  it("gives little Wonder a larger but still local hover target", () => {
+    expect(MARK_WAKE_PADDING_PX).toBeGreaterThan(WAKE_PADDING_PX);
+    expect(MARK_WAKE_PADDING_PX).toBeLessThan(70);
+    expect(nearField(rect, rect.left - MARK_WAKE_PADDING_PX, 220, MARK_WAKE_PADDING_PX)).toBe(true);
+    expect(nearField(rect, rect.left - MARK_WAKE_PADDING_PX - 1, 220, MARK_WAKE_PADDING_PX)).toBe(false);
+  });
+});
 
 describe("asleep: w.w with a zzz", () => {
   it("drops the letters into the lowercase pose", () => {
@@ -142,6 +164,21 @@ describe("asleep: w.w with a zzz", () => {
       expect(late.y).toBeLessThan(early.y); /* y grows downward */
       expect(late.x).toBeGreaterThan(early.x);
       expect(late.scale).toBeGreaterThan(early.scale);
+    }
+  });
+
+  it("keeps the whole sleeping glyph arc inside its paint viewport", () => {
+    for (let t = 0; t < TIMING.zzzGap * ZZZ_COUNT; t += 17) {
+      for (let index = 0; index < ZZZ_COUNT; index++) {
+        const z = zzzAt(t, index);
+        if (!z.visible) continue;
+        // A full em on every side also covers differences in mobile font metrics.
+        const extent = 3.1 * z.scale;
+        expect(z.x - extent).toBeGreaterThanOrEqual(ZZZ_VIEWPORT.x);
+        expect(z.x + extent).toBeLessThanOrEqual(ZZZ_VIEWPORT.x + ZZZ_VIEWPORT.width);
+        expect(z.y - extent).toBeGreaterThanOrEqual(ZZZ_VIEWPORT.y);
+        expect(z.y + extent).toBeLessThanOrEqual(ZZZ_VIEWPORT.y + ZZZ_VIEWPORT.height);
+      }
     }
   });
 });

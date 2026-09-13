@@ -2,6 +2,7 @@ import SHARD_DESCRIPTIONS from "../desc.json";
 import { currentAccess, writeAccess } from "../island/apiKey";
 import { fetchProfileMembers, resolveAccount } from "../island/hypixel";
 import type { ApiFailure, HypixelAccount, ProfileMember } from "../island/hypixel";
+import { readShardProfileSignals, type ShardProfileSignals } from "./profileAssumptions";
 
 /**
  * Importing a player's shards and attributes off the Hypixel API.
@@ -17,15 +18,13 @@ import type { ApiFailure, HypixelAccount, ProfileMember } from "../island/hypixe
  * applied either. In a deployed build the browser simply discarded the answer.
  *
  * The import now uses the shared request boundary in `island/hypixel.ts`.
- * Production sends the request through Skydex's narrow same-origin Worker;
- * local development can still call Hypixel directly with the developer's own
- * key. Nothing here sees a URL or header. It is handed already-fetched member
- * objects and turns them into shard counts.
+ * Production sends the request through Skydex's narrow API Worker. Nothing
+ * here sees a URL or header; it is handed already-fetched member objects and
+ * turns them into shard counts.
  *
  * WHAT IS ON THE WIRE, AND WHAT IS NOT
  * ------------------------------------
- * Every field read here was traced against a real authenticated dump of a
- * live account, recorded in `docs/hypixel-api-cheatsheet.md`:
+ * Supported wire shape, pinned by the parser tests:
  *
  *   member.shards.owned[]       array of `{type, amount_owned, captured}`.
  *                               `type` is the bare shard id (`SPHINX`), NOT the
@@ -88,6 +87,8 @@ export interface ProfileSummary {
 export interface ProfileData {
   profile: ProfileSummary;
   shards: ShardOwned[];
+  /** False when Hypixel sent no `shards.owned` collection for this member. */
+  shardsRead: boolean;
   attributes: AttributeOwned[];
   /**
    * False when Hypixel sent no `attributes.stacks` for this member at all.
@@ -100,6 +101,8 @@ export interface ProfileData {
   attributesRead: boolean;
   /** Shard ids Hypixel sent that our dataset does not know. Usually 0. */
   unmappedShards: number;
+  /** Calculator inputs derived from this member without retaining the raw payload. */
+  signals: ShardProfileSignals;
 }
 
 export interface HypixelProfileResponse {
@@ -107,6 +110,8 @@ export interface HypixelProfileResponse {
   uuid: string;
   profiles: ProfileData[];
   selected_profile_id: string | null;
+  fetchedAt?: number;
+  cacheState?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -152,6 +157,8 @@ export interface ShardsRead {
   shards: ShardOwned[];
   /** Ids Hypixel sent that the dataset has no entry for. */
   unmapped: number;
+  /** Whether `shards.owned` was present, including when it was an empty array. */
+  available: boolean;
 }
 
 /**
@@ -165,9 +172,9 @@ export function readShardsOwned(member: unknown, catalogue: ShardCatalogueEntry[
   const out: ShardOwned[] = [];
   let unmapped = 0;
 
-  if (!isObject(member)) return { shards: out, unmapped };
+  if (!isObject(member)) return { shards: out, unmapped, available: false };
   const shards = isObject(member.shards) ? member.shards : null;
-  if (!shards || !Array.isArray(shards.owned)) return { shards: out, unmapped };
+  if (!shards || !Array.isArray(shards.owned)) return { shards: out, unmapped, available: false };
 
   const byId = new Map<string, ShardCatalogueEntry>();
   for (const entry of catalogue) {
@@ -190,7 +197,7 @@ export function readShardsOwned(member: unknown, catalogue: ShardCatalogueEntry[
     out.push({ id: shard.key, name: shard.name, amount, rarity: shard.rarity });
   }
 
-  return { shards: out, unmapped };
+  return { shards: out, unmapped, available: true };
 }
 
 /** attribute id (`decent_karma`) to our shard key (`C35`), built once from desc.json. */
@@ -235,8 +242,18 @@ export function readAttributesOwned(member: unknown): AttributeOwned[] | null {
 }
 
 /** Turn one fetched member into the shape the modal reads. */
-export function toProfileData(entry: ProfileMember, catalogue: ShardCatalogueEntry[]): ProfileData {
-  const { shards, unmapped } = readShardsOwned(entry.member, catalogue);
+export function toProfileData(
+  entry: ProfileMember,
+  catalogue: ShardCatalogueEntry[],
+  signals: ShardProfileSignals = {
+    huntingXp: null,
+    huntersLuck: null,
+    kuudraTier: null,
+    attributeStacks: null,
+    itemFortune: { available: false, total: 0, parts: [], davidCloakEquipped: false },
+  },
+): ProfileData {
+  const { shards, unmapped, available: shardsRead } = readShardsOwned(entry.member, catalogue);
   const attributes = readAttributesOwned(entry.member);
 
   return {
@@ -248,9 +265,11 @@ export function toProfileData(entry: ProfileMember, catalogue: ShardCatalogueEnt
       selected: entry.selected,
     },
     shards,
+    shardsRead,
     attributes: attributes ?? [],
     attributesRead: attributes !== null,
     unmappedShards: unmapped,
+    signals,
   };
 }
 
@@ -279,7 +298,9 @@ export type ImportResult =
 export async function importPlayerProfile(
   username: string,
   catalogue: ShardCatalogueEntry[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  cachedOnly = false,
+  onCounts?: (response: HypixelProfileResponse) => void,
 ): Promise<ImportResult> {
   const access = currentAccess();
   const key = access.key.trim();
@@ -295,26 +316,34 @@ export async function importPlayerProfile(
   if (access.uuid && access.name && access.name.toLowerCase() === typed.toLowerCase()) {
     account = { uuid: access.uuid, name: access.name };
   } else {
+    if (cachedOnly) return { ok: false, error: { reason: "network", message: "No saved profile is available." } };
     const resolved = await resolveAccount(typed, signal);
     if (!resolved.ok) return { ok: false, error: resolved.error };
     account = resolved.value;
   }
 
-  const members = await fetchProfileMembers(account, key, signal);
+  const members = await fetchProfileMembers(account, key, signal, cachedOnly);
   if (!members.ok) return { ok: false, error: members.error };
-  writeAccess({ keyState: "valid", checkedAt: members.fetchedAt ?? Date.now() });
+  if (!cachedOnly) writeAccess({ keyState: "valid", checkedAt: members.fetchedAt ?? Date.now() });
 
-  const profiles = members.value.map((entry) => toProfileData(entry, catalogue));
+  const responseFor = (profiles: ProfileData[]): HypixelProfileResponse => ({
+    username: account.name || typed,
+    uuid: account.uuid,
+    profiles,
+    selected_profile_id: profiles.find((profile) => profile.profile.selected)?.profile.profile_id ?? null,
+    fetchedAt: members.fetchedAt ?? Date.now(),
+    cacheState: members.cacheState,
+  });
+  // Counts are plain JSON. They must not wait for equipment NBT or the much
+  // larger item catalogue before becoming available to the calculator.
+  onCounts?.(responseFor(members.value.map((entry) => toProfileData(entry, catalogue))));
+
+  const profiles = await Promise.all(members.value.map(async (entry) =>
+    toProfileData(entry, catalogue, await readShardProfileSignals(entry.member, signal, cachedOnly || Boolean(members.cacheState?.includes("stale"))))
+  ));
 
   return {
     ok: true,
-    value: {
-      // A pasted uuid resolves with an empty name; fall back to what was typed
-      // rather than showing a blank in "imported from".
-      username: account.name || typed,
-      uuid: account.uuid,
-      profiles,
-      selected_profile_id: profiles.find((p) => p.profile.selected)?.profile.profile_id ?? null,
-    },
+    value: responseFor(profiles),
   };
 }

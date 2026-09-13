@@ -166,22 +166,17 @@ export interface FaceState {
   /** The search field has focus. */
   alert: boolean;
   /**
-   * Nothing has happened on the page for `TIMING.sleepAfter`. The mark drops to
-   * `w.w` and grows a zzz.
+   * The visitor is away from Wonder and his nearby interaction surface. The
+   * mark drops to `w.w` and grows a zzz after the local doze delay.
    *
-   * This is an ABSENCE, which makes it different in kind from every other flag
-   * here: the others are set by something occurring, this one is set by nothing
-   * occurring. That is why it sits at the bottom of the priority order rather
-   * than competing with the rest, and why the component that owns it watches
-   * real user activity (pointer, key, scroll, focus) rather than any one
-   * feature of the page.
+   * This is deliberately local presence, not generic page activity. Reading or
+   * moving elsewhere does not keep Wonder awake.
    */
   sleeping: boolean;
   /**
-   * The pointer is well off to one side of the mark: positive right, negative
-   * left, zero when it is close, away, or nothing is worth watching. The mark
-   * glances toward it with the same scan eyes thinking uses, which is what
-   * keeps the law intact: a glance is a POSE, and nothing translates.
+   * The pointer is to one side inside Wonder's attentive region: positive
+   * right, negative left, zero when it is centred or away. The face resolves
+   * the glance while the rig supplies the small follow-through.
    */
   glance: number;
   /**
@@ -343,7 +338,7 @@ export const TIMING = {
   scanFlip: 450,
   /** How long `^.^` is held after a search settles. */
   satisfiedHold: 450,
-  /** Half the breath's cycle. The only thing left that is a transform. */
+  /** Half the legacy geometry-only breath cycle retained for pure pose tools. */
   breathHalf: 3400,
 
   /* ---- sleep ---------------------------------------------------------- */
@@ -359,7 +354,7 @@ export const TIMING = {
    *
    * With the rule this tight, 22s would mean the sleeping state was almost
    * never seen: you move the mouse off the field and then have to not come back
-   * for the better part of half a minute. 5 seconds is the pause after which
+   * for the better part of half a minute. A little over 3 seconds is the pause after which
    * "they have gone to do something else" is a fair reading, and it makes sleep
    * the state the mark is usually IN rather than a rare event, which is what
    * "sleep unless" asks for.
@@ -420,6 +415,14 @@ export const PET_TRAVEL_PX = 120;
  * make its ends far more sensitive than its middle.
  */
 export const WAKE_PADDING_PX = 18;
+
+/**
+ * Wonder is a much smaller target than the search field, so its attentive
+ * region needs a little more room than the field's one-finger inset. This is
+ * still local to the character: at the largest mark size it reaches roughly
+ * half a mark-width past the visible strokes, not across the page.
+ */
+export const MARK_WAKE_PADDING_PX = 54;
 
 /**
  * Whether a pointer at `(px, py)` counts as being at the field.

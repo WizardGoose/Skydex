@@ -45,6 +45,14 @@ const api = (receivedAt: number, sacks: Record<string, number> | null): IslandFe
   },
 });
 
+const apiWithIdentity = (receivedAt: number, profileName: string, playerUuid = "u"): IslandFeed => ({
+  ...api(receivedAt, { OAK_LOG: 4 }),
+  snapshot: snap({
+    player: { uuid: playerUuid, name: "Steve" },
+    profile: { name: profileName, gameMode: "ironman" },
+  }),
+});
+
 describe("deriveSections", () => {
   it("separates absent, empty and captured on the optional sections", () => {
     const sections = deriveSections(snap({ inventory: [], enderChest: [{ id: "A", name: "A", count: 1 }] }));
@@ -195,6 +203,122 @@ describe("mergeFeeds", () => {
     // belongs to nobody, so the named one supplies the whole block.
     expect(merged.snapshot?.player.name).toBe("Steve");
     expect(merged.snapshot?.profile).toStrictEqual({ name: "Papaya", gameMode: "ironman" });
+  });
+
+  it("filters a mismatched feed before it can contribute another account's chests", () => {
+    const staleMod = modFeed(snap({
+      player: { uuid: "other-account", name: "Old Player" },
+      chests: [chest(1)],
+    }), 900);
+    const currentApi = api(100, { OAK_LOG: 4 });
+    const feeds = { mod: staleMod, api: currentApi };
+    const merged = mergeFeeds(feeds, {
+      identity: { playerUuids: ["u"], profileName: "Papaya", hasConnectedAccount: true },
+    });
+
+    expect(merged.snapshot?.player.uuid).toBe("u");
+    expect(merged.snapshot?.chests).toStrictEqual([]);
+    expect(merged.sections.chests).toStrictEqual({ state: "absent", source: null, at: null });
+    expect(merged.sources).toStrictEqual({ mod: null, api: 100 });
+    // Filtering is a view concern. The persisted feed remains available for a
+    // later identity change or an explicit user clear.
+    expect(feeds.mod).toBe(staleMod);
+    expect(feeds.mod.snapshot.chests).toHaveLength(1);
+  });
+
+  it("keeps a matching mod feed eligible to win the chest section", () => {
+    const currentMod = modFeed(snap({ chests: [chest(2)] }), 100);
+    const merged = mergeFeeds({ mod: currentMod, api: api(200, { OAK_LOG: 4 }) }, {
+      identity: { playerUuids: ["u"], profileName: "Papaya", hasConnectedAccount: true },
+    });
+
+    expect(merged.snapshot?.chests).toHaveLength(1);
+    expect(merged.sections.chests).toStrictEqual({ state: "captured", source: "mod", at: 100 });
+    expect(merged.sources).toStrictEqual({ mod: 100, api: 200 });
+  });
+
+  it("uses a matching API profile as the anchor when no profile is selected explicitly", () => {
+    const staleMod = modFeed(snap({
+      profile: { name: "Apple", gameMode: "ironman" },
+      chests: [chest(1)],
+    }), 900);
+    const currentApi = apiWithIdentity(100, "Papaya");
+    const feeds = { mod: staleMod, api: currentApi };
+    const merged = mergeFeeds(feeds, {
+      identity: { playerUuids: ["u"], hasConnectedAccount: true },
+    });
+
+    expect(merged.snapshot?.profile.name).toBe("Papaya");
+    expect(merged.snapshot?.chests).toStrictEqual([]);
+    expect(merged.sources).toStrictEqual({ mod: null, api: 100 });
+    expect(feeds.mod).toBe(staleMod);
+  });
+
+  it("keeps a same-profile mod feed when the API supplies the selected profile name", () => {
+    const currentMod = modFeed(snap({ chests: [chest(2)] }), 100);
+    const merged = mergeFeeds({ mod: currentMod, api: apiWithIdentity(200, "Papaya") }, {
+      identity: { playerUuids: ["u"], hasConnectedAccount: true },
+    });
+
+    expect(merged.snapshot?.profile.name).toBe("Papaya");
+    expect(merged.snapshot?.chests).toHaveLength(1);
+    expect(merged.sections.chests).toStrictEqual({ state: "captured", source: "mod", at: 100 });
+    expect(merged.sources).toStrictEqual({ mod: 100, api: 200 });
+  });
+
+  it("does not blend mod data when the eligible API profile has no name", () => {
+    const currentMod = modFeed(snap({ chests: [chest(2)] }), 100);
+    const merged = mergeFeeds({ mod: currentMod, api: apiWithIdentity(200, "") }, {
+      identity: { playerUuids: ["u"], hasConnectedAccount: true },
+    });
+
+    expect(merged.snapshot?.profile.name).toBe("");
+    expect(merged.snapshot?.chests).toStrictEqual([]);
+    expect(merged.sections.chests).toStrictEqual({ state: "absent", source: null, at: null });
+    expect(merged.sources).toStrictEqual({ mod: null, api: 200 });
+  });
+
+  it("does not let a foreign API feed choose the profile anchor", () => {
+    const currentMod = modFeed(snap({ chests: [chest(2)] }), 100);
+    const merged = mergeFeeds({ mod: currentMod, api: apiWithIdentity(900, "Apple", "other-account") }, {
+      identity: { playerUuids: ["u"], hasConnectedAccount: true },
+    });
+
+    expect(merged.snapshot?.profile.name).toBe("Papaya");
+    expect(merged.snapshot?.chests).toHaveLength(1);
+    expect(merged.sections.chests).toStrictEqual({ state: "captured", source: "mod", at: 100 });
+    expect(merged.sources).toStrictEqual({ mod: 100, api: null });
+  });
+
+  it("keeps an explicit caller profile expectation authoritative", () => {
+    const currentMod = modFeed(snap({ chests: [chest(2)] }), 100);
+    const merged = mergeFeeds({ mod: currentMod, api: apiWithIdentity(200, "Apple") }, {
+      identity: { playerUuids: ["u"], profileName: "Papaya", hasConnectedAccount: true },
+    });
+
+    expect(merged.snapshot?.profile.name).toBe("Papaya");
+    expect(merged.snapshot?.chests).toHaveLength(1);
+    expect(merged.sections.chests).toStrictEqual({ state: "captured", source: "mod", at: 100 });
+    expect(merged.sources).toStrictEqual({ mod: 100, api: null });
+  });
+
+  it("withholds all feeds while a connected account is unresolved", () => {
+    const merged = mergeFeeds({ mod: modFeed(snap({ chests: [chest(1)] }), 100) }, {
+      identity: { playerUuids: [], hasConnectedAccount: true },
+    });
+
+    expect(merged.snapshot).toBeNull();
+    expect(merged.sources).toStrictEqual({ mod: null, api: null });
+    expect(merged.sections.chests).toStrictEqual({ state: "absent", source: null, at: null });
+  });
+
+  it("keeps a real mod-only feed when no connected account is selected", () => {
+    const merged = mergeFeeds({ mod: modFeed(snap({ chests: [chest(1)] }), 100) }, {
+      identity: { playerUuids: [], hasConnectedAccount: false },
+    });
+
+    expect(merged.snapshot?.chests).toHaveLength(1);
+    expect(merged.sources).toStrictEqual({ mod: 100, api: null });
   });
 });
 

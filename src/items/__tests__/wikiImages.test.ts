@@ -660,7 +660,7 @@ describe("the icon cache", () => {
     expect(readIcon("Rapid Juju Shortbow")).toBeNull();
   });
 
-  it("batches 50 titles per request", async () => {
+  it("batches 25 logical titles so PNG and GIF requests stay under MediaWiki's 50-title cap", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({ query: { pages: [] } }), { status: 200 }),
     );
@@ -669,7 +669,7 @@ describe("the icon cache", () => {
     const names = Array.from({ length: 120 }, (_, i) => `Item ${i}`);
     const learned = await fetchIconUrls(names);
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(Object.keys(learned)).toHaveLength(120);
   });
 
@@ -905,7 +905,7 @@ describe("composition across the whole funnel", () => {
 });
 
 describe("chooseIconSource with a head render", () => {
-  const HEAD = "https://mc-heads.net/avatar/abc123/64";
+  const HEAD = "https://mc-heads.net/head/abc123/64";
 
   it("keeps the head behind every wiki rung", () => {
     const { current } = chooseIconSource({ display: "Juju Shortbow", failed: [], lateSrc: HEAD });

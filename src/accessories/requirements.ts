@@ -25,10 +25,10 @@ import type { ItemRequirement } from "../items/useItemData";
  * player they are locked out of something they can already get. Hypixel's
  * structured array is authoritative, exact, and already on the page.
  *
- * That same measurement is why there is no skill-level machinery in this file.
- * Computing a player's Farming or Combat level from `player_data.experience`
- * against the skills resource is perfectly possible, and no accessory in the
- * game needs it, so it would be dead code with a maintenance cost.
+ * Recipes also reuse this checker. Some non-accessory recipe outputs do carry
+ * a structured SKILL gate, so callers can provide levels derived from
+ * `player_data.experience` and Hypixel's current skills resource. Accessory
+ * callers leave that optional projection null because no accessory needs it.
  *
  * THE THREE-STATE RULE
  * --------------------
@@ -39,7 +39,7 @@ import type { ItemRequirement } from "../items/useItemData";
  * would be claiming the player fails something nobody measured.
  */
 
-export type RequirementKind = "slayer" | "trophyFishing" | "heartOfTheMountain" | "collection" | "other";
+export type RequirementKind = "slayer" | "trophyFishing" | "heartOfTheMountain" | "skill" | "collection" | "other";
 
 export interface Requirement {
   kind: RequirementKind;
@@ -157,6 +157,20 @@ export function readRequirement(raw: ItemRequirement | unknown): Requirement | n
     };
   }
 
+  if (type === "SKILL") {
+    const skill = typeof raw.skill === "string" ? raw.skill : "";
+    const level = typeof raw.level === "number" ? raw.level : null;
+    if (!skill || level === null) return null;
+    const name = titleCase(skill);
+    return {
+      kind: "skill",
+      target: name,
+      threshold: String(level),
+      how: `Reach ${name} level ${level}.`,
+      raw: type,
+    };
+  }
+
   // Known to exist, not understood in detail. Named honestly rather than hidden.
   return {
     kind: "other",
@@ -176,9 +190,11 @@ export interface PlayerProgress {
   slayerLevels: Record<string, number> | null;
   /** Trophy fish counts, keyed exactly as Hypixel keys them ("frog_silver"). */
   trophyFish: Record<string, number> | null;
+  /** Resource skill key to the level derived from Hypixel's current XP ladder. */
+  skillLevels?: Record<string, number> | null;
 }
 
-export const NO_PROGRESS: PlayerProgress = { slayerLevels: null, trophyFish: null };
+export const NO_PROGRESS: PlayerProgress = { slayerLevels: null, trophyFish: null, skillLevels: null };
 
 /**
  * Read a player's slayer levels.
@@ -234,7 +250,7 @@ export function readTrophyFish(member: unknown): Record<string, number> | null {
 }
 
 export function readProgress(member: unknown): PlayerProgress {
-  return { slayerLevels: readSlayerLevels(member), trophyFish: readTrophyFish(member) };
+  return { slayerLevels: readSlayerLevels(member), trophyFish: readTrophyFish(member), skillLevels: null };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -289,6 +305,16 @@ export function checkRequirement(req: Requirement, progress: PlayerProgress): Ch
       // Tiers short, counting a never-caught fish as one below bronze.
       gap: from - best,
     };
+  }
+
+  if (req.kind === "skill") {
+    if (!progress.skillLevels) return unknown();
+    const key = Object.keys(progress.skillLevels).find((candidate) => titleCase(candidate) === req.target);
+    const need = Number(req.threshold);
+    if (!key || !Number.isFinite(need)) return unknown();
+    const have = progress.skillLevels[key] ?? 0;
+    const met = have >= need;
+    return { ...req, state: met ? "met" : "unmet", have: String(have), gap: met ? null : need - have };
   }
 
   /*

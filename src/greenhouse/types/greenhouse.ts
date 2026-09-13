@@ -64,6 +64,8 @@ export interface SolveRequest {
   targets: MutationGoal[];
   priorities?: Record<string, number>;
   locks?: LockDefinition[];
+  /** Strip support crops that do not contribute to any reported mutation. */
+  removeUnusedCrops?: boolean;
 }
 
 // Unified placement/mutation format - uses position/size

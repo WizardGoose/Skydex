@@ -1,57 +1,40 @@
-# SkyShards Guide
+# Skydex Guide
 
-Welcome to the **SkyShards Fusion Calculator**! This guide will help you use all the features of this tool to optimize your Skyblock shard fusions.
+## Profile and connected data
 
-## Getting Started
+Open [Settings](/settings) to choose your Minecraft username or UUID, selected profile, and Profile Type. [Profile](/profile) shows your equipment, inventory, skills, and progression. The [public Profile Viewer](/pv) looks up another player separately from your connected account.
 
-The SkyShards calculator helps you determine the most efficient way to fuse your shards to achieve your desired shard.
+Unavailable data is not zero. Holdings depend on what Hypixel exposes and what the companion mod has captured; a saved snapshot can be older than your current in-game inventory.
 
-### Navigation
-- **[Calculator](https://skyshards.com)**: The main fusion calculator where you input your current shards and desired outcomes
-- **[Shards](https://skyshards.com/shards)**: View and manage shard settings and configurations
-- **[Recipes](https://skyshards.com/recipes)**: Browse all available fusion recipes and combinations
-- **[Guide](https://skyshards.com/guide)**: This help page (you're here!)
+## Recipes
 
-## Basic Usage of the Calculator
+Use [Recipes](/recipes) to search the Crafting and Forge catalogue. Select an item and quantity to see its recipe access, direct ingredients, held materials, and missing inputs. Method, Materials, and Rarity filters narrow the catalogue.
 
-### Step 1: Input Your Current Shards
-1. Navigate to the [main calculator page](https://skyshards.com)
-2. Enter the level of each of the listed shards and other configuration options
-    - All the shards listed (plus Megalith) will help make shard grinding faster
-    - You should try to prioritize getting these 10 shards to level 10 before doing bigger fusions
-3. The calculator will automatically save your inputs if you turn on the "Auto Save" toggle at the top
+Open the material tree for the recursive plan. Normal and Ironman planning follow the Profile Type selected in Settings. Held intermediate items reduce what still needs to be made.
 
-### Step 2: Set Your Desired Shard
-1. Specify which shards you want to end up with
-2. The calculator will show you the optimal fusion path
+## Greenhouse
 
-### Step 3: Follow the Fusion Tree
-The calculator will show you:
-- **Fusion Tree**: Step-by-step instructions for how to fuse for the desired shard
-- **Total Shards Needed**: How many of each shard you need to fuse the shard
-- Direct shards are ones that you need to hunt
+[Greenhouse](/greenhouse) keeps goals, your plot, mutation requirements, and manual planting in one workspace.
 
-## Advanced Features
+1. Add an item or mutation to the goal shelf and set its quantity.
+2. Use Auto-arrange to calculate a layout, or choose from Input and Target to place plants by hand.
+3. Use Edit cells to change the usable land. The starter core stays unlocked; new expansion cells must touch an unlocked cell along an edge.
+4. Follow the requirements and planting steps for your goals. Use Loadouts to save or reopen layouts.
 
-### Settings and Customization
-Access the [Shards page](https://skyshards.com/shards) to:
-- Customize shard rates
-- The default for all the rates are with hyper-max gear and farming in the most optimal way possible (which usually means not solo)
-- Adjust these shard rates for how quickly you can farm shards
-- The calculator will automatically adjust the fusion tree based on your settings
-- Rates are in shards per hour before applying any fortune multipliers
+Undo and Redo apply to plot edits. Direct mutation goals mean growing fresh mutations; owned mutations can still supply dependencies for other goals.
 
-### Alternatives
-On the very right of every recipe, there is a cogwheel icon
-- Click it to see alternative fusion options
-- This will show you different ways to achieve the same shard using different combinations of shards
-- This is useful if you want to see if there are other ways to get a shard that may be faster for you or less annoying to grind
+## Shards
 
-### Recipe Browser
-Use the recipes page to:
-- Explore all available fusion combinations
-- Not very useful for planning fusions but can help you see how shards can be used or fused
+Open [Shards](/shards). Goal selects the shards you want to work toward; Collection shows loose and fused progress.
 
-## Issues or Suggestions?
+1. Add a target in Goal and choose the goal amount.
+2. Check Collection, using Sync to read the selected profile or the row's count editor to adjust saved counts and route use.
+3. Follow the fusion plan and its route requirements. Direct sources are the shards to obtain before combining them along the shown branches.
 
-If you're having issues or have suggestions for improvements, please create an issue on our [GitHub repository](https://github.com/Campionnn/SkyShards/issues) or contact me on Discord at `Campionn`
+The [shard recipe browser](/shard-recipes) lists fusion combinations. [Fusion Lines](/fusion-lines) shows the Special and ID lines, not every possible recipe combination.
+
+## Feedback and credits
+
+Report Skydex issues on [WizardGoose/Skydex](https://github.com/WizardGoose/Skydex/issues).
+
+The fusion calculator and Greenhouse solver originated in [SkyShards](https://github.com/Campionnn/SkyShards) by Campion and xKapy. See [About](/about) for project credits.

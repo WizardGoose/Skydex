@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import {
   chooseIconSource,
   iconVersion,
@@ -11,11 +11,21 @@ import {
 import {
   itemResourceVersion,
   requestItemResource,
+  resourceCategoryFor,
   resourceHeadSrcFor,
+  resourceItemModelFor,
   resourceNameFor,
   subscribeItemResource,
 } from "../items/itemResource";
-import { packTextureSrc, subscribeTexturePack, texturePackVersion } from "../items/texturePack";
+import { wikiIconUrl } from "../items/wikiCrafting";
+import {
+  packTextureFrame,
+  packTextureSrc,
+  subscribeTexturePack,
+  texturePackVersion,
+} from "../items/texturePack";
+import { StaticGifImage } from "./StaticGifImage";
+import { isGifImageUrl } from "./staticGifFrame";
 
 /**
  * The one item icon.
@@ -32,16 +42,16 @@ import { packTextureSrc, subscribeTexturePack, texturePackVersion } from "../ite
  * exactly `size` x `size`, so a miss never breaks the rhythm of a row:
  *
  *   1. `src`, when the caller has a better local asset (greenhouse crop art)
- *   2. the wiki image for each rung of the name ladder, most specific first:
+ *   2. the loaded texture pack, then the exact skull texture from Hypixel's
+ *      own item resource when the item has one
+ *   3. the wiki image for each rung of the name ladder, most specific first:
  *      the name as given, then with trailing stars off, leading glyphs off,
  *      a `[Lvl N]` pet tag off, a reforge prefix off, then Hypixel's own name
  *      for the id, then the shape rules (trophy grade, rune, joining words)
- *   3. a batched wiki API lookup over those same rungs, for files that live
+ *   4. a batched wiki API lookup over those same rungs, for files that live
  *      under another name ("Boots of Divan" is drawn with the Golden Boots
  *      texture, and "Silver Hunter Helmet" with the Iron Helmet one)
- *   4. `lateSrc`, or failing that a player head rendered from the item's own
- *      texture hash, which is the rung that makes a miss rare rather than normal
- *   5. initials, or a blank tile of the same size
+ *   5. a semantic vanilla texture, then a blank tile of the same size
  *
  * Steps 1 and 2 are free. Step 3 only happens after the browser has actually
  * failed to load every rung, so first paint never touches the API, and the
@@ -57,8 +67,8 @@ import { packTextureSrc, subscribeTexturePack, texturePackVersion } from "../ite
  * the same last resort, so it moved into the one component they all use and the
  * callers no longer have to know it exists.
  *
- * A caller's own `lateSrc` still wins, since a caller that went to the trouble
- * of supplying one knows something this component does not.
+ * A caller's own `lateSrc` still wins over the base item-resource head, since a
+ * caller that supplied one can be carrying the exact skin from that item stack.
  *
  * Failures are tracked by URL rather than as a boolean, so a recycled element
  * whose `name` prop changed retries against the new URL instead of staying
@@ -83,6 +93,18 @@ export interface ItemIconProps {
   hypixelId?: string;
   /** A preferred source tried before the wiki image, e.g. a bundled asset. */
   src?: string;
+  /** A semantically safe base texture tried only after the exact name fails. */
+  fallbackName?: string;
+  /** Disable generic shape substitution when identity must remain exact. */
+  allowSemanticFallback?: boolean;
+  /** Show a still first frame for remote GIF artwork instead of decoding it forever. */
+  freezeAnimatedMedia?: boolean;
+  /**
+   * Prefer the exact wiki-name ladder over local pack and item-resource
+   * renderings. Sack Rune counters need this because their API rows omit the
+   * NBT that distinguishes one Firework Star appearance from another.
+   */
+  preferWikiIdentity?: boolean;
   /**
    * A last-resort source, tried only once every wiki rung has failed and
    * before the blank or initials fallback. Meant for a player head render.
@@ -102,20 +124,72 @@ export interface ItemIconProps {
    * answer; there is no rung after it that could rescue a wrong-looking head.
    */
   lateSrc?: string;
+  /**
+   * A terminal identity render used only after the exact wiki ladder fails.
+   * Unlike `lateSrc`, this never pre-empts a verified wiki image. This is the
+   * safe shape for pet heads because mc-heads returns Steve for an unknown hash
+   * with a successful HTTP status, so that response must be the final rung.
+   */
+  terminalSrc?: string;
   /** Box size in px. Width and height both, always. */
   size?: number;
+  /** Load first-view identity icons immediately; long catalogues stay lazy. */
+  loading?: "eager" | "lazy";
   /** What a total miss renders: two-letter initials, or an empty tile. */
   fallback?: "initials" | "blank";
   className?: string;
 }
+
+/**
+ * A real in-game texture for the last rung of an unresolved custom item.
+ * This is deliberately semantic rather than an abbreviation: a generic
+ * vanilla helmet is honest for an unknown helmet, while an "RU" tile is not
+ * an item texture at all. Exact ids, official-pack models, wiki redirects, and
+ * Hypixel head hashes all retain priority over this fallback.
+ */
+// This pure helper is intentionally colocated with the component whose final
+// fallback it defines; moving it would split the source-order contract across
+// files just to satisfy the development hot-reload heuristic.
+// eslint-disable-next-line react-refresh/only-export-components
+export const semanticItemFallbackName = (
+  name: string,
+  id?: string | null,
+  category?: string | null,
+): string => {
+  const value = `${name} ${id ?? ""} ${category ?? ""}`.toLowerCase();
+  if (/helmet|fedora|crown|mask|head\b|hat\b/.test(value)) return "Leather Helmet";
+  if (/chestplate|tunic|jacket|shirt|coat\b/.test(value)) return "Leather Chestplate";
+  if (/leggings|trousers|pants\b/.test(value)) return "Leather Leggings";
+  if (/boots|shoes|sandals|galoshes/.test(value)) return "Leather Boots";
+  if (/necklace|bracelet|ring\b|talisman|accessory/.test(value)) return "Gold Nugget";
+  if (/cloak|belt|gloves|gauntlet/.test(value)) return "Leather";
+  if (/shortbow|bow\b/.test(value)) return "Bow";
+  if (/sword|katana|blade\b/.test(value)) return "Iron Sword";
+  if (/pickaxe|drill\b/.test(value)) return "Iron Pickaxe";
+  if (/\baxe\b/.test(value)) return "Iron Axe";
+  if (/\bhoe\b|dicer|chopper/.test(value)) return "Iron Hoe";
+  if (/fishing.?rod|\brod\b/.test(value)) return "Fishing Rod";
+  if (/wand|staff/.test(value)) return "Blaze Rod";
+  if (/potion|elixir/.test(value)) return "Potion";
+  if (/rune/.test(value)) return "Firework Star";
+  if (/pet|npc|minion|visitor|skull|head/.test(value)) return "Player Head";
+  if (/sack|bag|backpack/.test(value)) return "Bundle";
+  return "Chest";
+};
 
 export const ItemIcon: React.FC<ItemIconProps> = ({
   name,
   id,
   hypixelId,
   src,
+  fallbackName,
+  allowSemanticFallback = true,
+  freezeAnimatedMedia = false,
+  preferWikiIdentity = false,
   lateSrc,
+  terminalSrc,
   size = 20,
+  loading = "lazy",
   fallback = "initials",
   className = "",
 }) => {
@@ -139,23 +213,33 @@ export const ItemIcon: React.FC<ItemIconProps> = ({
   useSyncExternalStore(subscribeTexturePack, texturePackVersion, texturePackVersion);
 
   const display = itemDisplayName(name, id);
-  const resourceName = resourceNameFor(id);
-  const head = resourceHeadSrcFor(id);
+  const resourceKey = hypixelId ?? id;
+  const resourceName = resourceNameFor(resourceKey);
+  const head = resourceHeadSrcFor(resourceKey);
+  const itemModel = resourceItemModelFor(resourceKey);
+  const semanticName = fallbackName ?? semanticItemFallbackName(name, resourceKey, resourceCategoryFor(resourceKey));
+  // A semantic fallback is still a real wiki title, and mob assets in
+  // particular are often GIFs or redirects rather than the guessed PNG URL.
+  // Feed it through the same cached lookup as Hypixel's resource name while
+  // keeping the exact display name first in the ladder.
+  const lookupName = resourceName ?? (allowSemanticFallback ? semanticName : null);
+  const semanticSrc = allowSemanticFallback ? wikiIconUrl(semanticName, 64) : undefined;
   // The matching rule lives in packKeyCandidates: hypixel id first, display
   // name second. The raw `name` prop is passed rather than `display` so a
   // caller that only had an id does not ask the same key twice. `hypixelId`
   // outranks `id` because when a caller bothers to pass both, `id` is known
   // to be something else (a wiki slug, a prettifying source).
-  const packSrc = packTextureSrc(hypixelId ?? id, name);
+  const packSrc = preferWikiIdentity ? undefined : packTextureSrc(resourceKey, name, itemModel);
 
   const { current, exhausted, needLookup } = chooseIconSource({
     display,
     failed,
     src,
     packSrc,
-    lateSrc: lateSrc ?? head,
+    resourceSrc: preferWikiIdentity ? undefined : lateSrc ?? head,
+    lateSrc: terminalSrc ?? semanticSrc,
     known: readTitle,
-    resourceName,
+    resourceName: lookupName,
   });
 
   // Only ask the network once the cheap rungs have really failed in the
@@ -169,8 +253,14 @@ export const ItemIcon: React.FC<ItemIconProps> = ({
   useEffect(() => {
     if (!display || (!exhausted && !needLookup)) return;
     requestItemResource();
-    if (needLookup) requestIcon(display, resourceName);
-  }, [display, exhausted, needLookup, resourceName]);
+    if (needLookup) requestIcon(display, lookupName);
+  }, [display, exhausted, needLookup, lookupName]);
+
+  const handleFailure = useCallback(() => {
+    if (!current) return;
+    reportIconFailure(current);
+    setFailed((previous) => previous.includes(current) ? previous : [...previous, current]);
+  }, [current]);
 
   if (!current) {
     if (fallback === "blank") {
@@ -193,20 +283,65 @@ export const ItemIcon: React.FC<ItemIconProps> = ({
     );
   }
 
+  const frame = current === packSrc ? packTextureFrame(current) : undefined;
+  if (frame) {
+    const scale = Math.min(size / frame.frameWidth, size / frame.frameHeight);
+    const renderedWidth = frame.sheetWidth * scale;
+    const renderedHeight = frame.sheetHeight * scale;
+    const left = (size - frame.frameWidth * scale) / 2 - frame.frameX * scale;
+    const top = (size - frame.frameHeight * scale) / 2 - frame.frameY * scale;
+    return (
+      <span
+        className={`relative inline-block shrink-0 overflow-hidden ${className}`}
+        style={{ width: size, height: size }}
+        aria-hidden
+      >
+        <img
+          src={current}
+          alt=""
+          width={frame.sheetWidth}
+          height={frame.sheetHeight}
+          loading={loading}
+          referrerPolicy="no-referrer"
+          onError={() => {
+            reportIconFailure(current);
+            setFailed((f) => (f.includes(current) ? f : [...f, current]));
+          }}
+          className="absolute max-w-none"
+          style={{
+            left,
+            top,
+            width: renderedWidth,
+            height: renderedHeight,
+            imageRendering: "pixelated",
+          }}
+        />
+      </span>
+    );
+  }
+
+  if (freezeAnimatedMedia && isGifImageUrl(current)) {
+    return (
+      <StaticGifImage
+        src={current}
+        width={size}
+        height={size}
+        onFreezeError={handleFailure}
+        className={className}
+        style={{ imageRendering: "pixelated" }}
+      />
+    );
+  }
+
   return (
     <img
       src={current}
       alt=""
       width={size}
       height={size}
-      loading="lazy"
+      loading={loading}
       referrerPolicy="no-referrer"
-      onError={() => {
-        // A cached answer that errors is evicted so the title becomes a
-        // question again; a failed guess is just a failed guess.
-        reportIconFailure(current);
-        setFailed((f) => (f.includes(current) ? f : [...f, current]));
-      }}
+      onError={handleFailure}
       className={`shrink-0 object-contain ${className}`}
       style={{ width: size, height: size, imageRendering: "pixelated" }}
     />

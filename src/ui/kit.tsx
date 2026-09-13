@@ -351,6 +351,15 @@ export const rarityTileClass = (tier: string | null | undefined): string => {
   return RARITY_TILE[key] ?? RARITY_TILE_UNKNOWN;
 };
 
+/** Flat rarity ownership for surfaces that must not use the legacy glass falloff. */
+export const rarityFlatTileClass = (tier: string | null | undefined): string => {
+  if (!tier) return RARITY_TILE_UNKNOWN;
+  const key = tier.trim().toLowerCase().replace(/_/g, " ");
+  const edge = RARITY_EDGE[key];
+  const fill = RARITY_FILL[key];
+  return edge && fill ? `${edge} ${fill}` : RARITY_TILE_UNKNOWN;
+};
+
 /**
  * Which tier a recombobulated piece DISPLAYS at: one rung up, common through
  * divine, stopping at divine; SPECIAL and VERY SPECIAL sit outside the ladder
@@ -594,14 +603,14 @@ export const SplitPage: React.FC<{ rail: React.ReactNode; children: React.ReactN
    * pixel column at exactly 899px matching neither rule, where the padding
    * would fall back to the unprefixed px-3.
    */
-  <div className="flex min-h-0 flex-1 flex-col min-[900px]:flex-row min-[900px]:items-start">
+  <div className="sd-split-page flex min-h-0 flex-1 flex-col min-[900px]:flex-row min-[900px]:items-start min-[900px]:gap-[var(--sd-tool-gap)]">
     <aside
       aria-label={railLabel}
-      className="w-full space-y-3 px-3 pt-4 sm:max-[900px]:px-6 min-[900px]:sticky min-[900px]:top-[var(--sd-chrome-h)] min-[900px]:max-h-[calc(100vh-var(--sd-chrome-h))] min-[900px]:w-[var(--sd-col)] min-[900px]:shrink-0 min-[900px]:self-start min-[900px]:overflow-y-auto min-[900px]:border-r min-[900px]:border-white/8 min-[900px]:pb-6 min-[900px]:pl-[var(--sd-gutter)] min-[900px]:pr-4"
+      className="sd-split-rail w-full space-y-3 px-3 pt-4 sm:max-[900px]:px-6 min-[900px]:sticky min-[900px]:top-[var(--sd-chrome-h)] min-[900px]:h-[calc(100dvh-var(--sd-chrome-h))] min-[900px]:w-[var(--sd-tool-rail)] min-[900px]:shrink-0 min-[900px]:self-start min-[900px]:overflow-y-auto min-[900px]:pb-6 min-[900px]:pl-[var(--sd-gutter)] min-[900px]:pr-5"
     >
       {rail}
     </aside>
-    <div className="min-w-0 flex-1 space-y-3 px-3 pb-6 pt-4 sm:max-[900px]:px-6 min-[900px]:pl-[var(--sd-inset)] min-[900px]:pr-6">
+    <div className="sd-split-content min-w-0 flex-1 space-y-3 px-3 pb-6 pt-4 sm:max-[900px]:px-6 min-[900px]:pl-[var(--sd-inset)] min-[900px]:pr-[var(--sd-gutter)]">
       {children}
     </div>
   </div>

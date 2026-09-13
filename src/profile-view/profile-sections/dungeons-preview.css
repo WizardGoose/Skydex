@@ -1,0 +1,333 @@
+.profile-dungeons-content,
+.profile-dungeons-current,
+.profile-dungeons-current > section,
+.profile-dungeons-floors-section,
+.profile-dungeons-depth,
+.profile-dungeons-depth-grid,
+.profile-dungeons-floor-details,
+.profile-dungeons-value-grid {
+  display: grid;
+  min-width: 0;
+}
+
+.profile-dungeons-content,
+.profile-dungeons-depth {
+  gap: 0.68rem;
+}
+
+.profile-dungeons-current {
+  grid-template-columns: minmax(0, 1.55fr) minmax(14rem, 0.75fr);
+  gap: 0.65rem;
+}
+
+.profile-dungeons-current > section,
+.profile-dungeons-floors-section {
+  gap: 0.58rem;
+  padding: 0.72rem;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 0.55rem;
+  background: rgb(5 10 17 / 0.42);
+}
+
+.profile-dungeons-current header,
+.profile-dungeons-floors-section > header {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  color: rgb(225 234 241 / 0.88);
+  font-size: 0.7rem;
+}
+
+.profile-dungeons-floors-section > header span {
+  color: rgb(151 169 184 / 0.62);
+  font-size: 0.58rem;
+}
+
+.profile-dungeons-current dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.profile-dungeons-current dl > div {
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border-left: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.profile-dungeons-current dl > div:first-child {
+  border-left: 0;
+}
+
+.profile-dungeons-current dt,
+.profile-dungeons-selected-class span {
+  color: rgb(151 169 184 / 0.65);
+  font-size: 0.57rem;
+}
+
+.profile-dungeons-current dd {
+  margin: 0.18rem 0 0;
+  color: rgb(237 244 248 / 0.9);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.profile-dungeons-selected-class {
+  display: grid;
+  grid-template-columns: 1.8rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.12rem 0.45rem;
+}
+
+.profile-dungeons-selected-class svg {
+  grid-row: 1 / 3;
+  width: 1.35rem;
+  height: 1.35rem;
+  color: rgb(111 189 229 / 0.8);
+  stroke-width: 1.55;
+}
+
+.profile-dungeons-selected-class b {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  color: rgb(205 220 231 / 0.8);
+  font-size: 0.62rem;
+}
+
+.profile-dungeons-floors-section > header > div:first-child {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.profile-dungeons-run-totals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.profile-dungeons-run-totals > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  padding: 0.23rem 0.38rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.025);
+}
+
+.profile-dungeons-run-totals > .is-normal {
+  color: rgb(83 206 236 / 0.76);
+}
+
+.profile-dungeons-run-totals > .is-master {
+  color: rgb(220 96 255 / 0.76);
+}
+
+.profile-dungeons-run-totals b {
+  color: inherit;
+}
+
+.profile-dungeons-floor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  min-width: 0;
+  gap: 0.42rem;
+}
+
+.profile-dungeons-floor-card {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 0.46rem;
+  background: linear-gradient(145deg, rgb(11 18 27 / 0.78), rgb(4 9 15 / 0.62));
+}
+
+.profile-dungeons-floor-card > header {
+  padding: 0.38rem 0.48rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.055);
+}
+
+.profile-dungeons-floor-card > header strong {
+  color: rgb(225 235 242 / 0.9);
+  font-size: 0.62rem;
+  font-weight: 680;
+}
+
+.profile-dungeons-floor-card > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.profile-dungeons-floor-record {
+  --profile-dungeon-mode: 83 206 236;
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.38rem;
+  padding: 0.48rem;
+  background: linear-gradient(180deg, rgb(var(--profile-dungeon-mode) / 0.065), transparent 65%);
+}
+
+.profile-dungeons-floor-record + .profile-dungeons-floor-record {
+  border-left: 1px solid rgb(255 255 255 / 0.055);
+}
+
+.profile-dungeons-floor-record--master {
+  --profile-dungeon-mode: 220 96 255;
+}
+
+.profile-dungeons-floor-record > header {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.profile-dungeons-floor-record > header span {
+  color: rgb(var(--profile-dungeon-mode) / 0.82);
+  font-size: 0.51rem;
+  font-weight: 680;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.profile-dungeons-floor-record > header strong {
+  overflow: hidden;
+  color: rgb(221 232 239 / 0.86);
+  font-size: 0.59rem;
+  font-weight: 640;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-dungeons-floor-record dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.28rem;
+  margin: 0;
+}
+
+.profile-dungeons-floor-record dl > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.06rem;
+}
+
+.profile-dungeons-floor-record dt {
+  color: rgb(143 161 176 / 0.58);
+  font-size: 0.47rem;
+  text-transform: uppercase;
+}
+
+.profile-dungeons-floor-record dd {
+  margin: 0;
+  overflow: hidden;
+  color: rgb(204 219 229 / 0.78);
+  font-size: 0.52rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-dungeons-floor-record.is-empty {
+  min-height: 4.3rem;
+  opacity: 0.46;
+}
+
+.profile-dungeons-floor-empty {
+  color: rgb(137 154 168 / 0.44);
+  font-size: 0.62rem;
+}
+
+.profile-dungeons-depth-grid,
+.profile-dungeons-floor-details,
+.profile-dungeons-value-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.profile-dungeons-depth-row,
+.profile-dungeons-floor-details > div,
+.profile-dungeons-value-grid > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+  padding: 0.52rem 0.58rem;
+  border: 1px solid rgb(255 255 255 / 0.06);
+  border-radius: 0.38rem;
+  background: rgb(5 10 17 / 0.36);
+  color: rgb(185 201 213 / 0.72);
+  font-size: 0.59rem;
+}
+
+.profile-dungeons-depth-row span,
+.profile-dungeons-value-grid > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.profile-dungeons-depth-row svg {
+  width: 0.82rem;
+  height: 0.82rem;
+  margin-right: 0.3rem;
+  vertical-align: -0.15rem;
+}
+
+.profile-dungeons-floor-details span {
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .profile-dungeons-current {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container profile-workspace (max-width: 760px) {
+  .profile-dungeons-current {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-dungeons-current dl,
+  .profile-dungeons-depth-grid,
+  .profile-dungeons-floor-details,
+  .profile-dungeons-value-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-dungeons-current dl > div {
+    border-top: 1px solid rgb(255 255 255 / 0.07);
+    border-left: 0;
+  }
+
+  .profile-dungeons-current dl > div:first-child {
+    border-top: 0;
+  }
+}
+
+@container profile-workspace (max-width: 480px) {
+  .profile-dungeons-current dl,
+  .profile-dungeons-depth-grid,
+  .profile-dungeons-floor-details,
+  .profile-dungeons-value-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-dungeons-floor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-dungeons-floors-section > header {
+    align-items: start;
+  }
+
+  .profile-dungeons-run-totals {
+    justify-content: flex-start;
+  }
+}

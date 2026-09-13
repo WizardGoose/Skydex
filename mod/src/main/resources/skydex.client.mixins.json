@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.skydex.mixin.client",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "GlyphRenderStateMixin",
+    "GlyphStitcherMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

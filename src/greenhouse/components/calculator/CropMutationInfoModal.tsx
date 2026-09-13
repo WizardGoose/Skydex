@@ -1,78 +1,77 @@
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
-  X,
   AlertTriangle,
-  Loader2,
   Box,
-  ClockArrowUp, Flame, Target, PackageOpen, ClockArrowDown, WandSparkles, Sprout, Scissors
+  ClockArrowDown,
+  ClockArrowUp,
+  Flame,
+  Loader2,
+  PackageOpen,
+  Scissors,
+  Sprout,
+  Target,
+  WandSparkles,
+  X,
 } from "lucide-react";
+import { rarityKey } from "../../../search/rarity";
+import { getEffectDescription, useInfoModal } from "../../context";
+import type { CropDataJSON, EffectDefinition, MutationDataJSON } from "../../services/greenhouseDataService";
 import { getGroundImagePath } from "../../types/greenhouse";
 import { CropImage } from "../shared";
-import { useInfoModal, getEffectDescription } from "../../context";
 import { MutationRequirementGrid } from "../ui";
-import type { CropDataJSON, MutationDataJSON } from "../../services/greenhouseDataService";
 
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-// Format buff/crop name for display
-function formatName(name: string): string {
-  return name
+const formatName = (name: string): string =>
+  name
     .split("_")
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
-}
 
-// Format ground type name
-function formatGroundType(ground: string): string {
-  return ground
-    .split("_")
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
+const rarityStyle = (rarity: string | null | undefined): React.CSSProperties | undefined => {
+  const key = rarityKey(rarity);
+  return key
+    ? ({ "--greenhouse-rarity": `var(--color-rarity-${key})` } as React.CSSProperties)
+    : undefined;
+};
 
-// Get rarity color
-function getRarityColor(rarity: string): string {
-  switch (rarity.toLowerCase()) {
-    case "common":
-      return "text-slate-300";
-    case "uncommon":
-      return "text-green-400";
-    case "rare":
-      return "text-blue-400";
-    case "epic":
-      return "text-purple-400";
-    case "legendary":
-      return "text-yellow-400";
-    default:
-      return "text-slate-300";
-  }
-}
+const InfoFact: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  tone?: string;
+}> = ({ icon, label, value, tone = "" }) => (
+  <div className={`greenhouse-info-fact${tone ? ` is-${tone}` : ""}`}>
+    {icon}
+    <span>{label}</span>
+    <strong>{value}</strong>
+  </div>
+);
 
-function getRarityBgColor(rarity: string): string {
-  switch (rarity.toLowerCase()) {
-    case "common":
-      return "bg-slate-500/20 border-slate-500/30";
-    case "uncommon":
-      return "bg-green-500/20 border-green-500/30";
-    case "rare":
-      return "bg-blue-500/20 border-blue-500/30";
-    case "epic":
-      return "bg-purple-500/20 border-purple-500/30";
-    case "legendary":
-      return "bg-yellow-500/20 border-yellow-500/30";
-    default:
-      return "bg-slate-500/20 border-slate-500/30";
-  }
-}
-
-// =============================================================================
-// Main Component
-// =============================================================================
+const EffectList: React.FC<{
+  title: string;
+  icon: React.ReactNode;
+  effects: string[];
+  effectDescriptions: Record<string, EffectDefinition>;
+  tone: "positive" | "negative";
+}> = ({ title, icon, effects, effectDescriptions, tone }) => (
+  <section className={`greenhouse-info-section greenhouse-info-effects is-${tone}`}>
+    <header>{icon}<h3>{title}</h3></header>
+    <div>
+      {effects.map((effect) => {
+        const description = getEffectDescription(effect, effectDescriptions);
+        return (
+          <article key={effect}>
+            <strong>{formatName(effect)}</strong>
+            {description && <p>{description}</p>}
+          </article>
+        );
+      })}
+    </div>
+  </section>
+);
 
 export const CropMutationInfoModal: React.FC = () => {
-  const modalRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLElement>(null);
   const {
     isOpen,
     isLoading,
@@ -84,383 +83,203 @@ export const CropMutationInfoModal: React.FC = () => {
     closeInfo,
   } = useInfoModal();
 
-  // Determine what we're displaying
-  const isMutation = !!mutationData;
-  const data = mutationData || cropData;
-
-  // Build crop data map for requirement grid
   const cropDataMap = useMemo(() => {
     if (!allData) return {};
-    const map: Record<string, CropDataJSON | MutationDataJSON> = {};
-    
-    // Add all crops
-    for (const [id, crop] of Object.entries(allData.crops)) {
-      map[id] = crop;
-    }
-    
-    // Add all mutations (some requirements use mutations)
-    for (const [id, mutation] of Object.entries(allData.mutations)) {
-      map[id] = mutation;
-    }
-    
-    return map;
+    return {
+      ...allData.crops,
+      ...allData.mutations,
+    } as Record<string, CropDataJSON | MutationDataJSON>;
   }, [allData]);
 
-  // Close modal on escape key
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
-        closeInfo();
-      }
+    if (!isOpen) return;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeInfo();
     };
 
     document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [isOpen, closeInfo]);
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    const focusFrame = requestAnimationFrame(() => modalRef.current?.focus());
 
-  // Prevent body scroll when modal is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
     return () => {
-      document.body.style.overflow = "";
+      cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleEscape);
+      document.documentElement.style.overflow = previousRootOverflow;
+      document.body.style.overflow = previousBodyOverflow;
     };
-  }, [isOpen]);
-
-  // Click outside to close
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
-      closeInfo();
-    }
-  };
+  }, [closeInfo, isOpen]);
 
   if (!isOpen) return null;
 
-  // Loading state
+  const closeOnBackdrop = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) closeInfo();
+  };
+
   if (isLoading) {
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
-        onClick={handleBackdropClick}
-      >
-        <div
-          ref={modalRef}
-          className="bg-slate-900 border border-slate-700 rounded-md shadow-2xl w-full max-w-lg p-8 my-auto"
-        >
-          <div className="flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
-            <span className="text-slate-300">Loading...</span>
-          </div>
-        </div>
-      </div>
+    return createPortal(
+      <div className="greenhouse-info-backdrop" onMouseDown={closeOnBackdrop}>
+        <article ref={modalRef} className="greenhouse-info-modal is-status" role="dialog" aria-modal="true" aria-label="Loading plant details" tabIndex={-1}>
+          <Loader2 className="greenhouse-info-spinner" aria-hidden="true" />
+          <strong>Loading plant details</strong>
+        </article>
+      </div>,
+      document.body,
     );
   }
 
-  // Error state
+  const isMutation = Boolean(mutationData);
+  const data = mutationData ?? cropData;
+
   if (error || !data) {
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
-        onClick={handleBackdropClick}
-      >
-        <div
-          ref={modalRef}
-          className="bg-slate-900 border border-slate-700 rounded-md shadow-2xl w-full max-w-lg p-6 my-auto"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-100">Error</h2>
-            <button
-              onClick={closeInfo}
-              className="p-2 hover:bg-slate-800 rounded-md transition-colors text-slate-400 hover:text-slate-200"
-              aria-label="Close modal"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <p className="text-rose-400">{error || "Item not found"}</p>
-        </div>
-      </div>
+    return createPortal(
+      <div className="greenhouse-info-backdrop" onMouseDown={closeOnBackdrop}>
+        <article ref={modalRef} className="greenhouse-info-modal is-status" role="dialog" aria-modal="true" aria-labelledby="greenhouse-info-error-title" tabIndex={-1}>
+          <button type="button" className="greenhouse-info-close" onClick={closeInfo} aria-label="Close plant details"><X /></button>
+          <AlertTriangle className="greenhouse-info-error-icon" aria-hidden="true" />
+          <h2 id="greenhouse-info-error-title">Plant details unavailable</h2>
+          <p>{error ?? "Item not found"}</p>
+        </article>
+      </div>,
+      document.body,
     );
   }
 
-  // Extract common fields
   const id = isMutation ? mutationData!.id : cropData!.id;
   const name = data.name;
-  const size = data.size;
-  // Every growth surface the wiki lists, not just the first. `grounds` is only
-  // present on multi-surface rows (Lonelily: Farmland AND Dirt), so everything
-  // else keeps its single tile and label exactly as before.
-  const grounds = data.grounds && data.grounds.length > 0 ? data.grounds : [data.ground];
-  const growthStages = data.growth_stages;
-  const positiveBuffs = data.positive_buffs;
-  const negativeBuffs = data.negative_buffs;
+  const grounds = data.grounds?.length ? data.grounds : [data.ground];
+  const rarity = mutationData?.rarity ?? null;
+  const requirements = mutationData?.requirements ?? [];
+  const drops = mutationData?.drops ?? null;
+  const hasSideColumn = requirements.length > 0 || Boolean(drops && Object.keys(drops).length > 0);
 
-  // Mutation-specific fields
-  const rarity = isMutation ? mutationData!.rarity : null;
-  const requirements = isMutation ? mutationData!.requirements : [];
-  const special = isMutation ? mutationData!.special : null;
-  const decay = isMutation ? mutationData!.decay : null;
-  const drops = isMutation ? mutationData!.drops : null;
-  const harvestInfo = isMutation ? mutationData!.harvest_info : null;
-  const growingInfo = isMutation ? mutationData!.growing_info : null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/50 backdrop-blur-sm overflow-y-auto"
-      onClick={handleBackdropClick}
-    >
-      <div
+  return createPortal(
+    <div className="greenhouse-info-backdrop" onMouseDown={closeOnBackdrop}>
+      <article
         ref={modalRef}
-        className={`bg-slate-900 border border-slate-700 rounded-md shadow-2xl w-full max-h-[95vh] my-auto overflow-hidden flex flex-col ${
-          isMutation && (requirements.length > 0 || (drops && Object.keys(drops).length > 0)) ? "max-w-3xl" : "max-w-lg"
-        }`}
+        className={`greenhouse-info-modal${hasSideColumn ? " has-side-column" : ""}`}
+        style={rarityStyle(rarity)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="greenhouse-info-title"
+        tabIndex={-1}
       >
-        {/* Modal Header */}
-        <div className="flex-shrink-0 bg-slate-900 border-b border-slate-700 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between rounded-t-xl">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-800 rounded-md flex items-center justify-center overflow-hidden flex-shrink-0">
-              <CropImage
-                cropId={id}
-                cropName={name}
-                size="sm"
-                showFallback={false}
-              />
-            </div>
-            <div className="min-w-0">
-              <h2 className={`text-base sm:text-lg font-semibold truncate ${rarity ? getRarityColor(rarity) : "text-slate-100"}`}>
-                {name}
-              </h2>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">
-                  {size}x{size}
+        <header className="greenhouse-info-header">
+          <span className="greenhouse-info-art">
+            <CropImage cropId={id} cropName={name} width={48} height={48} showFallback={false} />
+          </span>
+          <div>
+            <span>{isMutation ? "MUTATION" : "CROP"}</span>
+            <h2 id="greenhouse-info-title">{name}</h2>
+            <p>{data.size}×{data.size}{rarity ? ` · ${formatName(rarity)}` : ""}</p>
+          </div>
+          <button type="button" className="greenhouse-info-close" onClick={closeInfo} aria-label="Close plant details"><X /></button>
+        </header>
+
+        <div className="greenhouse-info-scroll">
+          <div className="greenhouse-info-facts">
+            <InfoFact
+              icon={<Box aria-hidden="true" />}
+              label="GROUND"
+              value={(
+                <span className="greenhouse-info-ground">
+                  <i style={{ backgroundImage: `url(${getGroundImagePath(grounds[0])})` }} />
+                  {grounds.map(formatName).join(" or ")}
                 </span>
-                {rarity && (
-                  <span className={`text-xs px-1.5 py-0.5 rounded border ${getRarityBgColor(rarity)} ${getRarityColor(rarity)}`}>
-                    {rarity.charAt(0).toUpperCase() + rarity.slice(1)}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={closeInfo}
-            className="p-2 hover:bg-slate-800 rounded-md transition-colors text-slate-400 hover:text-slate-200"
-            aria-label="Close modal"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Modal Content */}
-        <div className={`p-4 sm:p-6 overflow-y-auto ${isMutation && (requirements.length > 0 || (drops && Object.keys(drops).length > 0)) ? "flex flex-col lg:flex-row gap-4 lg:gap-6" : ""}`}>
-          {/* Left Column - General Info */}
-          <div className={`space-y-4 ${isMutation && (requirements.length > 0 || (drops && Object.keys(drops).length > 0)) ? "flex-1 min-w-0" : ""}`}>
-            {/* Ground Type */}
-            <div className="rounded-md border border-slate-800 bg-slate-900/50 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Box className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-medium text-slate-200">Ground Type</h3>
-              </div>
-              <div className="flex items-center gap-3">
-                {/* One tile, the PRIMARY surface: it is the only one we ship a
-                    texture for (there is no dirt.png in public/greenhouse/
-                    ground/), and an empty bordered square would read as a bug.
-                    The label carries the full list. */}
-                <div
-                  className="w-8 h-8 rounded border border-slate-600"
-                  style={{
-                    backgroundImage: `url(${getGroundImagePath(grounds[0])})`,
-                    backgroundSize: "cover",
-                  }}
-                />
-                <span className="text-sm text-slate-300">{grounds.map(formatGroundType).join(" or ")}</span>
-              </div>
-            </div>
-
-            {/* Growth Stages & Decay (side by side for mutations) */}
-            {(growthStages !== null || (decay !== null && decay > 0)) && (
-              <div className="flex gap-4">
-                {growthStages !== null && (
-                  <div className="flex-1 rounded-md border border-slate-800 bg-slate-900/50 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <ClockArrowUp className="w-4 h-4 text-blue-400" />
-                      <h3 className="text-sm font-medium text-slate-200">Growth Stages</h3>
-                    </div>
-                    <span className="text-sm text-slate-300">{growthStages} stage{growthStages !== 1 ? "s" : ""}</span>
-                  </div>
-                )}
-                {decay !== null && decay > 0 && (
-                  <div className="flex-1 rounded-md border border-slate-800 bg-slate-900/50 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <ClockArrowDown className="w-4 h-4 text-amber-400" />
-                      <h3 className="text-sm font-medium text-slate-200">Decay</h3>
-                    </div>
-                    <span className="text-sm text-slate-300">{decay} day{decay !== 1 ? "s" : ""}</span>
-                  </div>
-                )}
-              </div>
+              )}
+              tone="ground"
+            />
+            {data.growth_stages !== null && (
+              <InfoFact icon={<ClockArrowUp aria-hidden="true" />} label="GROWTH" value={`${data.growth_stages} stage${data.growth_stages === 1 ? "" : "s"}`} tone="growth" />
             )}
-
-            {/* Special Conditions (Mutations Only) */}
-            {isMutation && special && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <WandSparkles className="w-4 h-4 text-amber-400" />
-                  <h3 className="text-sm font-medium text-amber-200">Special Condition</h3>
-                </div>
-                <p className="text-sm text-amber-300/90">{formatName(special)}</p>
-              </div>
-            )}
-
-            {/* Growing Info (Mutations Only) */}
-            {isMutation && growingInfo && (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sprout className="w-4 h-4 text-blue-400" />
-                  <h3 className="text-sm font-medium text-blue-200">Growing Info</h3>
-                </div>
-                <p className="text-sm text-blue-300/90 leading-relaxed">{growingInfo}</p>
-              </div>
-            )}
-
-            {/* Harvest Info (Mutations Only) */}
-            {isMutation && harvestInfo && (
-              <div className="bg-purple-500/10 border border-purple-500/30 rounded-md p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Scissors className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-medium text-purple-200">Harvest Info</h3>
-                </div>
-                <p className="text-sm text-purple-300/90 leading-relaxed">{harvestInfo}</p>
-              </div>
-            )}
-
-            {/* Positive Buffs with Descriptions */}
-            {positiveBuffs.length > 0 && (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-md p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Flame className="w-4 h-4 text-emerald-400" />
-                  <h3 className="text-sm font-medium text-emerald-200">Positive Effects</h3>
-                </div>
-                <div className="space-y-2">
-                  {positiveBuffs.map((buff, index) => {
-                    const description = getEffectDescription(buff, effectsMap);
-                    return (
-                      <div key={index} className="space-y-0.5">
-                        <span className="text-sm font-medium text-emerald-300">
-                          {formatName(buff)}
-                        </span>
-                        {description && (
-                          <p className="text-xs text-emerald-300/70">{description}</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Negative Buffs with Descriptions */}
-            {negativeBuffs.length > 0 && (
-              <div className="bg-rose-500/10 border border-rose-500/30 rounded-md p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertTriangle className="w-4 h-4 text-rose-400" />
-                  <h3 className="text-sm font-medium text-rose-200">Negative Effects</h3>
-                </div>
-                <div className="space-y-2">
-                  {negativeBuffs.map((buff, index) => {
-                    const description = getEffectDescription(buff, effectsMap);
-                    return (
-                      <div key={index} className="space-y-0.5">
-                        <span className="text-sm font-medium text-rose-300">
-                          {formatName(buff)}
-                        </span>
-                        {description && (
-                          <p className="text-xs text-rose-300/70">{description}</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            {mutationData && mutationData.decay > 0 && (
+              <InfoFact icon={<ClockArrowDown aria-hidden="true" />} label="DECAY" value={`${mutationData.decay} day${mutationData.decay === 1 ? "" : "s"}`} tone="decay" />
             )}
           </div>
 
-          {/* Right Column - Requirements & Drops (Mutations Only) */}
-          {isMutation && (requirements.length > 0 || (drops && Object.keys(drops).length > 0)) && (
-            <div className="w-full lg:w-72 flex-shrink-0 space-y-4">
-              {/* Requirements Section */}
-              {requirements.length > 0 && (
-                <div className="rounded-md border border-slate-800 bg-slate-900/50 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Target className="w-4 h-4 text-yellow-400" />
-                    <h3 className="text-sm font-medium text-slate-200">Requirements</h3>
-                  </div>
-                  
-                  {/* Mini Grid Layout - Full Width */}
-                  <div className="w-full mb-4">
-                    <MutationRequirementGrid
-                      mutationId={id}
-                      cropDataMap={cropDataMap}
-                    />
-                  </div>
-                  
-                  {/* Text List */}
-                  <div className="space-y-1.5 border-t border-slate-600/30 pt-3">
-                    {requirements.map((req, index) => {
-                      const reqData = cropDataMap[req.crop];
-                      const reqRarity = reqData && "rarity" in reqData ? reqData.rarity : null;
-                      const reqColor = reqRarity ? getRarityColor(reqRarity) : "text-slate-300";
-                      
-                      return (
-                        <div key={index} className="flex items-center gap-2">
-                          <CropImage
-                            cropId={req.crop}
-                            cropName={req.crop}
-                            size="xs"
-                            showFallback={false}
-                          />
-                          <span className={`text-sm ${reqColor}`}>
-                            {req.count}x {formatName(req.crop)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+          <div className={`greenhouse-info-body${hasSideColumn ? " has-side-column" : ""}`}>
+            <main className="greenhouse-info-main">
+              {mutationData?.special && (
+                <section className="greenhouse-info-section is-special">
+                  <header><WandSparkles aria-hidden="true" /><h3>Special condition</h3></header>
+                  <p>{formatName(mutationData.special)}</p>
+                </section>
+              )}
+              {mutationData?.growing_info && (
+                <section className="greenhouse-info-section is-growing">
+                  <header><Sprout aria-hidden="true" /><h3>Growing</h3></header>
+                  <p>{mutationData.growing_info}</p>
+                </section>
+              )}
+              {mutationData?.harvest_info && (
+                <section className="greenhouse-info-section is-harvest">
+                  <header><Scissors aria-hidden="true" /><h3>Harvest</h3></header>
+                  <p>{mutationData.harvest_info}</p>
+                </section>
+              )}
+
+              {(data.positive_buffs.length > 0 || data.negative_buffs.length > 0) && (
+                <div className="greenhouse-info-effect-grid">
+                  {data.positive_buffs.length > 0 && (
+                    <EffectList title="Positive effects" icon={<Flame aria-hidden="true" />} effects={data.positive_buffs} effectDescriptions={effectsMap} tone="positive" />
+                  )}
+                  {data.negative_buffs.length > 0 && (
+                    <EffectList title="Negative effects" icon={<AlertTriangle aria-hidden="true" />} effects={data.negative_buffs} effectDescriptions={effectsMap} tone="negative" />
+                  )}
                 </div>
               )}
-              
-              {/* Drops Section */}
-              {drops && Object.keys(drops).length > 0 && (
-                <div className="rounded-md border border-slate-800 bg-slate-900/50 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <PackageOpen className="w-4 h-4 text-blue-400" />
-                    <h3 className="text-sm font-medium text-slate-200">Drops</h3>
-                  </div>
-                  <div className="space-y-1">
-                    {Object.entries(drops).map(([item, amount]) => (
-                      <div key={item} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <CropImage
-                            cropId={item}
-                            cropName={item}
-                            size="xs"
-                            showFallback={false}
-                          />
-                          <span className="text-sm text-slate-300">{formatName(item)}</span>
-                        </div>
-                        <span className="text-sm text-slate-400">{amount}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            </main>
+
+            {hasSideColumn && (
+              <aside className="greenhouse-info-side">
+                {requirements.length > 0 && (
+                  <section className="greenhouse-info-section is-requirements">
+                    <header><Target aria-hidden="true" /><h3>Requirements</h3></header>
+                    <div className="greenhouse-info-requirement-grid">
+                      <MutationRequirementGrid mutationId={id} cropDataMap={cropDataMap} />
+                    </div>
+                    <div className="greenhouse-info-item-list">
+                      {requirements.map((requirement) => {
+                        const requiredData = cropDataMap[requirement.crop];
+                        const requiredRarity = requiredData && "rarity" in requiredData ? requiredData.rarity : null;
+                        const requiredName = requiredData?.name ?? formatName(requirement.crop);
+                        return (
+                          <div key={requirement.crop} style={rarityStyle(requiredRarity)}>
+                            <CropImage cropId={requirement.crop} cropName={requiredName} width={27} height={27} showFallback={false} />
+                            <span><strong>{requiredName}</strong><small>{requirement.count.toLocaleString()} required</small></span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {drops && Object.keys(drops).length > 0 && (
+                  <section className="greenhouse-info-section is-drops">
+                    <header><PackageOpen aria-hidden="true" /><h3>Drops</h3></header>
+                    <div className="greenhouse-info-item-list">
+                      {Object.entries(drops).map(([dropId, amount]) => {
+                        const dropData = cropDataMap[dropId];
+                        const dropRarity = dropData && "rarity" in dropData ? dropData.rarity : null;
+                        const dropName = dropData?.name ?? formatName(dropId);
+                        return (
+                          <div key={dropId} style={rarityStyle(dropRarity)}>
+                            <CropImage cropId={dropId} cropName={dropName} width={27} height={27} showFallback={false} />
+                            <span><strong>{dropName}</strong><small>{amount.toLocaleString()} per harvest</small></span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+              </aside>
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      </article>
+    </div>,
+    document.body,
   );
 };

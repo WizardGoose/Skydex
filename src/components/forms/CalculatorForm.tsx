@@ -19,6 +19,8 @@ interface CalculatorFormProps {
   ownedAttributes?: Map<string, number>;
   useInventory?: boolean;
   onUseInventoryChange?: (enabled: boolean) => void;
+  /** Keep only route-affecting assumptions when the target lives outside this form. */
+  assumptionsOnly?: boolean;
 }
 
 type LevelKey = keyof Pick<
@@ -26,8 +28,14 @@ type LevelKey = keyof Pick<
   "newtLevel" | "salamanderLevel" | "lizardKingLevel" | "leviathanLevel" | "pythonLevel" | "kingCobraLevel" | "seaSerpentLevel" | "tiamatLevel" | "crocodileLevel"
 >;
 
-export const CalculatorForm: React.FC<CalculatorFormProps> = ({ onSubmit, ownedAttributes, useInventory, onUseInventoryChange }) => {
-  const { form, setForm, saveEnabled, setSaveEnabledState } = useCalculatorState();
+export const CalculatorForm: React.FC<CalculatorFormProps> = ({
+  onSubmit,
+  ownedAttributes,
+  useInventory,
+  onUseInventoryChange,
+  assumptionsOnly = false,
+}) => {
+  const { form, setForm } = useCalculatorState();
   const { shards } = useShards();
 
   // Keep refs of the latest form and onSubmit to use inside effects
@@ -258,7 +266,7 @@ export const CalculatorForm: React.FC<CalculatorFormProps> = ({ onSubmit, ownedA
   );
 
   return (
-    <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-3">
+    <div className={`rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-3${assumptionsOnly ? " calculator-form--assumptions" : ""}`}>
       <form onSubmit={(e) => e.preventDefault()} className="space-y-3">
         {/*
           The Ironman / Normal pair that used to sit here is gone: the
@@ -269,53 +277,34 @@ export const CalculatorForm: React.FC<CalculatorFormProps> = ({ onSubmit, ownedA
           in step with the shared profile store the nav writes.
         */}
 
-        {/* Use Inventory + Auto Save toggles */}
-        <div className="flex justify-between gap-6 mb-3">
-          {onUseInventoryChange && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-slate-200">Use Inventory</span>
-              <Tooltip content="Enable inventory-aware calculations. When enabled, your imported inventory shards will be factored into the optimal fusion path. Does not work with material only mode yet. This is very experimental, so let me know on Discord or GitHub if it isn't working properly"></Tooltip>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={useInventory ?? false}
-                onClick={() => onUseInventoryChange(!useInventory)}
-                className={`relative inline-flex h-5 w-9 items-center rounded-full border border-white/10 transition-colors duration-200 cursor-pointer
-                  ${useInventory ? "bg-purple-600" : "bg-white/5"}
-                  hover:border-purple-400`}
-                style={{ boxShadow: "none" }}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full shadow transition-transform duration-200 border border-white/10
-                  ${useInventory ? "bg-purple-400" : "bg-slate-300/70"}
-                  ${useInventory ? "translate-x-4" : "translate-x-0.5"}`}
-                  style={{ paddingLeft: "1px" }}
-                />
-              </button>
+        {!assumptionsOnly && (
+          <>
+            {/* Shard-quantity-aware calculation toggle */}
+            <div className="flex justify-between gap-6 mb-3">
+              {onUseInventoryChange && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-200">Use Inventory</span>
+                  <Tooltip content="Factor your saved shard quantities into the fusion path. This controls shard quantities only; generic item holdings are not used here."></Tooltip>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={useInventory ?? false}
+                    onClick={() => onUseInventoryChange(!useInventory)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full border border-white/10 transition-colors duration-200 cursor-pointer
+                      ${useInventory ? "bg-purple-600" : "bg-white/5"}
+                      hover:border-purple-400`}
+                    style={{ boxShadow: "none" }}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full shadow transition-transform duration-200 border border-white/10
+                      ${useInventory ? "bg-purple-400" : "bg-slate-300/70"}
+                      ${useInventory ? "translate-x-4" : "translate-x-0.5"}`}
+                      style={{ paddingLeft: "1px" }}
+                    />
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-200">Auto Save</span>
-            <Tooltip content="Automatically saves all your settings (fortune, shard levels, etc.) in your browser. Data is restored when the page reloads."></Tooltip>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={saveEnabled}
-              onClick={() => setSaveEnabledState(!saveEnabled)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full border border-white/10 transition-colors duration-200 cursor-pointer
-                ${saveEnabled ? "bg-emerald-600" : "bg-white/5"}
-                hover:border-emerald-400`}
-              style={{ boxShadow: "none" }}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full shadow transition-transform duration-200 border border-white/10
-                ${saveEnabled ? "bg-emerald-400" : "bg-slate-300/70"}
-                ${saveEnabled ? "translate-x-4" : "translate-x-0.5"}`}
-                style={{ paddingLeft: "1px" }}
-              />
-            </button>
-          </div>
-        </div>
 
         {/* Target Shard or Select Shards */}
         <div className="space-y-2">
@@ -444,19 +433,21 @@ export const CalculatorForm: React.FC<CalculatorFormProps> = ({ onSubmit, ownedA
           )}
         </div>
 
-        {/* Multi-Select Shard Modal */}
-        <MultiSelectShardModal
-          isOpen={isMultiSelectModalOpen}
-          onClose={() => setIsMultiSelectModalOpen(false)}
-          shards={allShards}
-          onDone={handleMultiSelectDone}
-          initialSelections={
-            new Map(
-              (form.shardQuantities || []).map((item) => [item.shard.key, item.quantity])
-            )
-          }
-          ownedAttributes={ownedAttributes}
-        />
+            {/* Multi-Select Shard Modal */}
+            <MultiSelectShardModal
+              isOpen={isMultiSelectModalOpen}
+              onClose={() => setIsMultiSelectModalOpen(false)}
+              shards={allShards}
+              onDone={handleMultiSelectDone}
+              initialSelections={
+                new Map(
+                  (form.shardQuantities || []).map((item) => [item.shard.key, item.quantity])
+                )
+              }
+              ownedAttributes={ownedAttributes}
+            />
+          </>
+        )}
 
         {/* Settings */}
         <div className="space-y-2">
@@ -738,7 +729,7 @@ export const CalculatorForm: React.FC<CalculatorFormProps> = ({ onSubmit, ownedA
           </div>
         )}
 
-        <div className="flex justify-end mt-6">
+        {!assumptionsOnly && <div className="flex justify-end mt-6">
           <button
             type="button"
             onClick={() => {
@@ -753,7 +744,7 @@ export const CalculatorForm: React.FC<CalculatorFormProps> = ({ onSubmit, ownedA
             <TriangleAlert className="w-3 h-3" />
             <span>Reset calculator</span>
           </button>
-        </div>
+        </div>}
       </form>
     </div>
   );

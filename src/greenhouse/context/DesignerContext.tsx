@@ -6,10 +6,12 @@ import {
   findOverlappingPlacements,
   getPlacementAtCell,
   validateGridBounds,
+  validateAllowedCells,
   generatePlacementId,
   LocalStorageManager,
   evaluateMutationTargets,
 } from "../utilities";
+import { useGridState } from "./GridStateContext";
 import { loadLayouts, saveLayouts } from "../utilities/layoutStorage";
 import {
   createDesignerTimeline,
@@ -23,6 +25,12 @@ import {
   type DesignerTimeline,
   type DesignerWorkspace,
 } from "../utilities/designerWorkspace";
+import { GRID_SIZE, getDefaultUnlockedCells } from "../constants";
+import {
+  editPlotCell as editPlotCellState,
+  reconcilePlotCellMask,
+  type PlotCellEditResult,
+} from "../plotCellEditing";
 
 export type DesignerMode = "inputs" | "targets";
 
@@ -76,10 +84,14 @@ interface DesignerContextType {
   clearInputPlacements: () => void;
   clearTargetPlacements: () => void;
   clearAllPlacements: () => void;
+  setPlotCell: (row: number, col: number, mode: "unlock" | "lock") => boolean;
+  selectAllPlotCells: () => boolean;
+  resetPlotCells: () => boolean;
   canUndo: boolean;
   canRedo: boolean;
   undo: () => boolean;
   redo: () => boolean;
+  setKeyboardShortcutsEnabled: (enabled: boolean) => void;
 
   // One automatic recovery slot plus layouts deliberately saved by the user
   mostRecentLayout: SavedLayout | null;
@@ -128,6 +140,7 @@ interface DesignerContextType {
 const DesignerContext = createContext<DesignerContextType | null>(null);
 
 export const DesignerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { unlockedCells, cellSource, replaceUnlockedCells } = useGridState();
   const [mode, setMode] = useState<DesignerMode>("inputs");
   const [timeline, setTimeline] = useState<DesignerTimeline>(() => {
     const recovery = loadDesignerRecovery();
@@ -139,6 +152,9 @@ export const DesignerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   });
   const timelineRef = useRef(timeline);
+  const unlockedCellsRef = useRef(unlockedCells);
+  const cellSourceRef = useRef(cellSource);
+  const keyboardShortcutsEnabledRef = useRef(true);
   const { inputPlacements, targetPlacements, mostRecent, savedLayouts } = timeline.present;
   const [selectedCropForPlacement, setSelectedCropForPlacement] = useState<SelectedCropForDesigner | null>(null);
   const [hoveredTargetId, setHoveredTargetId] = useState<string | null>(null);
@@ -168,6 +184,11 @@ export const DesignerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return persistTimeline(pushDesignerTimeline(current, nextWorkspace, options));
   }, [persistTimeline]);
 
+  useEffect(() => {
+    unlockedCellsRef.current = unlockedCells;
+    cellSourceRef.current = cellSource;
+  }, [cellSource, unlockedCells]);
+
   // Adopt a legacy active layout into the crash-safe record on first mount.
   useEffect(() => {
     saveDesignerRecovery(timelineRef.current.present);
@@ -179,7 +200,70 @@ export const DesignerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const allPlacements = useMemo(() => {
     return [...inputPlacements, ...targetPlacements];
   }, [inputPlacements, targetPlacements]);
-  
+
+  const commitPlotCellEdit = useCallback((edit: PlotCellEditResult | null): boolean => {
+    if (!edit) return false;
+    const current = timelineRef.current;
+    const before = unlockedCellsRef.current;
+    const nextWorkspace: DesignerWorkspace = {
+      ...current.present,
+      inputPlacements: edit.inputPlacements,
+      targetPlacements: edit.targetPlacements,
+    };
+    const next = pushDesignerTimeline(current, nextWorkspace, {
+      cellEdit: {
+        before: [...before],
+        after: [...edit.unlockedCells],
+        beforeSource: cellSourceRef.current,
+        afterSource: "browser",
+      },
+    });
+    if (!persistTimeline(next)) return false;
+    unlockedCellsRef.current = edit.unlockedCells;
+    cellSourceRef.current = replaceUnlockedCells(edit.unlockedCells);
+    return true;
+  }, [persistTimeline, replaceUnlockedCells]);
+
+  const setPlotCell = useCallback((
+    row: number,
+    col: number,
+    cellMode: "unlock" | "lock",
+  ): boolean => {
+    const current = timelineRef.current.present;
+    return commitPlotCellEdit(editPlotCellState(
+      unlockedCellsRef.current,
+      row,
+      col,
+      cellMode,
+      current.inputPlacements,
+      current.targetPlacements,
+    ));
+  }, [commitPlotCellEdit]);
+
+  const selectAllPlotCells = useCallback((): boolean => {
+    const allCells = new Set<string>();
+    for (let row = 0; row < GRID_SIZE; row += 1) {
+      for (let col = 0; col < GRID_SIZE; col += 1) allCells.add(`${row},${col}`);
+    }
+    const current = timelineRef.current.present;
+    return commitPlotCellEdit(reconcilePlotCellMask(
+      unlockedCellsRef.current,
+      allCells,
+      current.inputPlacements,
+      current.targetPlacements,
+    ));
+  }, [commitPlotCellEdit]);
+
+  const resetPlotCells = useCallback((): boolean => {
+    const current = timelineRef.current.present;
+    return commitPlotCellEdit(reconcilePlotCellMask(
+      unlockedCellsRef.current,
+      getDefaultUnlockedCells(),
+      current.inputPlacements,
+      current.targetPlacements,
+    ));
+  }, [commitPlotCellEdit]);
+
   // Check if position is occupied by any placement (inputs or targets)
   const isPositionOccupied = useCallback((
     position: [number, number],
@@ -189,13 +273,16 @@ export const DesignerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return isPositionOccupiedByPlacements(position, size, allPlacements, excludeId);
   }, [allPlacements]);
   
-  // Validate position (bounds only - designer treats all cells as unlocked)
+  // The manual editor and the arranger now work on the same real plot. A crop
+  // cannot be drawn through a cell the player has not unlocked.
   const isValidPlacementPosition = useCallback((
     position: [number, number],
     size: number
   ): { valid: boolean; error?: string } => {
-    return validateGridBounds(position, size);
-  }, []);
+    const bounds = validateGridBounds(position, size);
+    if (!bounds.valid) return bounds;
+    return validateAllowedCells(position, size, unlockedCells);
+  }, [unlockedCells]);
   
   // Validate placement (includes overlap check)
   const isValidPlacement = useCallback((
@@ -414,18 +501,37 @@ export const DesignerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const undo = useCallback((): boolean => {
     const current = timelineRef.current;
+    const cellEdit = current.pastCellEdits.at(-1) ?? null;
     const next = undoDesignerTimeline(current);
-    return next !== current && persistTimeline(next);
-  }, [persistTimeline]);
+    if (next === current || !persistTimeline(next)) return false;
+    if (cellEdit) {
+      const restored = new Set(cellEdit.before);
+      unlockedCellsRef.current = restored;
+      cellSourceRef.current = replaceUnlockedCells(restored, cellEdit.beforeSource);
+    }
+    return true;
+  }, [persistTimeline, replaceUnlockedCells]);
 
   const redo = useCallback((): boolean => {
     const current = timelineRef.current;
+    const cellEdit = current.futureCellEdits[0] ?? null;
     const next = redoDesignerTimeline(current);
-    return next !== current && persistTimeline(next);
-  }, [persistTimeline]);
+    if (next === current || !persistTimeline(next)) return false;
+    if (cellEdit) {
+      const restored = new Set(cellEdit.after);
+      unlockedCellsRef.current = restored;
+      cellSourceRef.current = replaceUnlockedCells(restored, cellEdit.afterSource);
+    }
+    return true;
+  }, [persistTimeline, replaceUnlockedCells]);
+
+  const setKeyboardShortcutsEnabled = useCallback((enabled: boolean): void => {
+    keyboardShortcutsEnabledRef.current = enabled;
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!keyboardShortcutsEnabledRef.current) return;
       const shortcut = designerShortcut(event);
       if (!shortcut) return;
       const changed = shortcut === "undo" ? undo() : redo();
@@ -546,10 +652,14 @@ export const DesignerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     clearInputPlacements,
     clearTargetPlacements,
     clearAllPlacements,
+    setPlotCell,
+    selectAllPlotCells,
+    resetPlotCells,
     canUndo: timeline.past.length > 0,
     canRedo: timeline.future.length > 0,
     undo,
     redo,
+    setKeyboardShortcutsEnabled,
     mostRecentLayout: toMostRecentLayout(mostRecent),
     savedLayouts,
     restoreMostRecent,
@@ -578,6 +688,8 @@ export const DesignerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
+// The provider and its matching hook intentionally share one module.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useDesigner = (): DesignerContextType => {
   const context = useContext(DesignerContext);
   if (!context) {

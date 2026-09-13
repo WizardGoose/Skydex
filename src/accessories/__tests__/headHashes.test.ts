@@ -95,7 +95,7 @@ describe("headHashFor and headSrcFor", () => {
 
   it("renders a known id through the MCHeads chain the Island page uses", () => {
     expect(headHashFor("CAMPFIRE_TALISMAN_1")).toBe(CAMPFIRE_HASH);
-    expect(headSrcFor("CAMPFIRE_TALISMAN_1")).toBe(`https://mc-heads.net/avatar/${CAMPFIRE_HASH}/64`);
+    expect(headSrcFor("CAMPFIRE_TALISMAN_1")).toBe(`https://mc-heads.net/head/${CAMPFIRE_HASH}/64`);
   });
 
   it("gives undefined for an id with no head, so no lateSrc prop is set", () => {
@@ -116,7 +116,7 @@ describe("headHashFor and headSrcFor", () => {
  */
 describe("icon chain ordering, wiki first and head last", () => {
   const NAME = "Campfire Initiate Badge I";
-  const HEAD = `https://mc-heads.net/avatar/${CAMPFIRE_HASH}/64`;
+  const HEAD = `https://mc-heads.net/head/${CAMPFIRE_HASH}/64`;
   const wikiRungs = derivedCandidates(NAME);
 
   it("has wiki rungs to try in the first place", () => {

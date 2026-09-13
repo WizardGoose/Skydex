@@ -113,11 +113,6 @@ export const HypixelPanel: React.FC = () => {
       />
 
       <div className="p-3 space-y-2.5">
-        <p className="text-[11px] text-slate-400 leading-relaxed">
-          Connect your Minecraft account to load <span className="text-slate-200">sacks, networth, gear and profile data</span> through
-          Skydex. Hypixel does not publish island chests, which is why the mod still exists.
-        </p>
-
         <div className="grid gap-2">
           <label className="block">
             <span className={LABEL}>Minecraft username or UUID</span>
@@ -132,6 +127,11 @@ export const HypixelPanel: React.FC = () => {
           </label>
 
         </div>
+
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          Connect your Minecraft account to load <span className="text-slate-200">sacks, networth, gear and profile data</span> through
+          Skydex. Hypixel does not publish island chests, which is why the mod still exists.
+        </p>
 
         <div className="flex items-center gap-2 flex-wrap">
           <button

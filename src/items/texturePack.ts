@@ -1,328 +1,636 @@
 import { ensureTextureDatabaseMigration } from "../storage/migrateTextureDatabase";
-import { packKeyCandidates, type PackCounts, type ParsedPack } from "./texturePackParse";
+import {
+  packKeyCandidates,
+  type PackCounts,
+  type PackTextureFrame,
+  type ParsedPack,
+} from "./texturePackParse";
 
 /**
- * The loaded texture pack: storage, hydration, and the one lookup ItemIcon
- * makes.
+ * The user's local texture-pack stack.
  *
- * USER-SIDE CACHING, WHICH IS THE WHOLE DESIGN
- * ---------------------------------------------
- * A custom texture pack is cached on the user's side, violating nothing.
- * The pack lives in the visitor's own browser and nowhere else:
- * parsed client-side (texturePackParse.ts), stored in this site's own
- * IndexedDB database, served back to <img> tags as object URLs. Nothing is
- * uploaded, nothing is redistributed, and removing the pack removes every
- * byte of it.
+ * Packs are parsed in the browser, stored in IndexedDB and exposed to item
+ * icons through object URLs. No archive or texture leaves the visitor's own
+ * browser. The stack is ordered highest priority first; a disabled pack stays
+ * saved but contributes nothing until it is enabled again.
  *
- * WHY INDEXEDDB AND NOT LOCALSTORAGE
- * ----------------------------------
- * A pack's textures run to tens of megabytes, which localStorage cannot
- * hold and this codebase's storage rules would not allow it to anyway.
- * IndexedDB is the browser's store for exactly this: binary blobs, its own
- * database under this site's namespace ("skydex-texturepack"), touching
- * nothing else. localStorage carries exactly ONE tiny key,
- * `skydex.texturepack.v1`, a manifest pointer whose real job is the
- * no-pack fast path: when it is absent, this module never opens IndexedDB
- * at all, so a visitor who never loaded a pack pays nothing - not even a
- * database creation - and the site behaves byte-identically to before this
- * feature existed. The key is never enumerated alongside others and holds
- * no texture data, per the house storage rules.
- *
- * SCHEMA
- * ------
- * Database "skydex-texturepack", version 1, two object stores:
- *
- *   textures   keyPath "key"; { key, data: Uint8Array, path, source }
- *              one record per recognised item texture
- *   meta       keyPath "id"; a single record id "manifest" carrying
- *              { name, description, counts, loadedAt }
- *
- * A schema change bumps DB_VERSION and rebuilds in onupgradeneeded; the
- * stores hold only a derived copy of the user's own zip, so a rebuild costs
- * one re-upload at worst.
- *
- * THE LOOKUP CONTRACT
- * -------------------
- * `packTextureSrc` is synchronous over an in-memory map hydrated once from
- * IndexedDB, because ItemIcon decides its source during render and cannot
- * await. Before hydration lands it answers undefined, which ItemIcon reads
- * as "the pack has nothing", falls through to the wiki ladder, and then
- * re-renders when the hydration notify fires - the same arrival shape as
- * the item resource. Object URLs are created lazily, one per key on first
- * ask, and revoked when the pack is removed or replaced.
+ * Version 2 adds `packs` and `pack-textures` stores beside the version 1
+ * singleton stores. Hydration migrates that singleton into an enabled
+ * priority-1 entry, then clears the legacy records so an existing visitor does
+ * not carry two copies of the same art.
  */
 
 const DB_NAME = "skydex-texturepack";
-const DB_VERSION = 1;
-const STORE_TEXTURES = "textures";
-const STORE_META = "meta";
+const DB_VERSION = 2;
+const LEGACY_TEXTURES = "textures";
+const LEGACY_META = "meta";
+const STORE_PACKS = "packs";
+const STORE_PACK_TEXTURES = "pack-textures";
+const PACK_ID_INDEX = "packId";
 
 /**
- * The one localStorage key this module owns. A tiny manifest pointer, never
- * texture data; absent means "no pack, never open the database".
+ * A tiny localStorage pointer, never texture data. Its spelling is frozen for
+ * compatibility; presence means the IndexedDB stack should be hydrated.
  */
 export const PACK_FLAG_KEY = "skydex.texturepack.v1";
 
+/** The original public manifest shape, retained for existing readers. */
 export interface PackManifest {
-  /** The zip's file name, which is the only name the user actually chose. */
   name: string;
-  /** pack.mcmeta description, flattened, or null. */
   description: string | null;
   counts: PackCounts;
   loadedAt: number;
 }
 
+/** One saved pack plus the controls that place it in the stack. */
+export interface TexturePackEntry extends PackManifest {
+  id: string;
+  enabled: boolean;
+  /** Zero is highest priority. */
+  priority: number;
+}
+
+const plainManifest = (entry: PackManifest): PackManifest => ({
+  name: entry.name,
+  description: entry.description,
+  counts: entry.counts,
+  loadedAt: entry.loadedAt,
+});
+
 interface TextureRecord {
   key: string;
   data: Uint8Array;
   path: string;
-  source: "catharsis" | "vanilla";
+  source: "catharsis" | "hypixel" | "vanilla";
+  frame?: PackTextureFrame;
+}
+
+interface StackTextureRecord extends TextureRecord {
+  packId: string;
+}
+
+interface PackMemory {
+  manifest: TexturePackEntry;
+  blobs: Map<string, Blob>;
+  frames: Map<string, PackTextureFrame>;
+  urls: Map<string, string>;
+  urlFrames: Map<string, PackTextureFrame>;
 }
 
 /* -------------------------------------------------------------------------- */
 /* Store state                                                                */
 /* -------------------------------------------------------------------------- */
 
-let blobs: Map<string, Blob> | null = null;
-let urls = new Map<string, string>();
-let manifest: PackManifest | null = null;
-let hydrating = false;
-let hydratedFlag = false;
+let packs: PackMemory[] = [];
+/** Dev/private official-pack baseline. Every enabled user pack wins over it. */
+let runtimeBlobs: Map<string, Blob> | null = null;
+const runtimeUrls = new Map<string, string>();
+let runtimeFrames = new Map<string, PackTextureFrame>();
+const runtimeUrlFrames = new Map<string, PackTextureFrame>();
+let hydrated = false;
+let hydrationPromise: Promise<void> | null = null;
 let version = 0;
 const listeners = new Set<() => void>();
 
-const notify = () => {
+const notify = (): void => {
   version++;
-  for (const fn of listeners) fn();
+  for (const listener of listeners) listener();
+};
+
+const revokePack = (pack: PackMemory): void => {
+  for (const url of pack.urls.values()) URL.revokeObjectURL(url);
+  pack.urls.clear();
+  pack.urlFrames.clear();
+};
+
+const revokeAll = (): void => {
+  for (const pack of packs) revokePack(pack);
+};
+
+const revokeRuntime = (): void => {
+  for (const url of runtimeUrls.values()) URL.revokeObjectURL(url);
+  runtimeUrls.clear();
+  runtimeUrlFrames.clear();
 };
 
 const readFlag = (): boolean => {
   try {
     return localStorage.getItem(PACK_FLAG_KEY) !== null;
   } catch {
-    // No storage (tests, private mode): no flag, no pack, no database.
     return false;
   }
 };
 
-const writeFlag = (m: PackManifest | null) => {
+const writeFlag = (entries: readonly TexturePackEntry[]): void => {
   try {
-    if (m === null) localStorage.removeItem(PACK_FLAG_KEY);
-    else localStorage.setItem(PACK_FLAG_KEY, JSON.stringify({ name: m.name, recognised: m.counts.recognised, loadedAt: m.loadedAt }));
+    if (entries.length === 0) {
+      localStorage.removeItem(PACK_FLAG_KEY);
+      return;
+    }
+    localStorage.setItem(
+      PACK_FLAG_KEY,
+      JSON.stringify({
+        count: entries.length,
+        packs: entries.map(({ id, name, enabled, priority, counts, loadedAt }) => ({
+          id,
+          name,
+          enabled,
+          priority,
+          recognised: counts.recognised,
+          loadedAt,
+        })),
+      }),
+    );
   } catch {
-    // Optional pointer. The IndexedDB copy is the real one; losing the flag
-    // only means the next visit does not hydrate until a pack is loaded again.
+    // IndexedDB remains authoritative; the pointer only controls next boot.
   }
 };
 
 /* -------------------------------------------------------------------------- */
-/* IndexedDB plumbing, promisified just enough                                */
+/* IndexedDB                                                                  */
 /* -------------------------------------------------------------------------- */
 
 const openDb = (): Promise<IDBDatabase> =>
   ensureTextureDatabaseMigration().then(() => new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      // Version 1 creates both stores; a future version bump rebuilds here.
-      if (!db.objectStoreNames.contains(STORE_TEXTURES)) db.createObjectStore(STORE_TEXTURES, { keyPath: "key" });
-      if (!db.objectStoreNames.contains(STORE_META)) db.createObjectStore(STORE_META, { keyPath: "id" });
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      // Keep the old stores long enough to migrate a version 1 singleton.
+      if (!db.objectStoreNames.contains(LEGACY_TEXTURES)) {
+        db.createObjectStore(LEGACY_TEXTURES, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(LEGACY_META)) {
+        db.createObjectStore(LEGACY_META, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(STORE_PACKS)) {
+        db.createObjectStore(STORE_PACKS, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(STORE_PACK_TEXTURES)) {
+        const textureStore = db.createObjectStore(STORE_PACK_TEXTURES, {
+          keyPath: ["packId", "key"],
+        });
+        textureStore.createIndex(PACK_ID_INDEX, "packId", { unique: false });
+      }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("indexedDB open failed"));
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("indexedDB open failed"));
   }));
 
-const txDone = (tx: IDBTransaction): Promise<void> =>
+const txDone = (transaction: IDBTransaction): Promise<void> =>
   new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onabort = tx.onerror = () => reject(tx.error ?? new Error("indexedDB transaction failed"));
+    transaction.oncomplete = () => resolve();
+    transaction.onabort = transaction.onerror = () =>
+      reject(transaction.error ?? new Error("indexedDB transaction failed"));
   });
 
 const readAll = <T>(db: IDBDatabase, store: string): Promise<T[]> =>
   new Promise((resolve, reject) => {
-    const req = db.transaction(store, "readonly").objectStore(store).getAll();
-    req.onsuccess = () => resolve(req.result as T[]);
-    req.onerror = () => reject(req.error ?? new Error("indexedDB read failed"));
+    const request = db.transaction(store, "readonly").objectStore(store).getAll();
+    request.onsuccess = () => resolve(request.result as T[]);
+    request.onerror = () => reject(request.error ?? new Error("indexedDB read failed"));
   });
 
-/* -------------------------------------------------------------------------- */
-/* Hydration                                                                  */
-/* -------------------------------------------------------------------------- */
-
-const revokeAll = () => {
-  for (const url of urls.values()) URL.revokeObjectURL(url);
-  urls = new Map();
-};
-
-/**
- * Load the stored pack into memory, once, and only when the flag says there
- * is one. Fired from the subscribe path (an effect, never render), so the
- * notify on landing is safe. A failed hydration leaves the site exactly as
- * it is without a pack, which is a working site.
- */
-const hydrate = (): void => {
-  if (hydratedFlag || hydrating || typeof indexedDB === "undefined") return;
-  if (!readFlag()) {
-    hydratedFlag = true;
-    return;
-  }
-  hydrating = true;
-
-  openDb()
-    .then(async (db) => {
-      const [records, metas] = await Promise.all([
-        readAll<TextureRecord>(db, STORE_TEXTURES),
-        readAll<{ id: string } & PackManifest>(db, STORE_META),
-      ]);
-      db.close();
-
-      const map = new Map<string, Blob>();
-      for (const r of records) {
-        if (r?.key && r?.data) map.set(r.key, new Blob([r.data as BlobPart], { type: "image/png" }));
+const deletePackTextures = (store: IDBObjectStore, packId: string): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const request = store.index(PACK_ID_INDEX).openCursor(IDBKeyRange.only(packId));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve();
+        return;
       }
-      blobs = map;
-      manifest = metas.find((m) => m.id === "manifest") ?? null;
-      hydratedFlag = true;
-      hydrating = false;
-      // A manifest with zero textures is still a state the Settings page
-      // must be able to show honestly, so the notify fires for either.
-      if (map.size || manifest) notify();
-    })
-    .catch(() => {
-      // A blocked or broken database serves no textures this session. The
-      // wiki ladder is untouched, so every icon still resolves as it did
-      // before this feature existed.
-      hydratedFlag = true;
-      hydrating = false;
-    });
+      cursor.delete();
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error ?? new Error("indexedDB delete failed"));
+  });
+
+const deleteDatabase = (): Promise<void> =>
+  new Promise((resolve) => {
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onsuccess = request.onerror = request.onblocked = () => resolve();
+  });
+
+const normaliseEntries = (stored: TexturePackEntry[]): TexturePackEntry[] =>
+  stored
+    .filter(
+      (entry) =>
+        typeof entry?.id === "string" &&
+        typeof entry.name === "string" &&
+        typeof entry.loadedAt === "number" &&
+        typeof entry.counts === "object" &&
+        entry.counts !== null,
+    )
+    .sort((a, b) => (Number.isFinite(a.priority) ? a.priority : 0) - (Number.isFinite(b.priority) ? b.priority : 0))
+    .map((entry, priority) => ({
+      ...entry,
+      enabled: entry.enabled !== false,
+      priority,
+    }));
+
+const memoryFromRecords = (
+  manifest: TexturePackEntry,
+  records: readonly StackTextureRecord[],
+): PackMemory => {
+  const blobs = new Map<string, Blob>();
+  const frames = new Map<string, PackTextureFrame>();
+  for (const record of records) {
+    if (record.packId !== manifest.id || !record.key || !record.data) continue;
+    blobs.set(record.key, new Blob([record.data as BlobPart], { type: "image/png" }));
+    if (record.frame) frames.set(record.key, record.frame);
+  }
+  return { manifest, blobs, frames, urls: new Map(), urlFrames: new Map() };
+};
+
+const migrateLegacy = async (
+  db: IDBDatabase,
+  manifest: TexturePackEntry,
+  records: readonly TextureRecord[],
+): Promise<void> => {
+  const transaction = db.transaction(
+    [STORE_PACKS, STORE_PACK_TEXTURES, LEGACY_TEXTURES, LEGACY_META],
+    "readwrite",
+  );
+  const complete = txDone(transaction);
+  transaction.objectStore(STORE_PACKS).put(manifest);
+  const textureStore = transaction.objectStore(STORE_PACK_TEXTURES);
+  for (const record of records) textureStore.put({ ...record, packId: manifest.id } satisfies StackTextureRecord);
+  transaction.objectStore(LEGACY_TEXTURES).clear();
+  transaction.objectStore(LEGACY_META).clear();
+  await complete;
+};
+
+/** Hydrate once. A missing flag keeps the no-pack path out of IndexedDB. */
+const hydrate = (): Promise<void> => {
+  if (hydrated) return Promise.resolve();
+  if (hydrationPromise) return hydrationPromise;
+  if (typeof indexedDB === "undefined" || !readFlag()) {
+    hydrated = true;
+    return Promise.resolve();
+  }
+
+  hydrationPromise = (async () => {
+    let db: IDBDatabase | null = null;
+    try {
+      db = await openDb();
+      let entries = normaliseEntries(await readAll<TexturePackEntry>(db, STORE_PACKS));
+      let records = await readAll<StackTextureRecord>(db, STORE_PACK_TEXTURES);
+
+      if (entries.length === 0) {
+        const [legacyRecords, legacyMetas] = await Promise.all([
+          readAll<TextureRecord>(db, LEGACY_TEXTURES),
+          readAll<{ id: string } & PackManifest>(db, LEGACY_META),
+        ]);
+        const legacy = legacyMetas.find((candidate) => candidate.id === "manifest");
+        if (legacy) {
+          const base = plainManifest(legacy);
+          const migrated: TexturePackEntry = {
+            ...base,
+            id: `legacy-${base.loadedAt}`,
+            enabled: true,
+            priority: 0,
+          };
+          await migrateLegacy(db, migrated, legacyRecords);
+          entries = [migrated];
+          records = legacyRecords.map((record) => ({ ...record, packId: migrated.id }));
+        }
+      }
+
+      packs = entries.map((entry) => memoryFromRecords(entry, records));
+      writeFlag(entries);
+    } catch {
+      // The wiki image ladder remains the complete fallback for this session.
+      packs = [];
+    } finally {
+      db?.close();
+      hydrated = true;
+      hydrationPromise = null;
+      notify();
+    }
+  })();
+
+  return hydrationPromise;
 };
 
 /* -------------------------------------------------------------------------- */
-/* Public API                                                                 */
+/* Lookup                                                                     */
 /* -------------------------------------------------------------------------- */
 
 /**
- * The pack's texture for this item, as an object URL, or undefined.
- *
- * Synchronous by contract (ItemIcon reads it during render), so it answers
- * from the in-memory map only. Key order is the matching rule: the hypixel
- * id first, the display name second - see `packKeyCandidates`.
+ * Resolve by PACK priority first, then by the item's stable key candidates.
+ * This ordering is load-bearing: a high-priority pack's name fallback must
+ * beat a lower-priority pack's exact-id match, otherwise the priority control
+ * would lie whenever two formats identify the same item differently.
  */
-export const packTextureSrc = (id?: string | null, name?: string | null): string | undefined => {
-  if (!blobs || blobs.size === 0) return undefined;
-  for (const key of packKeyCandidates(id, name)) {
-    const blob = blobs.get(key);
+export const packTextureSrc = (
+  id?: string | null,
+  name?: string | null,
+  itemModel?: string | null,
+): string | undefined => {
+  const candidates = packKeyCandidates(id, name, itemModel);
+  for (const pack of packs) {
+    if (!pack.manifest.enabled) continue;
+    for (const key of candidates) {
+      const blob = pack.blobs.get(key);
+      if (!blob) continue;
+      let url = pack.urls.get(key);
+      if (!url) {
+        url = URL.createObjectURL(blob);
+        pack.urls.set(key, url);
+        const frame = pack.frames.get(key);
+        if (frame) pack.urlFrames.set(url, frame);
+      }
+      return url;
+    }
+  }
+
+  for (const key of candidates) {
+    const blob = runtimeBlobs?.get(key);
     if (!blob) continue;
-    let url = urls.get(key);
+    let url = runtimeUrls.get(key);
     if (!url) {
       url = URL.createObjectURL(blob);
-      urls.set(key, url);
+      runtimeUrls.set(key, url);
+      const frame = runtimeFrames.get(key);
+      if (frame) runtimeUrlFrames.set(url, frame);
     }
     return url;
   }
   return undefined;
 };
 
-/** The manifest of the loaded pack, for the Settings summary. Null when none. */
-export const packManifest = (): PackManifest | null => manifest;
+export const packTextureFrame = (src: string): PackTextureFrame | undefined => {
+  for (const pack of packs) {
+    const frame = pack.urlFrames.get(src);
+    if (frame) return frame;
+  }
+  return runtimeUrlFrames.get(src);
+};
 
-/** How many textures are usable right now (0 until hydration lands). */
-export const packTextureCount = (): number => blobs?.size ?? 0;
+/** Backwards-compatible view of the current highest-priority pack. */
+export const packManifest = (): PackManifest | null => {
+  const entry = packs[0]?.manifest;
+  return entry ? plainManifest(entry) : null;
+};
 
-/**
- * Adopt a freshly parsed pack: replace the stored one, publish to memory.
- *
- * The write is clear-then-put in one transaction per store, so a failed
- * write cannot leave half of the old pack under the new manifest. Memory is
- * updated only after the transaction completes; until then the old pack
- * keeps serving, which is the honest state of the store.
- */
+/** Ordered highest priority first. Returned objects cannot mutate the store. */
+export const texturePackEntries = (): TexturePackEntry[] =>
+  packs.map(({ manifest }) => ({ ...manifest }));
+
+/** Total enabled textures before conflict resolution. */
+export const packTextureCount = (): number =>
+  packs.reduce((total, pack) => total + (pack.manifest.enabled ? pack.blobs.size : 0), 0);
+
+/* -------------------------------------------------------------------------- */
+/* Mutations                                                                  */
+/* -------------------------------------------------------------------------- */
+
+const tight = (bytes: Uint8Array): Uint8Array =>
+  bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes : bytes.slice();
+
+const createPackId = (): string => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `pack-${crypto.randomUUID()}`;
+  return `pack-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+};
+
+/** Add a pack at priority 1 without replacing any pack already saved. */
 export const adoptTexturePack = async (parsed: ParsedPack, fileName: string): Promise<PackManifest> => {
-  const next: PackManifest = {
+  await hydrate();
+  const entry: TexturePackEntry = {
+    id: createPackId(),
     name: fileName,
     description: parsed.description,
     counts: parsed.counts,
     loadedAt: Date.now(),
+    enabled: true,
+    priority: 0,
   };
-
-  /*
-   * Tight copies, not views. The parser hands back subarray views over the
-   * whole archive where a file was stored uncompressed (the .cats raw
-   * case), and IndexedDB's structured clone serialises a typed array's
-   * ENTIRE backing buffer, not the window the view shows. Writing the view
-   * of a 16x16 icon would store the whole multi-megabyte archive with it,
-   * once per record. `slice()` copies exactly the bytes the texture is.
-   */
-  const tight = (u: Uint8Array): Uint8Array =>
-    u.byteOffset === 0 && u.byteLength === u.buffer.byteLength ? u : u.slice();
+  const existing = packs.map((pack, index) => ({
+    ...pack,
+    manifest: { ...pack.manifest, priority: index + 1 },
+  }));
 
   const db = await openDb();
   try {
-    const tx = db.transaction([STORE_TEXTURES, STORE_META], "readwrite");
-    const texStore = tx.objectStore(STORE_TEXTURES);
-    texStore.clear();
-    for (const [key, tex] of parsed.textures) {
-      texStore.put({ key, data: tight(tex.data), path: tex.path, source: tex.source } satisfies TextureRecord);
+    const transaction = db.transaction([STORE_PACKS, STORE_PACK_TEXTURES], "readwrite");
+    const complete = txDone(transaction);
+    const packStore = transaction.objectStore(STORE_PACKS);
+    packStore.put(entry);
+    for (const pack of existing) packStore.put(pack.manifest);
+    const textureStore = transaction.objectStore(STORE_PACK_TEXTURES);
+    for (const [key, texture] of parsed.textures) {
+      textureStore.put({
+        packId: entry.id,
+        key,
+        data: tight(texture.data),
+        path: texture.path,
+        source: texture.source,
+        frame: texture.frame,
+      } satisfies StackTextureRecord);
     }
-    const metaStore = tx.objectStore(STORE_META);
-    metaStore.clear();
-    metaStore.put({ id: "manifest", ...next });
-    await txDone(tx);
+    await complete;
   } finally {
     db.close();
   }
 
-  revokeAll();
-  const map = new Map<string, Blob>();
-  for (const [key, tex] of parsed.textures) map.set(key, new Blob([tex.data as BlobPart], { type: "image/png" }));
-  blobs = map;
-  manifest = next;
-  hydratedFlag = true;
-  writeFlag(next);
-  notify();
-  return next;
-};
-
-/**
- * Remove the pack outright: both stores emptied, the flag gone, every
- * object URL revoked. The database itself is deleted rather than left
- * empty, so a visitor who tried the feature once is not carrying an empty
- * database around forever.
- */
-export const removeTexturePack = async (): Promise<void> => {
-  writeFlag(null);
-  revokeAll();
-  blobs = null;
-  manifest = null;
-  hydratedFlag = true;
+  const records: StackTextureRecord[] = [...parsed.textures].map(([key, texture]) => ({
+    packId: entry.id,
+    key,
+    data: texture.data,
+    path: texture.path,
+    source: texture.source,
+    frame: texture.frame,
+  }));
+  packs = [memoryFromRecords(entry, records), ...existing];
+  writeFlag(texturePackEntries());
   notify();
 
-  await new Promise<void>((resolve) => {
-    const req = indexedDB.deleteDatabase(DB_NAME);
-    // Blocked (another tab holding a connection) still resolves: the flag
-    // is already gone, so nothing will hydrate from the leftover database
-    // and the next adopt overwrites it wholesale.
-    req.onsuccess = req.onerror = req.onblocked = () => resolve();
-  });
+  return plainManifest(entry);
 };
 
-/** Re-render hook for React. Subscribing is what kicks hydration. */
-export const subscribeTexturePack = (fn: () => void): (() => void) => {
-  listeners.add(fn);
-  hydrate();
-  return () => {
-    listeners.delete(fn);
-  };
+export const setTexturePackEnabled = async (id: string, enabled: boolean): Promise<void> => {
+  await hydrate();
+  const index = packs.findIndex((pack) => pack.manifest.id === id);
+  if (index === -1 || packs[index].manifest.enabled === enabled) return;
+  const next = { ...packs[index].manifest, enabled };
+
+  const db = await openDb();
+  try {
+    const transaction = db.transaction(STORE_PACKS, "readwrite");
+    const complete = txDone(transaction);
+    transaction.objectStore(STORE_PACKS).put(next);
+    await complete;
+  } finally {
+    db.close();
+  }
+
+  packs = packs.map((pack, position) =>
+    position === index ? { ...pack, manifest: next } : pack,
+  );
+  writeFlag(texturePackEntries());
+  notify();
+};
+
+/** Move one place: -1 raises priority, +1 lowers it. */
+export const moveTexturePack = async (id: string, direction: -1 | 1): Promise<void> => {
+  await hydrate();
+  const index = packs.findIndex((pack) => pack.manifest.id === id);
+  const target = index + direction;
+  if (index === -1 || target < 0 || target >= packs.length) return;
+
+  const reordered = [...packs];
+  [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+  const next = reordered.map((pack, priority) => ({
+    ...pack,
+    manifest: { ...pack.manifest, priority },
+  }));
+
+  const db = await openDb();
+  try {
+    const transaction = db.transaction(STORE_PACKS, "readwrite");
+    const complete = txDone(transaction);
+    const store = transaction.objectStore(STORE_PACKS);
+    for (const pack of next) store.put(pack.manifest);
+    await complete;
+  } finally {
+    db.close();
+  }
+
+  packs = next;
+  writeFlag(texturePackEntries());
+  notify();
+};
+
+/** Remove one pack. Calling without an id preserves the old remove-all API. */
+export const removeTexturePack = async (id?: string): Promise<void> => {
+  await hydrate();
+  if (id === undefined) {
+    writeFlag([]);
+    revokeAll();
+    packs = [];
+    hydrated = true;
+    notify();
+    await deleteDatabase();
+    return;
+  }
+
+  const removed = packs.find((pack) => pack.manifest.id === id);
+  if (!removed) return;
+  const remaining = packs
+    .filter((pack) => pack !== removed)
+    .map((pack, priority) => ({ ...pack, manifest: { ...pack.manifest, priority } }));
+
+  const db = await openDb();
+  try {
+    const transaction = db.transaction([STORE_PACKS, STORE_PACK_TEXTURES], "readwrite");
+    const complete = txDone(transaction);
+    const packStore = transaction.objectStore(STORE_PACKS);
+    packStore.delete(id);
+    for (const pack of remaining) packStore.put(pack.manifest);
+    await deletePackTextures(transaction.objectStore(STORE_PACK_TEXTURES), id);
+    await complete;
+  } finally {
+    db.close();
+  }
+
+  revokePack(removed);
+  packs = remaining;
+  writeFlag(texturePackEntries());
+  notify();
+  if (packs.length === 0) await deleteDatabase();
+};
+
+/** Same-session baseline without touching the user's saved stack. */
+export const adoptRuntimeTexturePack = (parsed: ParsedPack): void => {
+  revokeRuntime();
+  const next = new Map<string, Blob>();
+  const nextFrames = new Map<string, PackTextureFrame>();
+  for (const [key, texture] of parsed.textures) {
+    next.set(key, new Blob([texture.data as BlobPart], { type: "image/png" }));
+    if (texture.frame) nextFrames.set(key, texture.frame);
+  }
+  runtimeBlobs = next;
+  runtimeFrames = nextFrames;
+  notify();
+};
+
+/** Subscribing is the only action that starts hydration. */
+export const subscribeTexturePack = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  void hydrate();
+  return () => listeners.delete(listener);
 };
 
 export const texturePackVersion = (): number => version;
 
-/** Test seam. Not used by the app. */
-export const __setTexturePackForTests = (seed?: Map<string, Blob>, m?: PackManifest | null) => {
+const EMPTY_COUNTS: PackCounts = {
+  files: 0,
+  recognised: 0,
+  catharsis: 0,
+  hypixel: 0,
+  vanilla: 0,
+  unresolved: 0,
+  special: 0,
+  ignored: 0,
+  ignoredClasses: [],
+};
+
+/** Existing single-pack test seam. */
+export const __setTexturePackForTests = (
+  seed?: Map<string, Blob>,
+  manifest?: PackManifest | null,
+  seedFrames?: Map<string, PackTextureFrame>,
+): void => {
   revokeAll();
-  blobs = seed ?? null;
-  manifest = m ?? null;
-  hydratedFlag = true;
-  hydrating = false;
+  revokeRuntime();
+  packs = seed
+    ? [
+        {
+          manifest: {
+            id: "test-pack",
+            name: manifest?.name ?? "Test pack",
+            description: manifest?.description ?? null,
+            counts: manifest?.counts ?? EMPTY_COUNTS,
+            loadedAt: manifest?.loadedAt ?? 0,
+            enabled: true,
+            priority: 0,
+          },
+          blobs: seed,
+          frames: seedFrames ?? new Map(),
+          urls: new Map(),
+          urlFrames: new Map(),
+        },
+      ]
+    : [];
+  runtimeBlobs = null;
+  runtimeFrames = new Map();
+  hydrated = true;
+  hydrationPromise = null;
+  version++;
+};
+
+export interface TexturePackTestSeed {
+  manifest: TexturePackEntry;
+  textures: Map<string, Blob>;
+  frames?: Map<string, PackTextureFrame>;
+}
+
+/** Multi-pack test seam. Not used by the app. */
+export const __setTexturePackStackForTests = (seeds: readonly TexturePackTestSeed[]): void => {
+  revokeAll();
+  revokeRuntime();
+  packs = [...seeds]
+    .sort((a, b) => a.manifest.priority - b.manifest.priority)
+    .map(({ manifest, textures, frames }, priority) => ({
+      manifest: { ...manifest, priority },
+      blobs: textures,
+      frames: frames ?? new Map(),
+      urls: new Map(),
+      urlFrames: new Map(),
+    }));
+  runtimeBlobs = null;
+  runtimeFrames = new Map();
+  hydrated = true;
+  hydrationPromise = null;
   version++;
 };

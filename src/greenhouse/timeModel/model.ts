@@ -289,21 +289,103 @@ export const optimalHarvestWindow = (
  * Returns Infinity for a mutation that never rolls, rather than a number that
  * would read as an estimate.
  */
-export const expectedCyclesToFill = (spots: number, spawnChance: number, need: number): number => {
-  if (need <= 0) return 0;
-  if (spots <= 0 || spawnChance <= 0) return Number.POSITIVE_INFINITY;
-  // More wanted than there are spots to hold them: one sowing cannot do it, and
-  // the caller owns the re-sow question. Say so rather than sum to a ceiling.
-  if (need > spots) return Number.POSITIVE_INFINITY;
+export interface FillCycleEstimate {
+  /** Expected number of mutation-roll ticks until the requested spots fill. */
+  expectedCycles: number;
+  /** Variance of that wait, measured in growth-cycle ticks squared. */
+  varianceCycles2: number;
+  /** First whole roll count at which at least half of runs are complete. */
+  p50Cycles: number;
+  /** First whole roll count at which at least 90% of runs are complete. */
+  p90Cycles: number;
+  /** True only when the numerical safety ceiling was reached. */
+  truncated: boolean;
+}
 
-  let total = 0;
-  for (let w = 0; w < MAX_ROUNDS; w++) {
-    const done = binomialAtLeast(spots, atLeastOnce(spawnChance, w), need);
-    total += 1 - done;
-    if (1 - done < 1e-12) return total;
-  }
-  return total;
+/**
+ * Probability that persistent spawn spots have filled the requested amount by
+ * a given Greenhouse roll tick.
+ *
+ * This is the CDF used by `fillCycleEstimate`, exposed so a staged layout can
+ * combine several dependency waves without inventing a second probability
+ * model. A negative or fractional cycle count simply means no completed roll
+ * tick yet.
+ */
+export const probabilityFilledWithin = (
+  spots: number,
+  spawnChance: number,
+  need: number,
+  cycles: number,
+): number => {
+  if (need <= 0) return 1;
+  if (spots <= 0 || spawnChance <= 0 || need > spots || cycles < 0) return 0;
+  return binomialAtLeast(spots, atLeastOnce(spawnChance, Math.floor(cycles)), need);
 };
+
+/**
+ * Full stopping-time distribution for a set of persistent spawn spots.
+ *
+ * Unlike `estimateTime`, this does not divide the job into fixed harvest
+ * windows. The same planted inputs remain in place and every still-empty spot
+ * rolls again on the next Greenhouse tick. That distinction is decisive for a
+ * small goal: one Veilshroom can finish on its first successful roll, so it
+ * must not be charged for the unused tail of a four-roll harvest window.
+ *
+ * The first and second moments use the standard survival identities also used
+ * by `expectedRounds`. The percentiles come from the exact same CDF, so the
+ * headline expectation and the confidence line cannot describe different
+ * random processes.
+ */
+export const fillCycleEstimate = (spots: number, spawnChance: number, need: number): FillCycleEstimate => {
+  if (need <= 0) {
+    return { expectedCycles: 0, varianceCycles2: 0, p50Cycles: 0, p90Cycles: 0, truncated: false };
+  }
+  if (spots <= 0 || spawnChance <= 0 || need > spots) {
+    return {
+      expectedCycles: Number.POSITIVE_INFINITY,
+      varianceCycles2: Number.POSITIVE_INFINITY,
+      p50Cycles: Number.POSITIVE_INFINITY,
+      p90Cycles: Number.POSITIVE_INFINITY,
+      truncated: false,
+    };
+  }
+
+  let expected = 0;
+  let secondMoment = 0;
+  let p50 = Number.POSITIVE_INFINITY;
+  let p90 = Number.POSITIVE_INFINITY;
+
+  for (let w = 0; w < MAX_ROUNDS; w++) {
+    const done = probabilityFilledWithin(spots, spawnChance, need, w);
+    if (!Number.isFinite(p50) && done >= 0.5) p50 = w;
+    if (!Number.isFinite(p90) && done >= 0.9) p90 = w;
+
+    const survival = 1 - done;
+    expected += survival;
+    secondMoment += (2 * w + 1) * survival;
+
+    if (survival < 1e-12 && Number.isFinite(p90)) {
+      return {
+        expectedCycles: expected,
+        varianceCycles2: Math.max(0, secondMoment - expected * expected),
+        p50Cycles: p50,
+        p90Cycles: p90,
+        truncated: false,
+      };
+    }
+  }
+
+  return {
+    expectedCycles: expected,
+    varianceCycles2: Math.max(0, secondMoment - expected * expected),
+    p50Cycles: p50,
+    p90Cycles: p90,
+    truncated: true,
+  };
+};
+
+export const expectedCyclesToFill = (spots: number, spawnChance: number, need: number): number =>
+  fillCycleEstimate(spots, spawnChance, need).expectedCycles;
 
 /**
  * Sustained throughput, for layouts that keep producing without re-sowing.

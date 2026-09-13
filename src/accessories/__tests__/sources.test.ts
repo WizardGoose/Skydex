@@ -47,6 +47,32 @@ describe("classifyFromWikitext", () => {
     expect(classifyFromWikitext(infobox("Sold by a merchant at the Travelling Zoo"))).toBe("event");
   });
 
+  it("puts an event-exclusive merchant in Events", () => {
+    /*
+     * Witch's Ring: the event declaration lives in the page lead while the
+     * machine-readable merchant field and Obtaining section both name Agnes.
+     * The event is the gate, so the merchant must not turn it into an ordinary
+     * shop accessory.
+    */
+    const article =
+      `{{Exclusive|Year/Witch}}\n` +
+      `{{Infobox/Accessory\n|id = WITCH_RING\n|merchant = Agnes\n}}\n` +
+      `A '''Witch's Ring''' is only obtainable during the [[Year of the Witch]].\n\n` +
+      `== Obtaining ==\nA Witch's Ring can be purchased from [[Agnes]].\n`;
+    expect(classifyFromWikitext(article)).toBe("event");
+  });
+
+  it("keeps an Anniversary legacy accessory in Events", () => {
+    // Sloth Hat of Celebration: unobtainable now, but its acquisition family
+    // is still the anniversary event rather than an unmeasured generic gate.
+    const article =
+      `{{Legacy Item}}\n` +
+      `The '''Sloth Hat of Celebration''' was given out during the 4th ` +
+      `[[SkyBlock Anniversary]].\n\n` +
+      `== Obtaining ==\nIt was distributed by [[Simon]] during the anniversary.\n`;
+    expect(classifyFromWikitext(article)).toBe("event");
+  });
+
   it("refuses to classify when nothing matches", () => {
     // Null, not a guess. The page renders this as See wiki.
     expect(classifyFromWikitext(infobox("A mysterious trinket of unknown origin"))).toBeNull();
@@ -113,8 +139,9 @@ describe("regressions worth keeping", () => {
     expect(classifyFromWikitext(`== Obtaining ==\n=== Shop Purchase ===\nFrom an NPC.`)).toBe("shop");
   });
 
-  it("reads a structured merchant field as a shop, ahead of any prose", () => {
-    // An editor filling in |merchant = is making a machine-readable claim.
+  it("reads a structured merchant field as a shop when no specific gate is present", () => {
+    // An editor filling in |merchant = is making a machine-readable claim,
+    // but event, Dark Auction and quest evidence still outrank it.
     const article = `{{Infobox/Accessory\n|id = JUNK_TALISMAN\n|merchant = Junker Joel\n|buy = 32 Rusty Coin\n}}\nSome prose.`;
     expect(classifyFromWikitext(article)).toBe("shop");
   });

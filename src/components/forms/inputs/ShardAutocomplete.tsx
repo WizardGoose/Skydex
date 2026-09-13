@@ -7,7 +7,7 @@ import { SuggestionItem } from "../search";
 import { BrowseAllShardsModal } from "../../modals";
 import { FOCUS } from "../../../ui/kit";
 
-export const ShardAutocomplete: React.FC<ShardAutocompleteProps> = ({ value, onChange, onSelect, onFocus, placeholder = "Search for a shard...", className = "", searchMode = "enhanced" }) => {
+export const ShardAutocomplete: React.FC<ShardAutocompleteProps> = ({ value, onChange, onSelect, onFocus, placeholder = "Search for a shard...", className = "", searchMode = "enhanced", showBrowseButton = true }) => {
   const [suggestions, setSuggestions] = useState<ShardWithKey[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -203,20 +203,21 @@ export const ShardAutocomplete: React.FC<ShardAutocompleteProps> = ({ value, onC
             handleInputFocus();
           }}
           placeholder={placeholder}
-          className={`w-full pl-10 pr-20 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-md text-white placeholder-slate-400 hover:bg-slate-700/70 transition-colors ${FOCUS}`}
+          className={`w-full pl-10 ${showBrowseButton ? "pr-20" : value ? "pr-10" : "pr-3"} py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-md text-white placeholder-slate-400 hover:bg-slate-700/70 transition-colors ${FOCUS}`}
           autoComplete="off"
           spellCheck={false}
         />
         <div className="absolute inset-y-0 right-0 flex items-center">
-          <button
+          {showBrowseButton && <button
+            type="button"
             onClick={handleBrowseClick}
             className="px-3 flex items-center text-slate-400 hover:text-white transition-colors border-r border-slate-600/50 cursor-pointer"
             title="Browse all shards"
           >
             <LayoutGrid className="h-4 w-4" />
-          </button>
+          </button>}
           {value && (
-            <button onClick={handleClear} className="px-3 flex items-center text-slate-400 hover:text-white transition-colors cursor-pointer">
+            <button type="button" onClick={handleClear} className="px-3 flex items-center text-slate-400 hover:text-white transition-colors cursor-pointer">
               <X className="h-4 w-4" />
             </button>
           )}
@@ -235,7 +236,7 @@ export const ShardAutocomplete: React.FC<ShardAutocompleteProps> = ({ value, onC
         </ul>
       )}
 
-      <BrowseAllShardsModal isOpen={isBrowseModalOpen} onClose={() => setIsBrowseModalOpen(false)} shards={allShards} onSelectShard={handleShardSelect} />
+      {showBrowseButton && <BrowseAllShardsModal isOpen={isBrowseModalOpen} onClose={() => setIsBrowseModalOpen(false)} shards={allShards} onSelectShard={handleShardSelect} />}
     </div>
   );
 };

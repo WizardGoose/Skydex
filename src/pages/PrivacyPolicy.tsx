@@ -84,8 +84,8 @@ const PrivacyPolicy: React.FC = () => (
           profile id plus a random anonymous browser id. The id contains no authentication data and is used only for short-lived abuse limits. Cloudflare also
           provides the connecting IP address; the Worker turns it into an opaque temporary counter key and does not write it to Skydex telemetry. The
           Worker validates and authorizes the request, then asks <span className={HOST}>api.hypixel.net</span>. Fresh answers remain in the
-          Worker cache for 5 to 30 minutes depending on the data, with the last good answer retained for up to 24 hours. The same snapshot may remain
-          in this browser for up to 24 hours so changing pages does not request it again. Skydex also reads Hypixel&rsquo;s public item, skill and bazaar
+          Worker cache for 5 to 30 minutes depending on the data, with the last good answer retained for up to 24 hours. The browser reuses fresh
+          data between pages and can fall back to a response up to 30 days old if a refresh fails, marked as stale. Skydex also reads Hypixel&rsquo;s public item, skill and bazaar
           lists directly; those require no authentication and say nothing about you.
         </li>
         <li>
@@ -104,8 +104,8 @@ const PrivacyPolicy: React.FC = () => (
           , for recipe, forge, shop and mutation data and a few images. Page names go out; nothing about you does.
         </li>
         <li>
-          <span className={HOST}>raw.githubusercontent.com</span>, for two public data files: the SkyHelper price list behind the networth estimate,
-          and the NotEnoughUpdates constants that describe accessory upgrade paths. Nothing about you is sent with either.
+          <span className={HOST}>raw.githubusercontent.com</span>, for public reference data: the SkyHelper price list behind the networth estimate
+          and NotEnoughUpdates accessory upgrade paths, base-pet texture records and Bestiary data. These requests do not include your connected account or profile data.
         </li>
       </ul>
       <p className={P}>
@@ -118,9 +118,9 @@ const PrivacyPolicy: React.FC = () => (
       </p>
     </Section>
 
-    <Section title="The companion mod">
+    <Section title="The Skydex mod">
       <p className={P}>
-        Skydex does not contact the companion mod unless you choose <span className={HOST}>Link companion mod</span> in Settings. That deliberate
+        Skydex does not contact the Skydex mod unless you choose <span className={HOST}>Link mod</span> in Settings. That deliberate
         click checks <span className={HOST}>127.0.0.1</span>, which is your own computer, and is when your browser may ask for local-device access.
         Once linked, Skydex listens for live updates and can send a greenhouse layout when you press its button. Unlinking stops those local
         connections without deleting your saved snapshot. The traffic never leaves your machine, and none of it is reachable from the network.
@@ -135,7 +135,7 @@ const PrivacyPolicy: React.FC = () => (
       <ul className={UL}>
         <li>
           <span className={HOST}>localStorage</span> holds your settings, saved planners and greenhouse layouts, owned-shard inventory, recent
-          searches, the companion-mod link preference, your Minecraft account and profile choice, and cached copies of wiki and Hypixel data already
+          searches, the Skydex mod link preference, your Minecraft account and profile choice, and cached copies of wiki and Hypixel data already
           fetched, so the site is not re-fetching the same lists on every visit. It also holds the random anonymous browser id used for API abuse
           limits. The live site stores no Hypixel credential supplied by a visitor.
         </li>
@@ -148,8 +148,8 @@ const PrivacyPolicy: React.FC = () => (
           one. The file itself is stored, and it stays in the browser. Nothing about it is sent anywhere.
         </li>
         <li>
-          <span className={HOST}>Cache Storage</span> may hold the last profiles, garden and museum snapshot for up to 24 hours. Skydex caps this
-          cache and removes older entries as new ones arrive.
+          <span className={HOST}>Cache Storage</span> holds profile, Garden and Museum responses. Skydex can reuse these as a stale fallback for up to
+          30 days. The cache is capped, and entries older than that are removed when it is pruned during a cache write; this is not a scheduled deletion while the site is closed.
         </li>
       </ul>
       <p className={P}>

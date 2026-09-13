@@ -36,7 +36,7 @@ class MemoryStorage {
 }
 
 describe("the item catalogue", () => {
-  it("keeps only the nine fields the valuation reads", () => {
+  it("keeps only the fields the valuation and Museum collection read", () => {
     const trimmed = trimCatalogue({
       items: Array.from({ length: 200 }, (_, i) => ({
         id: `ITEM_${i}`,
@@ -48,8 +48,16 @@ describe("the item catalogue", () => {
         prestige: { item_id: "OTHER" },
         soulbound: "COOP",
         museum: true,
-        // Everything below is dropped.
+        museum_data: {
+          donation_xp: 4,
+          category: "COMBAT",
+          armor_set_donation_xp: { TEST_SET: 2, INVALID_SET: "nope" },
+          mapped_item_ids: [`STARRED_ITEM_${i}`, null],
+          game_stage: "INTERMEDIATE",
+          ignored: "drop me",
+        },
         stats: { DAMAGE: 260 },
+        // Everything below is dropped.
         npc_sell_price: 1,
         description: "a long string nobody needs",
         recipes: [{ a: 1 }],
@@ -63,12 +71,22 @@ describe("the item catalogue", () => {
       "gemstone_slots",
       "id",
       "museum",
+      "museum_data",
       "name",
       "prestige",
       "soulbound",
+      "stats",
       "tier",
       "upgrade_costs",
     ]);
+    expect(trimmed!.ITEM_0.museum_data).toEqual({
+      donation_xp: 4,
+      category: "COMBAT",
+      armor_set_donation_xp: { TEST_SET: 2 },
+      mapped_item_ids: ["STARRED_ITEM_0"],
+      game_stage: "INTERMEDIATE",
+    });
+    expect(trimmed!.ITEM_0.stats).toEqual({ DAMAGE: 260 });
   });
 
   it("keeps an entry that has nothing but an id", () => {

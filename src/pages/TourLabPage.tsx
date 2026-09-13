@@ -708,7 +708,7 @@ export const TourLabPage: React.FC = () => {
                 <span className="font-mono text-slate-300">#</span> line under it instead. Everything else is
                 Markdown (blank line between paragraphs, <span className="font-mono text-slate-300">-</span> for a
                 bulleted list, which shows real bullets), and a link to a site path like{" "}
-                <span className="font-mono text-slate-300">/island</span> navigates in-app. The three heading levels
+                <span className="font-mono text-slate-300">/profile</span> navigates in-app. The three heading levels
                 are three sizes and nothing more:{" "}
                 <span className="font-mono text-slate-300">#</span> is a big header,{" "}
                 <span className="font-mono text-slate-300">##</span> a smaller one, and{" "}
@@ -723,8 +723,8 @@ export const TourLabPage: React.FC = () => {
                 converter="..."]</span> (the two sublines are yours to rewrite, and{" "}
                 <span className="font-mono text-slate-300">converter=</span> adds a third card reading
                 Converter, with that text under it. It sets exactly the mode the Normal card sets, because a
-                converted profile can use the Bazaar and the Auction House and Hypixel never tells us one apart
-                from a normal profile: which of the two words you picked is remembered on its own, so it changes
+                converted profile follows the same sourcing rules as the Normal card; the selected label is
+                remembered separately, so it changes
                 the card that lights up and no number anywhere),{" "}
                 <span className="font-mono text-slate-300">[settings-button]</span>,{" "}
                 <span className="font-mono text-slate-300">[input label="Sign here" placeholder="- - - - -"

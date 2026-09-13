@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { composeSnapshot } from "../useAccessories";
-import { buildAccessoryCatalogue } from "../catalogue";
+import { accessoriesFromIndex, buildAccessoryCatalogue } from "../catalogue";
 import { buildCollectionKeys, readCollections, NO_COLLECTIONS } from "../collections";
 import { readProgress, NO_PROGRESS } from "../requirements";
-import { EMPTY_CHAINS } from "../chains";
+import { buildChainIndex, EMPTY_CHAINS } from "../chains";
+import { NO_MP_INPUTS } from "../magicalPower";
+import type { OwnedBag } from "../owned";
 import type { CollectionProgress } from "../collections";
 import type { ItemIndex } from "../../items/useItemData";
 
@@ -111,6 +113,64 @@ describe("composeSnapshot", () => {
     expect(snap.counts.owned).toBe(1);
   });
 
+  it("aggregates stats and enrichments over only the active accessory rungs", () => {
+    const statItems: ItemIndex = {
+      lower: {
+        name: "Lower Talisman", hypixelId: "LOWER_TALISMAN", tier: "COMMON", category: "ACCESSORY",
+        npcSell: null, yields: 1, recipe: null, stats: { STRENGTH: 99 },
+      },
+      higher: {
+        name: "Higher Ring", hypixelId: "HIGHER_RING", tier: "UNCOMMON", category: "ACCESSORY",
+        npcSell: null, yields: 1, recipe: null, stats: { STRENGTH: 2, MAGIC_FIND: 1, HEALTH: 2, rift_Time: 4 },
+      },
+      separate: {
+        name: "Separate Artifact", hypixelId: "SEPARATE_ARTIFACT", tier: "RARE", category: "ACCESSORY",
+        npcSell: null, yields: 1, recipe: null, stats: { STRENGTH: 3, health: 5, RIFT_TIME: 6 },
+      },
+    };
+    const statCatalogue = buildAccessoryCatalogue(accessoriesFromIndex(statItems), statItems);
+    const statChains = buildChainIndex([], statCatalogue, [
+      { fromId: "LOWER_TALISMAN", toId: "HIGHER_RING" },
+    ]);
+    const bag: OwnedBag = {
+      ids: ["LOWER_TALISMAN", "HIGHER_RING", "SEPARATE_ARTIFACT"],
+      recombobulated: new Set(["HIGHER_RING"]),
+      tiers: new Map(),
+      enrichments: new Map([
+        ["LOWER_TALISMAN", "health"],
+        ["HIGHER_RING", "magic_find"],
+        ["SEPARATE_ARTIFACT", "magic_find"],
+      ]),
+      ambiguousEnrichments: new Set(),
+    };
+    const snap = composeSnapshot(
+      statCatalogue,
+      bag.ids,
+      {},
+      NO_COLLECTIONS,
+      buildCollectionKeys(statItems),
+      false,
+      null,
+      NO_PROGRESS,
+      statChains,
+      {},
+      {},
+      {},
+      { ...NO_MP_INPUTS, recombobulated: bag.recombobulated },
+      bag,
+    );
+
+    expect(snap.activeCount).toBe(2);
+    expect(snap.activeRecombobulated).toBe(1);
+    expect(snap.statContributions).toStrictEqual([
+      { key: "health", value: 7 },
+      { key: "magic_find", value: 1 },
+      { key: "rift_time", value: 10 },
+      { key: "strength", value: 5 },
+    ]);
+    expect(snap.enrichments).toStrictEqual([{ key: "magic_find", count: 2 }]);
+  });
+
   it("marks a lower rung owned through its family, and says so", () => {
     const snap = composeSnapshot(catalogue, ["BIOANALYSIS_RING"], {}, NO_COLLECTIONS, keys, false, null);
 
@@ -190,6 +250,65 @@ describe("composeSnapshot", () => {
     // the page has an honest number to show for it.
     expect(snap.unresolvedCollections).toBe(1);
     expect(find(snap, "BIOANALYSIS_TALISMAN").status).toBe("missing");
+  });
+
+  it("recognises the physically held lower rung as the next upgrade context", () => {
+    const anguishItems: ItemIndex = {
+      anguish_talisman: {
+        name: "Anguish Talisman",
+        hypixelId: "ANGUISH_TALISMAN",
+        tier: "RARE",
+        category: "ACCESSORY",
+        npcSell: null,
+        yields: 1,
+        recipe: null,
+      },
+      anguish_ring: {
+        name: "Anguish Ring",
+        hypixelId: "ANGUISH_RING",
+        tier: "EPIC",
+        category: "ACCESSORY",
+        npcSell: null,
+        yields: 1,
+        recipe: null,
+      },
+      anguish_artifact: {
+        name: "Anguish Artifact",
+        hypixelId: "ANGUISH_ARTIFACT",
+        tier: "LEGENDARY",
+        category: "ACCESSORY",
+        npcSell: null,
+        yields: 1,
+        recipe: null,
+      },
+    };
+    const anguishCatalogue = buildAccessoryCatalogue(
+      [
+        { id: "ANGUISH_TALISMAN", name: "Anguish Talisman", tier: "RARE", category: "ACCESSORY" },
+        { id: "ANGUISH_RING", name: "Anguish Ring", tier: "EPIC", category: "ACCESSORY" },
+        { id: "ANGUISH_ARTIFACT", name: "Anguish Artifact", tier: "LEGENDARY", category: "ACCESSORY" },
+      ],
+      anguishItems,
+    );
+
+    const snap = composeSnapshot(
+      anguishCatalogue,
+      ["ANGUISH_RING"],
+      {},
+      NO_COLLECTIONS,
+      buildCollectionKeys(anguishItems),
+      false,
+      null,
+    );
+    const artifact = find(snap, "ANGUISH_ARTIFACT");
+
+    expect(artifact.status).toBe("missing");
+    expect(artifact.acquisition.category).toBe("upgradePaths");
+    expect(artifact.ownedPrerequisite).toMatchObject({ id: "ANGUISH_RING", name: "Anguish Ring" });
+    expect(artifact.readiness).toEqual({
+      kind: "nextUpgrade",
+      label: "Owns Anguish Ring; remaining materials are not measured.",
+    });
   });
 });
 
@@ -326,6 +445,7 @@ describe("the Rift split and the event key", () => {
     // Whole-catalogue counts keep the whole truth; the tiers hold only the
     // normal accessory, because the Rift band is its own section.
     expect(snap.counts.total).toBe(2);
+    expect(snap.normalCounts).toEqual({ total: 1, owned: 0, missing: 1, locked: 0 });
     const tierTotal = Object.values(snap.reachCounts).reduce((a, b) => a + b, 0);
     expect(tierTotal).toBe(1);
   });
@@ -334,6 +454,31 @@ describe("the Rift split and the event key", () => {
     const snap = composeSnapshot(riftCatalogue, ["CRUX_TALISMAN_1"], {}, NO_COLLECTIONS, riftKeys, false, null);
     expect(snap.riftCounts.owned).toBe(1);
     expect(snap.counts.owned).toBe(1);
+    expect(snap.normalCounts.owned).toBe(0);
+  });
+
+  it("includes a Rift-origin transferable in normal counts and reach", () => {
+    const items: ItemIndex = {
+      ...riftItems,
+      iq: {
+        name: "IQ Point",
+        hypixelId: "IQ_POINT",
+        tier: "COMMON",
+        category: "ACCESSORY",
+        origin: "RIFT",
+        riftTransferable: true,
+        npcSell: null,
+        yields: 1,
+        recipe: null,
+      },
+    };
+    const catalogue = buildAccessoryCatalogue(accessoriesFromIndex(items), items);
+    const snap = composeSnapshot(catalogue, [], {}, NO_COLLECTIONS, buildCollectionKeys(items), false, null);
+
+    expect(snap.riftCounts.total).toBe(2);
+    expect(snap.normalCounts.total).toBe(2);
+    expect(snap.normalCounts.missing).toBe(2);
+    expect(Object.values(snap.reachCounts).reduce((sum, count) => sum + count, 0)).toBe(2);
   });
 
   it("carries an event key only on event accessories, and unknown when unnamed", () => {

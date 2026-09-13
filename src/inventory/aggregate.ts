@@ -59,6 +59,20 @@ export const SOURCE_LABEL: Record<OwnedSource, string> = {
   "island.inventory": "inventory",
   "island.enderChest": "ender chest",
   "island.storage": "backpack",
+  "profile.armor": "armour",
+  "profile.equipment": "equipment",
+  "profile.wardrobe": "saved armour",
+  "profile.accessories": "accessory bag",
+  "profile.personalVault": "personal vault",
+  "profile.fishingBag": "fishing bag",
+  "profile.potionBag": "potion bag",
+  "profile.sacksBag": "sacks bag",
+  "profile.quiver": "quiver",
+  "profile.candy": "candy inventory",
+  "profile.carnivalMasks": "carnival masks",
+  "profile.farmingToolkit": "farming toolkit",
+  "profile.huntingToolkit": "hunting toolkit",
+  "profile.museum": "museum",
   shards: "shard inventory",
   manual: "set by you",
 };
@@ -70,6 +84,126 @@ interface Contribution {
   at: number | null;
   counts: Record<string, number>;
 }
+
+/**
+ * The decoded, browser-cached half of the Hypixel profile that can contribute
+ * physical items to a plan. It deliberately accepts the parser's loose record
+ * rather than importing the valuation model: inventory is a read-side consumer
+ * of that snapshot, not another owner of it.
+ */
+export interface ProfileHoldingsInput {
+  parsed: Record<string, unknown[]>;
+  inventoryShared: boolean;
+  /** Exact sack-counter field presence. Undefined only on legacy cached profile snapshots. */
+  sacksShared?: boolean;
+  vaultShared: boolean;
+  museumShared: boolean;
+  fetchedAt: number;
+}
+
+const PROFILE_CATEGORY_SOURCE = {
+  armor: "profile.armor",
+  equipment: "profile.equipment",
+  wardrobe: "profile.wardrobe",
+  accessories: "profile.accessories",
+  personal_vault: "profile.personalVault",
+  fishing_bag: "profile.fishingBag",
+  potion_bag: "profile.potionBag",
+  sacks_bag: "profile.sacksBag",
+  quiver: "profile.quiver",
+  candy_inventory: "profile.candy",
+  carnival_mask_inventory: "profile.carnivalMasks",
+  farming_toolkit: "profile.farmingToolkit",
+  hunting_toolkit: "profile.huntingToolkit",
+  museum: "profile.museum",
+} as const satisfies Record<string, OwnedSource>;
+
+const PROFILE_OVERLAP_CATEGORY: Partial<Record<SectionKey, string>> = {
+  sacks: "sacks",
+  inventory: "inventory",
+  enderChest: "enderchest",
+  storage: "storage",
+};
+
+const finiteCount = (value: unknown, includeZero = false): number | null =>
+  typeof value === "number"
+  && Number.isFinite(value)
+  && (includeZero ? value >= 0 : value > 0)
+    ? value
+    : null;
+
+/** Reduce either a decoded NBT stack or a sack `{ id, amount }` row. */
+const profileCounts = (entries: readonly unknown[], basic = false): Record<string, number> => {
+  const counts: Record<string, number> = {};
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const value = entry as {
+      id?: unknown;
+      amount?: unknown;
+      Count?: unknown;
+      tag?: { ExtraAttributes?: { id?: unknown } };
+    };
+    const extraId = value.tag?.ExtraAttributes?.id;
+    const id = typeof extraId === "string" && extraId
+      ? extraId
+      : typeof value.id === "string" && value.id
+        ? value.id
+        : null;
+    // Basic rows are sack counters. Hypixel's explicit zero is evidence that
+    // the item was checked, so it must bridge into a known-zero holding.
+    const count = finiteCount(basic ? value.amount : value.Count, basic);
+    if (!id || count === null) continue;
+    counts[id] = (counts[id] ?? 0) + count;
+  }
+  return counts;
+};
+
+const profileContribution = (
+  profile: ProfileHoldingsInput,
+  category: string,
+  source: OwnedSource,
+): Contribution => ({
+  source,
+  feed: "api",
+  at: profile.fetchedAt,
+  counts: profileCounts(profile.parsed[category] ?? [], category === "sacks"),
+});
+
+const hasCounts = (contribution: Contribution): boolean => Object.keys(contribution.counts).length > 0;
+
+/**
+ * Pick one snapshot of an overlapping blob-shaped container. The mod and API
+ * can both describe the same inventory, Ender Chest or backpack page, so they
+ * must never be added. A non-empty observation beats an empty one, then the
+ * freshest wins, with the mod winning an exact tie.
+ */
+const chooseContainer = (island: Contribution | null, profile: Contribution | null): Contribution | null => {
+  if (!island) return profile;
+  if (!profile) return island;
+  if (hasCounts(island) !== hasCounts(profile)) return hasCounts(island) ? island : profile;
+  if ((profile.at ?? 0) > (island.at ?? 0)) return profile;
+  return island;
+};
+
+/**
+ * Sack feeds are partial by design, so union ids and replace collisions rather
+ * than adding them. The existing island merge already lets the live mod win
+ * collisions; a newer cached API profile wins only when that merged feed has
+ * no mod contribution.
+ */
+const mergeSackContributions = (island: Contribution | null, profile: Contribution | null): Contribution | null => {
+  if (!island) return profile;
+  if (!profile) return island;
+  const islandWinsCollisions = island.feed === "mod" || (island.at ?? 0) >= (profile.at ?? 0);
+  return {
+    source: "island.sacks",
+    feed: island.feed === "mod" ? "mod" : "api",
+    at: Math.max(island.at ?? 0, profile.at ?? 0) || null,
+    counts: islandWinsCollisions
+      ? { ...profile.counts, ...island.counts }
+      : { ...island.counts, ...profile.counts },
+  };
+};
 
 /**
  * A count reader for one contribution, following `sackLookup`'s matching rule.
@@ -123,6 +257,12 @@ export interface OwnedInput {
    */
   island?: { snapshot: IslandSnapshot | null; sections: Record<SectionKey, SectionProvenance> } | null;
   /**
+   * The last decoded Hypixel profile, already cached in IndexedDB by the
+   * profile store. Overlapping containers are selected, never summed, against
+   * the mod-backed island view; API-only surfaces remain separate provenance.
+   */
+  profile?: ProfileHoldingsInput | null;
+  /**
    * The shard suite's own tally, exactly as it stores it: keyed by shard key
    * such as `C1`. `ids` bridges those keys to Hypixel ids (`SHARD_GROVE`), and
    * without it the shard tally contributes nothing rather than polluting the
@@ -133,6 +273,12 @@ export interface OwnedInput {
   manual?: Record<string, number> | null;
   /** When each source last reported, for the island feeds. Optional. */
   shardsAt?: number | null;
+  /**
+   * Optional shared switches for the island-container sources. The legacy
+   * shard tally is a separate source and is intentionally not controlled by
+   * these toggles; manual overrides are always retained.
+   */
+  enabledSources?: ReadonlySet<OwnedSource>;
 }
 
 /** Turn the shard tally into Hypixel-id-keyed counts. Shards with no id drop out. */
@@ -164,26 +310,58 @@ const EMPTY: OwnedIndex = {
  * called from a test, a tool or a worker without a React tree.
  */
 export function buildOwned(input: OwnedInput): OwnedIndex {
-  const { items, island, shards, manual } = input;
+  const { items, island, profile, shards, manual, enabledSources } = input;
 
   // ---- collect what each store has to say -------------------------------
   const contributions: Contribution[] = [];
 
-  if (island?.snapshot) {
-    for (const key of SECTION_KEYS) {
-      const provenance = island.sections[key];
-      // Only a real observation competes. `empty` is an observation too, but it
-      // contributes an empty map, which is exactly the right amount of nothing.
-      if (provenance?.state !== "captured" && provenance?.state !== "empty") continue;
-      contributions.push({
-        source: SECTION_SOURCE[key],
-        feed: provenance.source,
-        at: provenance.at,
-        counts: sectionCounts(island.snapshot, key),
-      });
+  for (const key of SECTION_KEYS) {
+    const source = SECTION_SOURCE[key];
+    if (enabledSources && !enabledSources.has(source)) continue;
+
+    const provenance = island?.sections[key];
+    const islandContribution = island?.snapshot
+      && (provenance?.state === "captured" || provenance?.state === "empty")
+      ? {
+          source,
+          feed: provenance.source,
+          at: provenance.at,
+          counts: sectionCounts(island.snapshot, key),
+        } satisfies Contribution
+      : null;
+
+    const profileCategory = PROFILE_OVERLAP_CATEGORY[key];
+    const profileCanSeeSection = profileCategory !== undefined
+      && profile !== null
+      && profile !== undefined
+      && (key === "sacks"
+        ? profile.sacksShared === true || (profile.parsed.sacks?.length ?? 0) > 0
+        : profile.inventoryShared);
+    const apiContribution = profileCanSeeSection
+      ? profileContribution(profile!, profileCategory!, source)
+      : null;
+
+    const selected = key === "sacks"
+      ? mergeSackContributions(islandContribution, apiContribution)
+      : chooseContainer(islandContribution, apiContribution);
+    if (selected) contributions.push(selected);
+  }
+
+  if (profile) {
+    for (const [category, source] of Object.entries(PROFILE_CATEGORY_SOURCE) as [keyof typeof PROFILE_CATEGORY_SOURCE, OwnedSource][]) {
+      const shared = category === "personal_vault"
+        ? profile.vaultShared
+        : category === "museum"
+          ? profile.museumShared
+          : profile.inventoryShared;
+      if (!shared) continue;
+      contributions.push(profileContribution(profile, category, source));
     }
   }
 
+  // Shards are the legacy suite's separate inventory source, not an island
+  // container. The shared drawer only toggles island sections, so a five-source
+  // enabled set must never make this source disappear.
   if (shards) {
     const counts = shardCounts(shards);
     if (Object.keys(counts).length > 0) {

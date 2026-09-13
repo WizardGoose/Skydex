@@ -25,6 +25,7 @@ export interface CalculationFormData {
   shard: string;
   quantity: number;
   hunterFortune: number;
+  hunterFortuneSource?: "profile" | "override";
   excludeChameleon: boolean;
   frogBonus: boolean;
   newtLevel: number;
@@ -37,12 +38,14 @@ export interface CalculationFormData {
   tiamatLevel: number;
   crocodileLevel: number;
   kuudraTier: "none" | "t1" | "t2" | "t3" | "t4" | "t5";
+  kuudraTierSource?: "profile" | "override";
   moneyPerHour: number | null;
   customKuudraTime: boolean;
   kuudraTimeSeconds: number | null;
   noWoodenBait: boolean;
   ironManView: boolean;
   instantBuyPrices: boolean;
+  useHeldShards?: boolean;
   craftPenalty: number;
   materialsOnly: boolean;
   selectedShardKeys?: string[] | undefined;

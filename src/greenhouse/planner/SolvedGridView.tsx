@@ -22,13 +22,20 @@ interface Cell {
   /** Top-left cell of a multi-cell placement, so we only draw the icon once. */
   anchor: boolean;
   size: number;
+  /** Dependency wave for a delayed-growth overlay. Undefined on direct fields. */
+  wave?: number;
 }
 
-const buildCells = (result: SolveResponse, data: Dataset): Map<string, Cell> => {
+const buildCells = (
+  result: SolveResponse,
+  data: Dataset,
+  mutationWaveByPlacement?: Record<string, number>,
+): Map<string, Cell> => {
   const map = new Map<string, Cell>();
 
   const put = (id: string, row: number, col: number, size: number, isMutation: boolean) => {
     const def = isMutation ? data.mutations[id] : data.crops[id] ?? data.mutations[id];
+    const wave = isMutation ? mutationWaveByPlacement?.[`${id}@${row},${col}`] : undefined;
     for (let dr = 0; dr < size; dr++) {
       for (let dc = 0; dc < size; dc++) {
         map.set(`${row + dr},${col + dc}`, {
@@ -38,6 +45,7 @@ const buildCells = (result: SolveResponse, data: Dataset): Map<string, Cell> => 
           isMutation,
           anchor: dr === 0 && dc === 0,
           size,
+          ...(wave !== undefined ? { wave } : {}),
         });
       }
     }
@@ -58,12 +66,35 @@ const buildCells = (result: SolveResponse, data: Dataset): Map<string, Cell> => 
  *   - a mutation spot: left visibly bare, ringed in emerald, with a faint
  *     preview of what will appear there
  */
-export const SolvedGridView: React.FC<{ result: SolveResponse; data: Dataset; cellSize?: number }> = ({
+interface SolvedGridViewProps {
+  result: SolveResponse;
+  data: Dataset;
+  cellSize?: number;
+  /**
+   * Present on the workspace's locked preview. A solved field is read-only,
+   * but read-only must not mean inscrutable: every occupied cell can still
+   * open the same item sheet as the editable grid.
+   *
+   * Phase thumbnails deliberately omit this callback because their whole
+   * surface selects the field. Keeping the interaction opt-in prevents a cell
+   * click from doing two unrelated things there.
+   */
+  onOpenItem?: (id: string) => void;
+  /** Optional dependency wave for each `id@row,col` mutation placement. */
+  mutationWaveByPlacement?: Record<string, number>;
+}
+
+const SolvedGridViewComponent: React.FC<SolvedGridViewProps> = ({
   result,
   data,
   cellSize = 44,
+  onOpenItem,
+  mutationWaveByPlacement,
 }) => {
-  const cells = buildCells(result, data);
+  const cells = React.useMemo(
+    () => buildCells(result, data, mutationWaveByPlacement),
+    [result, data, mutationWaveByPlacement],
+  );
 
   return (
     <div
@@ -104,22 +135,36 @@ export const SolvedGridView: React.FC<{ result: SolveResponse; data: Dataset; ce
           backgroundSize: `${cellSize}px ${cellSize}px`,
           imageRendering: "pixelated" as const,
         };
+        const CellElement: React.ElementType = onOpenItem ? "button" : "div";
+        const inspectProps = onOpenItem
+          ? {
+              type: "button" as const,
+              onClick: () => onOpenItem(cell.id),
+              "aria-label": `Open ${cell.name} details`,
+            }
+          : {};
 
         if (cell.isMutation) {
+          const stagedTitle = cell.wave === undefined
+            ? `${cell.name} spawns here`
+            : cell.wave === 0
+              ? `Step 1: ${cell.name} grows here`
+              : `Step ${cell.wave + 1}: ${cell.name} grows here after its inputs appear`;
           return (
-            <div
+            <CellElement
               key={i}
-              title={`${cell.name} spawns here, leave this cell empty (${groundLabel(cell.ground)})`}
-              className="relative rounded-[2px]"
+              {...inspectProps}
+              title={`${stagedTitle}, leave this cell empty (${groundLabel(cell.ground)})`}
+              className={`greenhouse-solved-cell relative rounded-[2px]${onOpenItem ? " is-inspectable" : ""}`}
               style={{ width: cellSize, height: cellSize, ...soilTile }}
             >
               {cell.anchor && (
                 <div
-                  className="pointer-events-none absolute left-0 top-0 z-10 overflow-hidden rounded-[2px] ring-2 ring-emerald-400 ring-inset"
+                  className={`greenhouse-solved-mutation${cell.wave !== undefined ? ` is-wave-${Math.min(2, cell.wave)}` : ""} pointer-events-none absolute left-0 top-0 z-10 overflow-hidden rounded-[2px]`}
                   style={{ width: span, height: span, ...soilTile }}
                 >
                   {/* Wash keeps the spot obviously bare rather than looking planted. */}
-                  <div className="absolute inset-0 bg-emerald-950/70" />
+                  <div className="greenhouse-solved-mutation-wash absolute inset-0" />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <CropImage
                       cropId={cell.id}
@@ -133,15 +178,16 @@ export const SolvedGridView: React.FC<{ result: SolveResponse; data: Dataset; ce
                   </div>
                 </div>
               )}
-            </div>
+            </CellElement>
           );
         }
 
         return (
-          <div
+          <CellElement
             key={i}
+            {...inspectProps}
             title={`Plant ${cell.name} on ${groundLabel(cell.ground)}`}
-            className={`relative rounded-[2px] ${cell.size === 1 ? "overflow-hidden border border-slate-700/50" : ""}`}
+            className={`greenhouse-solved-cell relative rounded-[2px]${onOpenItem ? " is-inspectable" : ""} ${cell.size === 1 ? "overflow-hidden border border-slate-700/50" : ""}`}
             style={{ width: cellSize, height: cellSize, ...soilTile }}
           >
             {cell.size === 1 ? (
@@ -163,12 +209,20 @@ export const SolvedGridView: React.FC<{ result: SolveResponse; data: Dataset; ce
                 </div>
               )
             )}
-          </div>
+          </CellElement>
         );
       })}
     </div>
   );
 };
+
+/**
+ * Planner progress changes timings and counters, not a solver result's board.
+ * Keeping the board behind a memo boundary prevents every planting tick from
+ * reconciling another 100 cells for every move in the route preview.
+ */
+export const SolvedGridView = React.memo(SolvedGridViewComponent);
+SolvedGridView.displayName = "SolvedGridView";
 
 export const SolvedLegend: React.FC = () => (
   <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400">

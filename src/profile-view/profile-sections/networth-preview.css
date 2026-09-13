@@ -1,0 +1,84 @@
+.profile-networth-preview { display: grid; min-width: 0; gap: 0.65rem; }
+.profile-networth-head { display: flex; min-width: 0; align-items: center; gap: 0.72rem; padding: 0.54rem 0.62rem 0.54rem 0.78rem; border: 1px solid rgb(255 255 255 / 0.07); border-radius: 0.58rem; }
+.profile-networth-head > div:first-child { display: grid; gap: 0.12rem; }
+.profile-networth-head > div:first-child > span, .profile-networth-composition header small, .profile-networth-valuables header small, .profile-networth-breakdown header small { color: var(--profile-muted); font-size: 0.57rem; letter-spacing: 0.07em; text-transform: uppercase; }
+.profile-networth-head h2, .profile-networth-composition h3, .profile-networth-valuables h3, .profile-networth-breakdown h3 { margin: 0; color: #e1eaf1; line-height: 1.1; }
+.profile-networth-head h2 { font-size: 1.05rem; }
+.profile-networth-mode { display: inline-grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.18rem; padding: 0.18rem; border: 1px solid rgb(255 255 255 / 0.075); border-radius: 0.45rem; background: rgb(3 8 13 / 0.58); }
+.profile-networth-mode button { display: flex; min-width: 5.1rem; align-items: center; gap: 0.34rem; padding: 0.3rem 0.42rem; border: 1px solid transparent; border-radius: 0.32rem; color: var(--profile-muted); background: transparent; font: inherit; text-align: left; }
+.profile-networth-mode button > svg { width: 0.85rem; height: 0.85rem; flex: 0 0 auto; }
+.profile-networth-mode button > span { display: grid; gap: 0.02rem; font-size: 0.58rem; font-weight: 700; line-height: 1.05; }
+.profile-networth-mode button small { color: var(--profile-muted); font-size: 0.46rem; font-weight: 560; }
+.profile-networth-mode button.is-active { border-color: rgb(56 199 244 / 0.22); color: #dceef2; background: rgb(56 199 244 / 0.09); box-shadow: inset 0 0 0 1px rgb(56 199 244 / 0.035); }
+.profile-networth-mode button.is-active small { color: rgb(116 205 225 / 0.76); }
+.profile-networth-provenance { display: flex; min-width: 0; margin-left: auto; align-items: center; justify-content: flex-end; gap: 0.5rem; color: var(--profile-muted); font-size: 0.625rem; }
+.profile-networth-provenance button { display: grid; width: 1.75rem; height: 1.75rem; place-items: center; border: 1px solid rgb(255 255 255 / 0.08); border-radius: 0.35rem; color: rgb(187 204 215 / 0.74); background: rgb(7 13 20 / 0.7); }
+.profile-networth-provenance svg { width: 0.82rem; height: 0.82rem; }
+.profile-networth-provenance .is-refreshing { animation: profile-networth-spin 0.85s linear infinite; }
+@keyframes profile-networth-spin { to { transform: rotate(360deg); } }
+.profile-networth-notice { margin: 0; padding: 0.48rem 0.68rem; border: 1px solid rgb(217 171 73 / 0.18); border-radius: 0.42rem; color: rgb(216 196 151 / 0.8); background: rgb(82 57 12 / 0.12); font-size: 0.6rem; }
+.profile-networth-balances, .profile-networth-npc-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid rgb(255 255 255 / 0.07); border-radius: 0.58rem; }
+.profile-networth-balances > div, .profile-networth-npc-summary > div { display: grid; min-width: 0; gap: 0.22rem; padding: 0.72rem 0.78rem; border-left: 1px solid rgb(255 255 255 / 0.06); }
+.profile-networth-balances > div:first-child, .profile-networth-npc-summary > div:first-child { border-left: 0; }
+.profile-networth-balances small, .profile-networth-npc-summary small { color: var(--profile-muted); font-size: 0.57rem; }
+.profile-networth-balances strong, .profile-networth-npc-summary strong { color: rgb(222 232 239 / 0.88); font-size: 0.82rem; overflow-wrap: anywhere; }
+.profile-networth-balances .is-primary strong, .profile-networth-npc-summary .is-primary strong { color: var(--color-stat-gold, #f6d36f); font-size: 1rem; }
+.profile-networth-unsoulbound { --profile-skill-accent: rgb(113 209 174 / 0.78); display: grid; gap: 0.42rem; padding: 0.58rem 0.72rem; border: 1px solid rgb(255 255 255 / 0.07); border-radius: 0.5rem; }
+.profile-networth-unsoulbound > div { display: flex; align-items: baseline; justify-content: space-between; gap: 0.7rem; color: var(--profile-muted); font-size: 0.625rem; }
+.profile-networth-unsoulbound strong { color: rgb(216 227 235 / 0.86); }
+.profile-networth-composition, .profile-networth-valuables, .profile-networth-state, .profile-networth-npc-unavailable { display: grid; min-width: 0; gap: 0.62rem; padding: 0.75rem; border: 1px solid rgb(255 255 255 / 0.07); border-radius: 0.58rem; }
+.profile-networth-composition > header, .profile-networth-valuables > header { display: flex; min-width: 0; align-items: center; gap: 0.55rem; }
+.profile-networth-composition > header > div, .profile-networth-valuables > header > div { display: grid; min-width: 0; flex: 1; gap: 0.12rem; }
+.profile-networth-composition h3, .profile-networth-valuables h3 { font-size: 0.75rem; }
+.profile-networth-composition > header > strong, .profile-networth-valuables > header > strong { color: var(--color-stat-gold, #f6d36f); font-size: 0.75rem; }
+.profile-networth-bar { display: flex; height: 0.55rem; min-width: 0; overflow: hidden; border-radius: 999px; background: rgb(255 255 255 / 0.05); }
+.profile-networth-bar button { min-width: 0.18rem; height: 100%; border: 0; padding: 0; }
+.profile-networth-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.32rem; }
+.profile-networth-legend button { display: flex; min-width: 0; align-items: center; gap: 0.44rem; padding: 0.4rem 0.5rem; border: 1px solid rgb(255 255 255 / 0.055); border-radius: 0.38rem; color: inherit; background: rgb(6 12 18 / 0.4); text-align: left; }
+.profile-networth-legend button.is-active { border-color: rgb(82 194 202 / 0.26); background: rgb(19 73 82 / 0.24); }
+.profile-networth-legend-icon { display: grid; width: 1.55rem; height: 1.55rem; flex: 0 0 auto; place-items: center; }
+.profile-networth-legend button > i { width: 0.18rem; height: 1.35rem; flex: 0 0 auto; border-radius: 999px; }
+.profile-networth-legend button > span { display: grid; min-width: 0; gap: 0.08rem; }
+.profile-networth-legend strong { color: rgb(212 224 232 / 0.84); font-size: 0.61rem; overflow-wrap: anywhere; }
+.profile-networth-legend small { color: var(--profile-muted); font-size: 0.53rem; }
+.profile-networth-category-states { display: flex; flex-wrap: wrap; gap: 0.28rem; }
+.profile-networth-category-states span { padding: 0.25rem 0.4rem; border: 1px solid rgb(255 255 255 / 0.055); border-radius: 999px; color: var(--profile-muted); font-size: 0.625rem; }
+.profile-networth-items-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(15rem, 0.8fr); align-items: start; gap: 0.65rem; min-width: 0; }
+.profile-networth-items-layout > div { display: grid; min-width: 0; gap: 0.5rem; }
+.profile-networth-item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12.5rem), 1fr)); gap: 0.38rem; min-width: 0; }
+.profile-networth-item-wrap { display: block; min-width: 0; }
+.profile-networth-item { display: grid; grid-template-columns: 2.75rem minmax(0, 1fr); width: 100%; min-width: 0; min-height: 3.35rem; align-items: center; gap: 0.48rem; padding: 0.34rem 0.44rem; border: 1px solid color-mix(in srgb, var(--profile-rarity-color, #8896a6) 36%, transparent); border-radius: 0.42rem; color: inherit; background: color-mix(in srgb, var(--profile-rarity-color, #8896a6) 8%, rgb(7 13 20 / 0.82)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.045); text-align: left; }
+.profile-networth-item.is-selected { border-color: color-mix(in srgb, var(--profile-rarity-color, #9db0c0) 72%, white 8%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--profile-rarity-color, #9db0c0) 20%, transparent); }
+.profile-networth-item-icon { display: grid; width: 2.65rem; height: 2.65rem; place-items: center; overflow: hidden; border-radius: 0.3rem; }
+.profile-networth-item-copy { display: grid; min-width: 0; gap: 0.16rem; }
+.profile-networth-item-copy strong { color: rgb(219 230 237 / 0.88); font-size: 0.59rem; line-height: 1.22; overflow-wrap: anywhere; }
+.profile-networth-item-copy small { color: var(--color-stat-gold, #e4c15d); font-size: 0.54rem; }
+.profile-networth-breakdown { display: grid; min-width: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--profile-rarity-color, #8797a5) 40%, transparent); border-radius: 0.48rem; background: color-mix(in srgb, var(--profile-rarity-color, #8797a5) 7%, rgb(7 13 20 / 0.9)); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04); }
+.profile-networth-items-layout > .profile-networth-breakdown { position: sticky; top: 0.65rem; }
+.profile-networth-breakdown > header { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; align-items: center; gap: 0.55rem; min-width: 0; padding: 0.62rem; border-bottom: 1px solid rgb(255 255 255 / 0.07); }
+.profile-networth-breakdown > header > span { display: grid; width: 3rem; height: 3rem; place-items: center; }
+.profile-networth-breakdown > header > div { display: grid; min-width: 0; gap: 0.12rem; }
+.profile-networth-breakdown h3 { font-size: 0.67rem; overflow-wrap: anywhere; }
+.profile-networth-breakdown > header > strong { color: var(--color-stat-gold, #f6d36f); font-size: 0.66rem; }
+.profile-networth-breakdown-rows { display: grid; max-height: 18rem; overflow: auto; }
+.profile-networth-breakdown-rows > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.65rem; min-width: 0; padding: 0.42rem 0.58rem; border-bottom: 1px solid rgb(255 255 255 / 0.052); }
+.profile-networth-breakdown-identity { min-width: 0; }
+.profile-networth-breakdown-label { display: grid; grid-template-columns: 1.65rem minmax(0, 1fr); min-width: 0; align-items: center; gap: 0.42rem; }
+.profile-networth-breakdown-label > i { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; font-style: normal; }
+.profile-networth-breakdown-label > span { display: grid; min-width: 0; gap: 0.1rem; }
+.profile-networth-breakdown-rows strong { color: rgb(208 221 230 / 0.83); font-size: 0.58rem; }
+.profile-networth-breakdown-rows small { color: var(--profile-muted); font-size: 0.51rem; overflow-wrap: anywhere; }
+.profile-networth-breakdown-rows b { color: rgb(231 200 107 / 0.84); font-size: 0.58rem; white-space: nowrap; }
+.profile-networth-breakdown footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.32rem; padding: 0.46rem 0.62rem; color: var(--profile-muted); font-size: 0.625rem; }
+.profile-networth-empty, .profile-networth-npc-unavailable p, .profile-networth-state-copy p { margin: 0; color: var(--profile-muted); font-size: 0.62rem; }
+.profile-networth-npc-unavailable h3, .profile-networth-state h2 { margin: 0; color: #dce6ed; font-size: 0.78rem; }
+.profile-networth-skeleton { display: grid; gap: 0.38rem; }
+.profile-networth-skeleton i { height: 0.65rem; border-radius: 999px; background: rgb(255 255 255 / 0.06); }
+.profile-networth-skeleton i:nth-child(2) { width: 76%; }.profile-networth-skeleton i:nth-child(3) { width: 54%; }
+@media (max-width: 900px) { .profile-networth-head { flex-wrap: wrap; } .profile-networth-provenance { width: 100%; margin-left: 0; justify-content: flex-start; } .profile-networth-items-layout { grid-template-columns: minmax(0, 1fr); } .profile-networth-item-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .profile-networth-items-layout > .profile-networth-breakdown { position: static; } .profile-networth-breakdown-rows { max-height: none; } }
+@media (max-width: 560px) { .profile-networth-head > div:first-child { flex: 1; } .profile-networth-mode { order: 3; width: 100%; } .profile-networth-mode button { min-width: 0; } .profile-networth-provenance { width: auto; margin-left: auto; flex-wrap: wrap; } .profile-networth-balances, .profile-networth-npc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .profile-networth-balances > div:nth-child(3), .profile-networth-npc-summary > div:nth-child(3) { border-top: 1px solid rgb(255 255 255 / 0.06); border-left: 0; } .profile-networth-balances > div:nth-child(4), .profile-networth-npc-summary > div:nth-child(4) { border-top: 1px solid rgb(255 255 255 / 0.06); } .profile-networth-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); } .profile-networth-breakdown > header { grid-template-columns: 2.7rem minmax(0, 1fr); } .profile-networth-breakdown > header > strong { grid-column: 2; } }
+@media (max-width: 390px) { .profile-networth-preview { margin-inline: 0; } .profile-networth-head, .profile-networth-composition, .profile-networth-valuables { padding-inline: 0.58rem; } .profile-networth-item-grid, .profile-networth-legend { grid-template-columns: minmax(0, 1fr); } }
+
+@container profile-workspace (max-width: 900px) { .profile-networth-head { flex-wrap: wrap; } .profile-networth-provenance { width: 100%; margin-left: 0; justify-content: flex-start; } .profile-networth-items-layout { grid-template-columns: minmax(0, 1fr); } .profile-networth-item-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .profile-networth-items-layout > .profile-networth-breakdown { position: static; } .profile-networth-breakdown-rows { max-height: none; } }
+@container profile-workspace (max-width: 560px) { .profile-networth-head > div:first-child { flex: 1; } .profile-networth-mode { order: 3; width: 100%; } .profile-networth-mode button { min-width: 0; } .profile-networth-provenance { width: auto; margin-left: auto; flex-wrap: wrap; } .profile-networth-balances, .profile-networth-npc-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .profile-networth-balances > div:nth-child(3), .profile-networth-npc-summary > div:nth-child(3) { border-top: 1px solid rgb(255 255 255 / 0.06); border-left: 0; } .profile-networth-balances > div:nth-child(4), .profile-networth-npc-summary > div:nth-child(4) { border-top: 1px solid rgb(255 255 255 / 0.06); } .profile-networth-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); } .profile-networth-breakdown > header { grid-template-columns: 2.7rem minmax(0, 1fr); } .profile-networth-breakdown > header > strong { grid-column: 2; } }
+@container profile-workspace (max-width: 390px) { .profile-networth-preview { margin-inline: 0; } .profile-networth-head, .profile-networth-composition, .profile-networth-valuables { padding-inline: 0.58rem; } .profile-networth-item-grid, .profile-networth-legend { grid-template-columns: minmax(0, 1fr); } }

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "skydex-gui-test",
+  "version": "1.0.0",
+  "name": "Skydex GUI visual check",
+  "description": "Test-only real-client captures for approving the Skydex interface.",
+  "environment": "client",
+  "entrypoints": {
+    "preLaunch": ["com.skydex.gametest.MigrationFixture"],
+    "fabric-client-gametest": [
+      "com.skydex.gametest.SkydexNativeIntegrationTest",
+      "com.skydex.gametest.GreenhouseWorldTest",
+      "com.skydex.gametest.GreenhouseHeadPreviewTest"
+    ]
+  },
+  "depends": {
+    "skydex": "*",
+    "fabric-client-gametest-api-v1": "*"
+  }
+}

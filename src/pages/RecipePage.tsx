@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { BookOpen, Search, Menu, X } from "lucide-react";
 import { ShardAutocomplete, RecipeCountBadge, ShardDisplay, DropdownButton } from "../components";
-import { WikiLink, wikiArticleUrl } from "../ui/WikiLink";
+import { WikiLink } from "../ui/WikiLink";
+import { wikiArticleUrl } from "../ui/wikiUrl";
 import { getRarityColor } from "../utilities";
 import { useFusionData, useDropdownManager, useRecipeState, useShardsWithRecipes } from "../hooks";
 import { processOutputRecipes, categorizeAndGroupRecipes, filterCategorizedRecipes, type Recipe, type CategorizedRecipes, type GroupedRecipe, type FusionData } from "../utilities";

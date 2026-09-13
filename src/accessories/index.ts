@@ -9,13 +9,37 @@
 export { useAccessories, currentAccessories, refreshOwned, composeSnapshot } from "./useAccessories";
 export type {
   AccessoriesSnapshot,
+  AccessoryEnrichmentSummary,
+  AccessoryStatSummary,
   AccessoryStatus,
   AccessoryView,
+  AccessoryRungSummary,
+  CachedMagicalPowerInputs,
   FoldedRung,
   SourceCategory,
 } from "./useAccessories";
 
-export { buildAccessoryCatalogue, buildFamilies, accessoriesFromIndex, familyRankOf } from "./catalogue";
+export {
+  acquisitionOf,
+  readinessOf,
+  ACQUISITION_LABEL,
+  ACQUISITION_ORDER,
+} from "./acquisition";
+export type {
+  AccessoryAcquisition,
+  AccessoryAcquisitionCategory,
+  AccessoryReadiness,
+  AccessoryReadinessKind,
+} from "./acquisition";
+
+export {
+  ACCESSORY_EXCLUSIONS,
+  buildAccessoryCatalogue,
+  buildFamilies,
+  accessoriesFromIndex,
+  familyRankOf,
+  isNormalAccessory,
+} from "./catalogue";
 export type {
   AccessoryCatalogue,
   AccessoryEntry,
@@ -27,6 +51,7 @@ export type {
 
 export {
   bagFromItems,
+  bagFromParsedItems,
   bioanalysisRank,
   collapseOwned,
   findTalismanBag,
@@ -56,12 +81,14 @@ export {
   signalTitle,
 } from "./locations";
 export type { LocationIndex } from "./locations";
-export { parseUpgradeEdges, buildChainIndex, EMPTY_CHAINS } from "./chains";
+export { parseUpgradeEdges, buildChainIndex, stableIdUpgradeEdges, EMPTY_CHAINS } from "./chains";
 export { fetchNeuUpgrades, parseTalismanUpgrades, NEU_CACHE_KEY, NEU_UPGRADES_URL } from "./neuUpgrades";
 export { computeFolds } from "./dedup";
 export type { FoldResult } from "./dedup";
 export { activeAccessories, computeMagicalPower, MP_BY_RARITY, NO_MP_INPUTS } from "./magicalPower";
-export type { MagicalPowerFigure, MagicalPowerInputs } from "./magicalPower";
+export type { MagicalPowerBreakdownRow, MagicalPowerFigure, MagicalPowerInputs } from "./magicalPower";
+export { accessoryPowerStats, normalizeAccessoryPowerName } from "./powerStats";
+export type { AccessoryPowerStatKey, AccessoryPowerStatValue } from "./powerStats";
 export {
   attainabilityOf,
   groupOf,

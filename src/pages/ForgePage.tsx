@@ -6,8 +6,10 @@ import { useRecipes } from "../items/useItemData";
 import { norm } from "../items/wikiCrafting";
 import { itemResourceVersion, requestItemResource, resourceTierFor, subscribeItemResource } from "../items/itemResource";
 import { ItemIcon } from "../ui/ItemIcon";
-import { BTN_QUIET, INPUT, ItemQuantityField, NUM, PANEL, PageHeader, RARITY, SectionHead, SplitPage, Tag, TILE_HOVER } from "../ui/kit";
+import { BTN_QUIET, Figure, FOCUS, INPUT, ItemQuantityField, NUM, PANEL, PageHeader, RARITY, SplitPage, stated, Tag, TILE_HOVER } from "../ui/kit";
 import { normaliseItemQuantity } from "../utilities/itemQuantity";
+import { ManagedInventoryPanel } from "../components/common/ManagedInventoryPanel";
+import { ForgeGroup } from "./ForgeGroup";
 
 /**
  * The Forge, as its own tab.
@@ -98,6 +100,8 @@ export const ForgePage: React.FC = () => {
     return out;
   }, [shown, sections]);
 
+  const ready = !loading && index.recipes.length > 0;
+
   return (
     /* The signature split: search and section filters in the rail under the
        logo, the recipe sections under the tabs. Same furniture positions as
@@ -108,19 +112,22 @@ export const ForgePage: React.FC = () => {
         <>
           {/* Narrow viewports collapse the rail behind one button. */}
           <div className="min-[900px]:hidden">
-            <button onClick={() => setRailOpen(!railOpen)} className={`${BTN_QUIET} w-full justify-center`}>
+            <button type="button" onClick={() => setRailOpen(!railOpen)} aria-expanded={railOpen} aria-controls="forge-rail-content" className={`${BTN_QUIET} w-full justify-center`}>
               {railOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-              <span>{railOpen ? "Hide" : "Show"} Filters</span>
+              <span className="sr-only">{railOpen ? "Hide" : "Show"} Filters</span>
             </button>
           </div>
 
-          <div className={`${railOpen ? "block" : "hidden min-[900px]:block"} space-y-3`}>
+          <div id="forge-rail-content" className={`${railOpen ? "block" : "hidden min-[900px]:block"} space-y-3`}>
+            <ManagedInventoryPanel items={itemIndex} defaultOpen={false} />
+            <div className="space-y-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search recipes and ingredients"
+                aria-label="Search recipes and ingredients"
                 className={`${INPUT} w-full pl-8`}
                 autoComplete="off"
                 spellCheck={false}
@@ -137,7 +144,7 @@ export const ForgePage: React.FC = () => {
                     type="button"
                     aria-pressed={active}
                     onClick={() => setSection(active ? null : s)}
-                    className={`cursor-pointer rounded-md border px-2.5 py-1 text-[12px] transition-colors ${
+                    className={`cursor-pointer rounded-md border px-2.5 py-1 text-[12px] transition-colors ${FOCUS} ${
                       active
                         ? "border-emerald-500/45 bg-emerald-500/15 text-emerald-200"
                         : "border-white/12 bg-white/8 text-slate-300 hover:bg-white/12 hover:text-slate-100"
@@ -149,6 +156,7 @@ export const ForgePage: React.FC = () => {
               })}
             </div>
           </div>
+          </div>
         </>
       }
     >
@@ -157,6 +165,13 @@ export const ForgePage: React.FC = () => {
         sub="Every forge recipe: what it takes, how long it runs, what it needs unlocked."
         icon={Hammer}
       />
+
+      <div className={`${PANEL} flex flex-wrap items-center justify-between gap-x-8 gap-y-2 px-3 py-2`}>
+        <Figure label="Recipes" value={stated(ready, index.recipes.length)} title="Every forge recipe read from the wiki" />
+        <Figure label="Showing" value={stated(ready, shown.length)} title="Recipes admitted by the rail filters" />
+        <Figure label="Groups" value={stated(ready, grouped.size)} title="Forge sections represented by the visible recipes" />
+        <Figure label="Section" value={section ?? "All"} title="The section filter currently applied" />
+      </div>
 
       {loading && index.recipes.length === 0 && (
         <p className={`${PANEL} px-3 py-4 text-[12px] text-slate-400`}>Reading the forge table from the wiki.</p>
@@ -172,72 +187,75 @@ export const ForgePage: React.FC = () => {
         </p>
       )}
 
-      {[...grouped].map(([sectionName, recipes]) => (
-        <section key={sectionName} className={PANEL}>
-          <SectionHead
+      <div className="space-y-5">
+        {[...grouped].map(([sectionName, recipes], groupIndex) => (
+          <ForgeGroup
+            key={`${section ?? "all"}:${sectionName}`}
             title={sectionName}
-            right={<span className={`text-[11px] ${NUM} text-slate-500`}>{recipes.length}</span>}
-          />
-          <div className="grid gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3">
-            {recipes.map((recipe) => {
-              const tier = tierByName.get(norm(recipe.name)) ?? resourceTierFor(recipe.name);
-              return (
-                <Link
-                  key={recipe.name}
-                  to={`/items?q=${encodeURIComponent(recipe.name)}&qty=${quantity}`}
-                  title="Open in Crafting for the full cost tree against what you hold"
-                  className={`${TILE_HOVER} group flex flex-col gap-2 p-2.5`}
-                >
-                  <span className="flex items-center gap-2">
-                    {/* The icon resolves from the table's own icon-cell title when it
-                        differs from the article: `File:Ammonite.png` does not exist,
-                        `File:Ammonite Pet.png` does. See ForgeRecipe.wikiTitle. */}
-                    {/* 32 rather than 24: wiki thumbs are 64px pixel art, and only
-                        integer halvings (16/32/64) downscale without smearing. */}
-                    <ItemIcon name={recipe.wikiTitle ?? recipe.name} size={32} />
-                    <span
-                      className={`min-w-0 flex-1 truncate text-[14px] leading-5 font-medium ${
-                        tier ? RARITY[tier] ?? "text-slate-100" : "text-slate-100"
-                      }`}
-                    >
-                      {recipe.name}
+            count={recipes.length}
+            initiallyOpen={section !== null || groupIndex === 0}
+          >
+            <div className="grid gap-2.5 p-2.5 min-[1280px]:grid-cols-2 min-[2200px]:grid-cols-3">
+              {recipes.map((recipe) => {
+                const tier = tierByName.get(norm(recipe.name)) ?? resourceTierFor(recipe.name);
+                return (
+                  <Link
+                    key={recipe.name}
+                    to={`/recipes?q=${encodeURIComponent(recipe.name)}&qty=${quantity}`}
+                    title="Open in Recipes for the full cost tree against what you hold"
+                    className={`${TILE_HOVER} group self-start flex flex-col gap-2.5 p-3`}
+                  >
+                    <span className="flex items-center gap-2">
+                      {/* The icon resolves from the table's own icon-cell title when it
+                          differs from the article: `File:Ammonite.png` does not exist,
+                          `File:Ammonite Pet.png` does. See ForgeRecipe.wikiTitle. */}
+                      {/* 32 rather than 24: wiki thumbs are 64px pixel art, and only
+                          integer halvings (16/32/64) downscale without smearing. */}
+                      <ItemIcon name={recipe.wikiTitle ?? recipe.name} size={32} />
+                      <span
+                        className={`min-w-0 flex-1 truncate text-[14px] leading-5 font-medium ${
+                          tier ? RARITY[tier] ?? "text-slate-100" : "text-slate-100"
+                        }`}
+                      >
+                        {recipe.name}
+                      </span>
                     </span>
-                  </span>
 
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    {recipe.ingredients.map((ing) => (
-                      <Tag key={ing.name}>
-                        <ItemIcon name={ing.name} size={14} />
-                        <span className={NUM}>{(ing.qty * quantity).toLocaleString("en-US")}x</span>
-                        <span className="max-w-[10rem] truncate">{ing.name}</span>
-                      </Tag>
-                    ))}
-                    {recipe.coins !== null && (
-                      <Tag>
-                        <span className={NUM}>{(recipe.coins * quantity).toLocaleString("en-US")}</span> coins
-                      </Tag>
-                    )}
-                  </span>
-
-                  <span className="mt-auto flex items-center gap-1.5">
-                    {recipe.seconds !== null && (
-                      <Tag accent title="Base time for each item. Multiple forge slots can run in parallel; Quick Forge and Cole shorten it in game.">
-                        {formatDuration(recipe.seconds)} base each
-                      </Tag>
-                    )}
-                    {recipe.hotm !== null && (
-                      <Tag title={recipe.requirement ?? undefined}>HotM {recipe.hotm}</Tag>
-                    )}
-                    <span className="ml-auto text-[11px] text-slate-500 transition-colors group-hover:text-emerald-300">
-                      cost tree
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {recipe.ingredients.map((ing) => (
+                        <Tag key={ing.name}>
+                          <ItemIcon name={ing.name} size={14} />
+                          <span className={NUM}>{(ing.qty * quantity).toLocaleString("en-US")}x</span>
+                          <span className="max-w-[14rem] truncate">{ing.name}</span>
+                        </Tag>
+                      ))}
+                      {recipe.coins !== null && (
+                        <Tag>
+                          <span className={NUM}>{(recipe.coins * quantity).toLocaleString("en-US")}</span> coins
+                        </Tag>
+                      )}
                     </span>
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+
+                    <span className="mt-auto flex items-center gap-1.5">
+                      {recipe.seconds !== null && (
+                        <Tag accent title="Base time for each item. Multiple forge slots can run in parallel; Quick Forge and Cole shorten it in game.">
+                          {formatDuration(recipe.seconds)} base each
+                        </Tag>
+                      )}
+                      {recipe.hotm !== null && (
+                        <Tag title={recipe.requirement ?? undefined}>HotM {recipe.hotm}</Tag>
+                      )}
+                      <span className="ml-auto text-[11px] text-slate-500 transition-colors group-hover:text-emerald-300">
+                        cost tree
+                      </span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </ForgeGroup>
+        ))}
+      </div>
     </SplitPage>
   );
 };

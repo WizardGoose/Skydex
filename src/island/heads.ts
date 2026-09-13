@@ -18,7 +18,7 @@
  *     real per-hash render and not one shared default
  *
  * One property worth recording: an unrecognised hash returns `200` with the
- * default Steve face rather than a `404`. This step therefore cannot fail, so a
+ * default Steve head rather than a `404`. This step therefore cannot fail, so a
  * corrupt hash shows Steve instead of falling through to a blank tile. That is
  * the right trade for real data, where the hash comes straight from the item's
  * own component. Mojang's `textures.minecraft.net/texture/<hash>` does 404
@@ -29,7 +29,7 @@
  * service, which is exactly why it is there.
  */
 
-/** Face size requested from the service. Matches the wiki's 64px convention. */
+/** Item-head size requested from the service. Matches the wiki's 64px convention. */
 const HEAD_PX = 64;
 
 /**
@@ -41,7 +41,7 @@ const HEAD_PX = 64;
  * than trusting a caller to have done it.
  */
 export const headUrl = (hash: string): string | null =>
-  /^[0-9a-f]{32,64}$/i.test(hash) ? `https://mc-heads.net/avatar/${hash.toLowerCase()}/${HEAD_PX}` : null;
+  /^[0-9a-f]{32,64}$/i.test(hash) ? `https://mc-heads.net/head/${hash.toLowerCase()}/${HEAD_PX}` : null;
 
 /** Width requested for the identity render. The service scales height to match. */
 const BODY_PX = 64;

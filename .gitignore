@@ -10,6 +10,9 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.vite/
+.jspace/
+prototypes/
 *.local
 
 # Editor directories and files
@@ -43,12 +46,28 @@ bench/
 docs/design-intel.md
 docs/skycrypt-style-intel.md
 
+# Local planning notes and draft cover artwork.
+docs/superpowers/
+docs/research/
+docs/greenhouse-time-research.md
+docs/hypixel-api-cheatsheet.md
+docs/networth-research.md
+docs/route-engine-design.md
+docs/devpost-cover-concepts.html
+docs/assets/devpost-export-fonts.js
+
 # Editor and agent workspace configuration. The repository should read the same
 # to every contributor and every tool, so no local session scaffolding ships.
 .claude/
+.codex/
 CLAUDE.md
 AGENTS.md
 *.claude.md
+
+# Local credentials and environment overrides.
+.env
+.env.*
+!.env.example
 
 # Dataset build scripts that carry a maintainer contact address in their
 # User-Agent header. They are held back so no personal email is published; the

@@ -8,14 +8,34 @@
  * not a map of zeros, because "Hypixel did not say" and "level zero" are
  * different sentences and this site never trades one for the other.
  *
- * Field locations verified against docs/hypixel-api-cheatsheet.md (a real dump
- * of a real account): experience lives at `player_data.experience` keyed
+ * Supported field locations are pinned by the parser tests: experience lives
+ * at `player_data.experience` keyed
  * `SKILL_FARMING` style, first join at `profile.first_join` (ms epoch), fairy
  * souls at `fairy_soul.total_collected`.
  */
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+export interface ProfileTreeNodeFact {
+  /** Level exactly as Hypixel states it. */
+  level: number;
+  /** The matching `toggle_<node>` value, or null when the API has no toggle. */
+  enabled: boolean | null;
+}
+
+export interface ProfileSkillTreeFacts {
+  /** Player-supplied preset name when the active tree has one. */
+  customName: string | null;
+  /** Total tree experience for this progression system. */
+  experience: number | null;
+  /** Tokens spent in the active tree. */
+  tokensSpent: number | null;
+  /** Selected active ability key, when the tree exposes one. */
+  selectedAbility: string | null;
+  /** Active-tree nodes keyed by the API's own future-safe node IDs. */
+  nodes: Record<string, ProfileTreeNodeFact>;
+}
 
 export interface ProfileFacts {
   /**
@@ -32,7 +52,7 @@ export interface ProfileFacts {
    * payload does not state it. The game's own arithmetic is fixed: every
    * level costs 100 XP, so level = floor(xp / 100) and the remainder is the
    * progress into the current level. Verified against
-   * docs/hypixel-api-cheatsheet.md (38220 = level 382, 20/100 in).
+   * the synthetic fixtures in this module's tests.
    */
   levelXp: number | null;
   /**
@@ -48,6 +68,18 @@ export interface ProfileFacts {
   hotmName: string | null;
   /** The selected Heart of the Forest tree name, exactly as Hypixel states it. */
   hotfName: string | null;
+  /** The active Heart of the Mountain allocation, when shared. */
+  hotmTree: ProfileSkillTreeFacts | null;
+  /** The active Heart of the Forest allocation, when shared. */
+  hotfTree: ProfileSkillTreeFacts | null;
+  /** Hypixel's currently selected Heart of the Mountain preset slot. */
+  hotmSelectedSlot?: number | null;
+  /** Hypixel's currently selected Heart of the Forest preset slot. */
+  hotfSelectedSlot?: number | null;
+  /** Every shared Heart of the Mountain preset, keyed by its one-based slot. */
+  hotmTrees?: Record<number, ProfileSkillTreeFacts>;
+  /** Every shared Heart of the Forest preset, keyed by its one-based slot. */
+  hotfTrees?: Record<number, ProfileSkillTreeFacts>;
 }
 
 export const EMPTY_FACTS: ProfileFacts = {
@@ -59,6 +91,96 @@ export const EMPTY_FACTS: ProfileFacts = {
   selectedPower: null,
   hotmName: null,
   hotfName: null,
+  hotmTree: null,
+  hotfTree: null,
+  hotmSelectedSlot: null,
+  hotfSelectedSlot: null,
+  hotmTrees: {},
+  hotfTrees: {},
+};
+
+const finiteNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value : null;
+
+const positiveInteger = (value: unknown): number | null =>
+  typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+
+type TreeKey = "mining" | "foraging";
+type TokenKey = "mountain" | "forest";
+
+const presetKey = (base: TreeKey | TokenKey, slot: number): string =>
+  slot === 1 ? base : `${base}_${slot}`;
+
+const readTree = (
+  skillTree: Record<string, unknown> | undefined,
+  treeKey: TreeKey,
+  tokenKey: TokenKey,
+  slot: number,
+): ProfileSkillTreeFacts | null => {
+  if (!skillTree) return null;
+  const storedTreeKey = presetKey(treeKey, slot);
+  const storedTokenKey = presetKey(tokenKey, slot);
+  const names = isRecord(skillTree[storedTreeKey]) ? skillTree[storedTreeKey] : undefined;
+  const nodeSets = isRecord(skillTree.nodes) ? skillTree.nodes : undefined;
+  const rawNodes = nodeSets && isRecord(nodeSets[storedTreeKey]) ? nodeSets[storedTreeKey] : undefined;
+  const experience = isRecord(skillTree.experience) ? finiteNumber(skillTree.experience[treeKey]) : null;
+  const tokensSpent = isRecord(skillTree.tokens_spent) ? finiteNumber(skillTree.tokens_spent[storedTokenKey]) : null;
+  const selectedAbility = isRecord(skillTree.selected_ability) && typeof skillTree.selected_ability[storedTreeKey] === "string"
+    ? skillTree.selected_ability[storedTreeKey] as string
+    : null;
+  const customName = names && typeof names.custom_name === "string" && names.custom_name.trim()
+    ? names.custom_name
+    : null;
+  const nodes: Record<string, ProfileTreeNodeFact> = {};
+
+  if (rawNodes) {
+    for (const [key, value] of Object.entries(rawNodes)) {
+      if (key.startsWith("toggle_")) continue;
+      const level = finiteNumber(value);
+      if (level === null || level < 0) continue;
+      const toggle = rawNodes[`toggle_${key}`];
+      nodes[key] = { level, enabled: typeof toggle === "boolean" ? toggle : null };
+    }
+  }
+
+  if (!customName && experience === null && tokensSpent === null && !selectedAbility && Object.keys(nodes).length === 0) {
+    return null;
+  }
+  return { customName, experience, tokensSpent, selectedAbility, nodes };
+};
+
+const readTreePresets = (
+  skillTree: Record<string, unknown> | undefined,
+  treeKey: TreeKey,
+  tokenKey: TokenKey,
+  selectedSlot: number | null,
+): Record<number, ProfileSkillTreeFacts> => {
+  if (!skillTree) return {};
+  const slots = new Set<number>([1]);
+  if (selectedSlot !== null) slots.add(selectedSlot);
+
+  const collect = (value: unknown, base: TreeKey | TokenKey) => {
+    if (!isRecord(value)) return;
+    const pattern = new RegExp(`^${base}(?:_(\\d+))?$`);
+    for (const key of Object.keys(value)) {
+      const match = pattern.exec(key);
+      if (!match) continue;
+      const slot = match[1] ? Number(match[1]) : 1;
+      if (Number.isInteger(slot) && slot > 0) slots.add(slot);
+    }
+  };
+
+  collect(skillTree, treeKey);
+  collect(skillTree.nodes, treeKey);
+  collect(skillTree.selected_ability, treeKey);
+  collect(skillTree.tokens_spent, tokenKey);
+
+  const presets: Record<number, ProfileSkillTreeFacts> = {};
+  for (const slot of [...slots].sort((left, right) => left - right)) {
+    const tree = readTree(skillTree, treeKey, tokenKey, slot);
+    if (tree) presets[slot] = tree;
+  }
+  return presets;
 };
 
 export const readProfileFacts = (member: unknown): ProfileFacts => {
@@ -99,6 +221,9 @@ export const readProfileFacts = (member: unknown): ProfileFacts => {
       if (!slot.startsWith("slot_") || !isRecord(value)) continue;
       const stats: Record<string, number> = {};
       for (const [stat, points] of Object.entries(value)) {
+        // Hypixel stores the slot purchase timestamp beside the allocation.
+        // It is bookkeeping, not a tunable SkyBlock stat.
+        if (stat === "purchase_ts") continue;
         if (typeof points === "number" && Number.isFinite(points)) stats[stat] = points;
       }
       tuning[slot] = stats;
@@ -107,10 +232,32 @@ export const readProfileFacts = (member: unknown): ProfileFacts => {
   const selectedPower = bag && typeof bag.selected_power === "string" && bag.selected_power ? bag.selected_power : null;
 
   const skillTree = isRecord(member.skill_tree) ? member.skill_tree : undefined;
-  const miningTree = skillTree && isRecord(skillTree.mining) ? skillTree.mining : undefined;
-  const foragingTree = skillTree && isRecord(skillTree.foraging) ? skillTree.foraging : undefined;
-  const hotmName = miningTree && typeof miningTree.custom_name === "string" && miningTree.custom_name ? miningTree.custom_name : null;
-  const hotfName = foragingTree && typeof foragingTree.custom_name === "string" && foragingTree.custom_name ? foragingTree.custom_name : null;
+  const selectedSlots = skillTree && isRecord(skillTree.selected_skill_tree_slot)
+    ? skillTree.selected_skill_tree_slot
+    : undefined;
+  const hotmSelectedSlot = positiveInteger(selectedSlots?.mining);
+  const hotfSelectedSlot = positiveInteger(selectedSlots?.foraging);
+  const hotmTrees = readTreePresets(skillTree, "mining", "mountain", hotmSelectedSlot);
+  const hotfTrees = readTreePresets(skillTree, "foraging", "forest", hotfSelectedSlot);
+  const hotmTree = hotmTrees[hotmSelectedSlot ?? 1] ?? null;
+  const hotfTree = hotfTrees[hotfSelectedSlot ?? 1] ?? null;
+  const hotmName = hotmTree?.customName ?? null;
+  const hotfName = hotfTree?.customName ?? null;
 
-  return { skillXp, firstJoin, fairySouls, levelXp, tuning, selectedPower, hotmName, hotfName };
+  return {
+    skillXp,
+    firstJoin,
+    fairySouls,
+    levelXp,
+    tuning,
+    selectedPower,
+    hotmName,
+    hotfName,
+    hotmTree,
+    hotfTree,
+    hotmSelectedSlot,
+    hotfSelectedSlot,
+    hotmTrees,
+    hotfTrees,
+  };
 };

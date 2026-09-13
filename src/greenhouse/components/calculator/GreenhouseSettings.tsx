@@ -161,7 +161,7 @@ export const GreenhouseSettings: React.FC<GreenhouseSettingsProps> = ({
   return (
     <div className={className}>
       <div className="flex items-baseline justify-between gap-2 pb-1">
-        <span className={LABEL}>Your greenhouse</span>
+        <span className={LABEL}>Greenhouse</span>
       </div>
 
       <ControlGrid>

@@ -3,6 +3,7 @@ import { makeKeyedGate } from "./gate";
 import {
   buildHypixelRequest,
   fetchProductionHypixelResource,
+  readCachedHypixelResource,
   hasHypixelApiCredential,
   usesProductionHypixelApi,
 } from "./hypixelTransport";
@@ -21,8 +22,8 @@ import type { IslandFeed } from "./merge";
  * **The key is a secret and the transport boundary is the only place it is
  * handled.** The hosted site and local Skydex checkouts send no browser
  * credential at all: `hypixelTransport.ts` selects Skydex's narrow API Worker,
- * where the application key is an encrypted secret.
- * Nothing interpolates a key into a URL or error message, and the one place a
+ * where the application key is an encrypted secret. Nothing interpolates a key
+ * into a URL or error message, and the one place a
  * remote string becomes an error message runs it through `redact` first.
  *
  * **No background polling.** The keyed API is pulled on demand behind a five
@@ -125,6 +126,7 @@ const withTimeoutTask = async <T>(
   const deadline = setTimeout(() => controller.abort(), TIMEOUT_MS);
   const onAbort = () => controller.abort();
   signal?.addEventListener("abort", onAbort);
+  if (signal?.aborted) controller.abort();
   try {
     return await task(controller.signal);
   } finally {
@@ -190,14 +192,19 @@ const responseMetadata = (response: Response): { fetchedAt?: number; cacheState?
 const resolveGate = makeKeyedGate<ApiResult<HypixelAccount>>(30_000);
 
 export async function resolveAccount(input: string, signal?: AbortSignal): Promise<ApiResult<HypixelAccount>> {
+  const cancelled: ApiResult<HypixelAccount> = {
+    ok: false, error: { reason: "network", message: "Username lookup was cancelled." },
+  };
+  if (signal?.aborted) return cancelled;
   const trimmed = input.trim();
-  // Keyed on the trimmed name, so "Steve " and "Steve" are one question. The
-  // early shape rejections below never touch the network and so never reach
-  // the gate.
-  return resolveGate.run(trimmed.toLowerCase(), () => runResolveAccount(trimmed, signal));
+  // A shared lookup belongs to the gate. One view unmounting must not cancel
+  // another reader or cache its cancellation as a failed username lookup.
+  // The underlying requests still have their own bounded timeout.
+  const result = await resolveGate.run(trimmed.toLowerCase(), () => runResolveAccount(trimmed));
+  return signal?.aborted ? cancelled : result;
 }
 
-async function runResolveAccount(input: string, signal?: AbortSignal): Promise<ApiResult<HypixelAccount>> {
+async function runResolveAccount(input: string): Promise<ApiResult<HypixelAccount>> {
   const trimmed = input.trim();
   if (!trimmed) return { ok: false, error: { reason: "shape", message: "Enter a Minecraft username or UUID." } };
 
@@ -209,7 +216,7 @@ async function runResolveAccount(input: string, signal?: AbortSignal): Promise<A
   }
 
   try {
-    const res = await withTimeout(PLAYERDB_URL + encodeURIComponent(trimmed), {}, signal);
+    const res = await withTimeout(PLAYERDB_URL + encodeURIComponent(trimmed), {});
     if (res.ok) {
       const body: unknown = await res.json();
       const player = isObject(body) && isObject(body.data) ? body.data.player : null;
@@ -230,7 +237,7 @@ async function runResolveAccount(input: string, signal?: AbortSignal): Promise<A
   }
 
   try {
-    const res = await withTimeout(ASHCON_URL + encodeURIComponent(trimmed), {}, signal);
+    const res = await withTimeout(ASHCON_URL + encodeURIComponent(trimmed), {});
     if (res.ok) {
       const body: unknown = await res.json();
       if (isObject(body) && typeof body.uuid === "string") {
@@ -601,13 +608,13 @@ export async function fetchGarden(
  * Fetch one profile's museum.
  *
  * Its own endpoint, like the garden, and keyed by PROFILE id rather than by
- * player uuid, so the whole co-op shares one museum document with a `members`
- * map inside it. The query parameter is `profile`, the same trap `fetchGarden`
- * documents.
+ * player uuid. Hypixel has exposed both a historical `members[uuid]` response
+ * and the current documented `profile` response, so the reader accepts both
+ * without making the rest of the app care which envelope arrived.
  *
- * Returns `members[uuid]` for the player asked about, untouched and typed
- * `unknown`: what a museum field means belongs to whoever reads it, and this
- * function's job ends at handing over the right slice.
+ * Returns the matching historical `members[uuid]` slice or the documented
+ * `profile` object, untouched and typed `unknown`: what a museum field means
+ * belongs to whoever reads it, and this function ends at the right slice.
  *
  * A profile that has never opened the museum, or a player whose Museum API
  * toggle is off, answers 200 with no matching member. That is `null`, not an
@@ -646,15 +653,28 @@ export async function fetchMuseum(
   const failure = classifyResponse(res, body, key.trim());
   if (failure) return { ok: false, error: failure };
 
-  const members = isObject(body) && isObject(body.members) ? body.members : null;
-  if (!members) return { ok: true, value: null, ...responseMetadata(res) };
-
-  const wanted = undash(playerUuid);
-  for (const [memberId, value] of Object.entries(members)) {
-    if (undash(memberId) === wanted) return { ok: true, value, ...responseMetadata(res) };
-  }
-  return { ok: true, value: null, ...responseMetadata(res) };
+  return { ok: true, value: readMuseumProfile(body, playerUuid), ...responseMetadata(res) };
 }
+
+/**
+ * Read the Museum payload independently of the wire call so both documented
+ * envelopes stay pinned by tests. The returned object remains untyped here;
+ * the Profile model owns the meaning of `value`, `appraisal`, donations, and
+ * special items.
+ */
+export const readMuseumProfile = (body: unknown, playerUuid: string): unknown => {
+  if (!isObject(body)) return null;
+
+  const members = isObject(body.members) ? body.members : null;
+  if (members) {
+    const wanted = undash(playerUuid);
+    for (const [memberId, value] of Object.entries(members)) {
+      if (undash(memberId) === wanted) return value;
+    }
+  }
+
+  return isObject(body.profile) ? body.profile : null;
+};
 
 /* -------------------------------------------------------------------------- */
 /* The raw member, for readers that need more than sacks                      */
@@ -676,6 +696,8 @@ export interface ProfileMember {
   gameMode: string | null;
   /** What Hypixel marks as the player's current profile. Exactly one is true. */
   selected: boolean;
+  /** Profile-level Account & Profile Upgrades, needed for slot entitlements. */
+  communityUpgrades?: unknown;
   /**
    * The co-op bank balance, from `profile.banking.balance`.
    *
@@ -691,6 +713,10 @@ export interface ProfileMember {
    * should treat it exactly as it treats `null`.
    */
   bankBalance?: number | null;
+  /** The shared profile bank ledger, omitted when Banking API access is private. */
+  bankTransactions?: unknown;
+  /** Number of members attached to this profile, including the selected player. */
+  memberCount?: number;
 }
 
 /**
@@ -764,7 +790,8 @@ export async function fetchProfileMember(
 export async function fetchProfileMembers(
   account: HypixelAccount,
   key: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  cachedOnly = false,
 ): Promise<ApiResult<ProfileMember[]>> {
   if (!hasHypixelApiCredential(key)) {
     return { ok: false, error: { reason: "auth", message: "Skydex's Hypixel connection is unavailable right now." } };
@@ -772,7 +799,10 @@ export async function fetchProfileMembers(
 
   let res: Response;
   try {
-    res = await fetchAuthenticated(`${PROFILES_URL}?uuid=${encodeURIComponent(account.uuid)}`, key, signal);
+    const url = `${PROFILES_URL}?uuid=${encodeURIComponent(account.uuid)}`;
+    const cached = cachedOnly ? await readCachedHypixelResource(url) : null;
+    if (cachedOnly && !cached) return { ok: false, error: { reason: "network", message: "No saved profile is available." } };
+    res = cached ?? await fetchAuthenticated(url, key, signal);
   } catch {
     // Says nothing about the request. No URL, no headers, same as everywhere else here.
     return {
@@ -816,7 +846,10 @@ export async function fetchProfileMembers(
           // Absent means normal. Hypixel only sends this field for the odd modes.
           gameMode: typeof raw.game_mode === "string" && raw.game_mode !== "" ? raw.game_mode : null,
           selected: raw.selected === true,
+          communityUpgrades: raw.community_upgrades,
           bankBalance: typeof banking?.balance === "number" ? banking.balance : null,
+          bankTransactions: Array.isArray(banking?.transactions) ? banking.transactions : null,
+          memberCount: Object.keys(members).length,
         });
         break;
       }

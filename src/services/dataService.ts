@@ -11,10 +11,14 @@ import {
   NAME_ONLY_FILTER_CONFIG,
 } from "../utilities/shardFilters";
 
-interface FusionData {
+export interface FusionData {
   shards: Record<string, Shard>;
-  recipes: Record<string, unknown>;
+  recipes: Record<string, Record<string, [string, string][]>>;
 }
+
+const PRICE_CACHE_KEY = "skydex.shard-prices.v1";
+const PRICE_TTL_MS = 5 * 60 * 1000;
+const REQUEST_TIMEOUT_MS = 8_000;
 
 export class DataService {
   private static instance: DataService;
@@ -22,6 +26,12 @@ export class DataService {
   private shardNameToKeyCache: Record<string, string> | null = null;
   private defaultRatesCache: Record<string, number> | null = null;
   private bazaarPriceCache: Record<string, Record<string, number>> | null = null;
+  private bazaarPriceAt = 0;
+  private pricesPending: Promise<void> | null = null;
+  private priceFailure: { at: number; error: Error } | null = null;
+  private fusionPending: Promise<FusionData> | null = null;
+  private ratesPending: Promise<Record<string, number>> | null = null;
+  private shardsPending: Promise<ShardWithKey[]> | null = null;
 
   public static getInstance(): DataService {
     if (!DataService.instance) {
@@ -43,17 +53,30 @@ export class DataService {
   }
 
   private async fetchApi<T>(endpoint: string): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
       const response = await fetch(
-        `https://api.hypixel.net/v2/skyblock${endpoint}`
+        `https://api.hypixel.net/v2/skyblock${endpoint}`, { signal: controller.signal },
       );
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       return await response.json();
     } catch (error) {
-      throw new Error(`Failed to fetch API endpoint ${endpoint}: ${error}`);
+      throw new Error(controller.signal.aborted
+        ? "Hypixel Bazaar did not respond. Prices are unavailable; try again shortly."
+        : `Could not load Hypixel Bazaar prices: ${error instanceof Error ? error.message : "connection failed"}`);
+    } finally {
+      clearTimeout(timer);
     }
+  }
+
+  loadFusionData(): Promise<FusionData> {
+    return this.fusionPending ??= this.fetchJson<FusionData>("fusion-data.json").catch((error: unknown) => {
+      this.fusionPending = null;
+      throw error;
+    });
   }
 
   async loadShards(): Promise<ShardWithKey[]> {
@@ -61,13 +84,21 @@ export class DataService {
       return this.shardsCache;
     }
 
-    const [fusionData, defaultRates] = await Promise.all([this.fetchJson<FusionData>("fusion-data.json"), this.loadDefaultRates()]);
+    if (this.shardsPending) return this.shardsPending;
+    this.shardsPending = this.buildShards();
+    try { return await this.shardsPending; }
+    finally { this.shardsPending = null; }
+  }
+
+  private async buildShards(): Promise<ShardWithKey[]> {
+    const [fusionData, defaultRates] = await Promise.all([this.loadFusionData(), this.loadDefaultRates()]);
 
     this.shardsCache = Object.entries(fusionData.shards).map(([key, shard]: [string, Shard]) => ({
         key,
         ...shard,
         id: key,
         rate: defaultRates[key] || 0,
+        canFuse: Object.values(fusionData.recipes[key] ?? {}).some((pairs) => Array.isArray(pairs) && pairs.length > 0),
     }));
 
     return this.shardsCache;
@@ -92,30 +123,56 @@ export class DataService {
       return this.defaultRatesCache;
     }
 
-    this.defaultRatesCache = await this.fetchJson<Record<string, number>>("rates.json");
+    this.ratesPending ??= this.fetchJson<Record<string, number>>("rates.json").catch((error: unknown) => {
+      this.ratesPending = null;
+      throw error;
+    });
+    this.defaultRatesCache = await this.ratesPending;
     return this.defaultRatesCache;
   }
 
   async loadShardCosts(useInstantBuyPrices: boolean): Promise<Record<string, number>> {
     const cacheKey = useInstantBuyPrices ? "instant_buy" : "buy_offer";
-  
-    if (this.bazaarPriceCache?.[cacheKey]) {
+    if (!this.bazaarPriceCache) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) ?? "null");
+        if (cached && Number.isFinite(cached.at) && cached.at <= Date.now() && Date.now() - cached.at < PRICE_TTL_MS
+          && cached.prices?.instant_buy && cached.prices?.buy_offer
+          && Object.values(cached.prices).every((prices) => prices && typeof prices === "object"
+            && Object.values(prices).every((price) => typeof price === "number" && Number.isFinite(price) && price > 0))) {
+          this.bazaarPriceCache = cached.prices;
+          this.bazaarPriceAt = cached.at;
+        }
+      } catch { /* A missing or invalid cache is not a price. */ }
+    }
+    if (this.bazaarPriceCache?.[cacheKey] && Date.now() - this.bazaarPriceAt < PRICE_TTL_MS) {
       return this.bazaarPriceCache[cacheKey];
     }
+    if (this.priceFailure && Date.now() - this.priceFailure.at < 30_000) throw this.priceFailure.error;
+    this.pricesPending ??= this.refreshPrices().catch((error: Error) => {
+      this.priceFailure = { at: Date.now(), error };
+      throw error;
+    }).finally(() => { this.pricesPending = null; });
+    await this.pricesPending;
+    return this.bazaarPriceCache![cacheKey];
+  }
 
-    const bazaarData = await this.fetchApi<BazaarData>("/bazaar");
-    const shards = await this.loadShards();
-    this.bazaarPriceCache = this.bazaarPriceCache ?? {};
-    this.bazaarPriceCache[cacheKey] = {};
-
+  private async refreshPrices(): Promise<void> {
+    const [bazaarData, shards] = await Promise.all([this.fetchApi<BazaarData>("/bazaar"), this.loadShards()]);
+    if (!bazaarData.success || !bazaarData.products) throw new Error("Hypixel Bazaar returned no prices.");
+    const prices: Record<string, Record<string, number>> = { instant_buy: {}, buy_offer: {} };
     for (const shard of shards) {
-      const buyPrice = bazaarData.products[`${shard.internal_id}`]?.buy_summary[0]?.pricePerUnit;
-      const sellPrice = bazaarData.products[`${shard.internal_id}`]?.sell_summary[0]?.pricePerUnit;
-
-      this.bazaarPriceCache[cacheKey][shard.id] = useInstantBuyPrices ? buyPrice : sellPrice;
+      const product = bazaarData.products[shard.internal_id];
+      const buy = product?.buy_summary?.[0]?.pricePerUnit;
+      const offer = product?.sell_summary?.[0]?.pricePerUnit;
+      if (Number.isFinite(buy) && buy > 0) prices.instant_buy[shard.id] = buy;
+      if (Number.isFinite(offer) && offer > 0) prices.buy_offer[shard.id] = offer;
     }
-  
-    return this.bazaarPriceCache[cacheKey];
+    this.bazaarPriceCache = prices;
+    this.bazaarPriceAt = Date.now();
+    this.priceFailure = null;
+    try { localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify({ at: this.bazaarPriceAt, prices })); }
+    catch { /* Storage is optional. */ }
   }
 
   private sortShardsByQuery(shards: ShardWithKey[], query: string): ShardWithKey[] {

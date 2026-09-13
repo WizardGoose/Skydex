@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { armorItems, gearItems, petTiles, rawToGearItem, recombTier } from "../gear";
+import { armorItems, buildWardrobeRows, gearItems, petTiles, rawToGearItem, recombTier, stackTextureHash, tierFromGearLore } from "../gear";
 import type { PetData, RawItem } from "../types";
 
 /**
@@ -54,6 +54,17 @@ describe("rawToGearItem", () => {
     expect(rawToGearItem(raw)!.extra?.recomb).toBe(true);
     expect(rawToGearItem(item("HYPERION"))!.extra?.recomb).toBeUndefined();
   });
+
+  it("keeps the exact custom-head texture carried by the stack", () => {
+    const hash = "a074a7bd976fe6aba1624161793be547d54c835cf422243a851ba09d1e650553";
+    const value = btoa(JSON.stringify({ textures: { SKIN: { url: `https://textures.minecraft.net/texture/${hash}` } } }));
+    const raw = item("BLOSSOM_NECKLACE");
+    raw.tag!.SkullOwner = { Properties: { textures: [{ Value: value }] } };
+
+    expect(stackTextureHash(raw)).toBe(hash);
+    expect(rawToGearItem(raw)?.extra?.skin).toBe(hash);
+  });
+
 });
 
 describe("recombTier", () => {
@@ -78,6 +89,30 @@ describe("recombTier", () => {
   });
 });
 
+describe("tierFromGearLore", () => {
+  it("uses the item's displayed rarity regardless of its gear category", () => {
+    expect(tierFromGearLore([
+      "§7Rarity upgrades with Rift milestones.",
+      "",
+      "§d§lMYTHIC NECKLACE",
+    ])).toBe("MYTHIC");
+    expect(tierFromGearLore(["§6§lLEGENDARY BOOTS"])).toBe("LEGENDARY");
+  });
+
+  it("keeps scanning past footer lines that follow the rarity", () => {
+    expect(tierFromGearLore([
+      "§5§lEPIC DRILL",
+      "",
+      "§8* Co-op Soulbound *",
+    ])).toBe("EPIC");
+  });
+
+  it("does not infer a rarity from descriptive prose", () => {
+    expect(tierFromGearLore(["§7A rare drop from an enemy."])).toBeNull();
+    expect(tierFromGearLore(null)).toBeNull();
+  });
+});
+
 describe("gearItems and armorItems", () => {
   it("drops entries that cannot be drawn and keeps blob order", () => {
     const list = [item("BOOTS"), {}, item("HELMET")];
@@ -97,6 +132,37 @@ describe("gearItems and armorItems", () => {
   it("returns nothing for an absent section rather than throwing", () => {
     expect(gearItems(undefined)).toEqual([]);
     expect(armorItems(undefined)).toEqual([]);
+  });
+});
+
+describe("wardrobe grouping", () => {
+  const piece = (id: string) => ({ id, name: id, count: 1 });
+
+  it("keeps nine-set structural rows for 27 exposed sets", () => {
+    const sets = Array.from({ length: 27 }, (_, index) => ({
+      id: index + 1,
+      pieces: [piece("SET_" + (index + 1)), null, null, null],
+    }));
+    const rows = buildWardrobeRows(sets);
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => row.slots.length)).toEqual([9, 9, 9]);
+    expect(rows[1].slots[0].id).toBe(10);
+  });
+
+  it("distinguishes occupied, unlocked-empty, locked, and private slots", () => {
+    const rows = buildWardrobeRows([
+      { id: 1, pieces: [piece("HELMET"), null, null, null] },
+      { id: 2, pieces: [null, null, null, null] },
+      { id: 4, pieces: [piece("BOOTS"), null, null, null] },
+    ], { capacity: 4 });
+    expect(rows[0].slots.map((slot) => slot.state)).toEqual([
+      "occupied",
+      "unlocked-empty",
+      "locked",
+      "occupied",
+    ]);
+    expect(rows[0].slots[1].pieces).toEqual([null, null, null, null]);
+    expect(buildWardrobeRows([], { available: false })[0].slots[0].state).toBe("private");
   });
 });
 

@@ -1,4 +1,4 @@
-import { wikiArticleUrl } from "../ui/WikiLink";
+import { wikiArticleUrl } from "../ui/wikiUrl";
 import { normalise, titleCase } from "./normalise";
 import { rarityKey } from "./rarity";
 import { SECTION_ENTRIES } from "./sections";
@@ -126,7 +126,7 @@ export const buildSearchIndex = (sources: Partial<IndexSources> = {}): SearchEnt
       key: `shards:${s.key}`,
       name: s.name,
       destination: "shards",
-      href: `/fusion?q=${encodeURIComponent(s.name)}`,
+      href: `/shards?q=${encodeURIComponent(s.name)}`,
       rarity: rarityKey(s.rarity),
       iconName: s.name,
       iconSrc: `${assetBase}shardIcons/${s.key}.png`,
@@ -144,7 +144,7 @@ export const buildSearchIndex = (sources: Partial<IndexSources> = {}): SearchEnt
       key: `items:${it.id}`,
       name: it.name,
       destination: "items",
-      href: `/items?q=${encodeURIComponent(it.name)}`,
+      href: `/recipes?q=${encodeURIComponent(it.name)}`,
       rarity: rarityKey(it.tier),
       iconName: it.name,
       iconId: it.id,
@@ -215,7 +215,7 @@ export const scoreEntry = (entry: SearchEntry, q: string): number => {
  */
 export const searchSite = (index: SearchEntry[], rawQuery: string, limit = MAX_ROWS): SearchOutcome => {
   const q = normalise(rawQuery);
-  if (!q) return { rows: [], moreInItems: 0, moreHref: "/items" };
+  if (!q) return { rows: [], moreInItems: 0, moreHref: "/recipes" };
 
   const scored: { entry: SearchEntry; score: number }[] = [];
   for (const entry of index) {
@@ -250,6 +250,6 @@ export const searchSite = (index: SearchEntry[], rawQuery: string, limit = MAX_R
   return {
     rows: [...dataRows, wikiRow],
     moreInItems: Math.max(0, itemMatches - itemsShown),
-    moreHref: `/items?q=${encodeURIComponent(rawQuery.trim())}`,
+    moreHref: `/recipes?q=${encodeURIComponent(rawQuery.trim())}`,
   };
 };

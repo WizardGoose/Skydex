@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { CropDefinition, MutationDefinition } from "../../types/greenhouse";
 import {
   buildPlanEstimates,
+  expectedGrowthCyclesLeft,
   fillLabel,
   gateStock,
   harvestWindowLabel,
@@ -22,7 +23,7 @@ import {
   type PlanProgressRow,
 } from "../planEstimates";
 import type { PlotEconomy, SolverPlan, SolverPlanNode } from "../solverPlan";
-import { expectedCyclesToFill } from "../../timeModel";
+import { BASE_CROP_DECAY_DAYS, expectedCyclesToFill } from "../../timeModel";
 import { formatDuration, plantingSeconds, stageSeconds, totalSeconds } from "../time";
 
 /**
@@ -78,8 +79,7 @@ const est = (id: string, need: number, plots: number, settings: EstimateSettings
 };
 
 /** The stage clock the UI would use for this mutation's plot. */
-const stageFor = (id: string, settings: EstimateSettings = BARE) =>
-  stageSeconds({ ...settings, uniqueCrops: Object.keys(ECONOMIES[id]?.crops ?? {}).length });
+const stageFor = (settings: EstimateSettings = BARE) => stageSeconds(settings);
 
 describe("Choconut, a 1x1 on a 72 spot plot", () => {
   /**
@@ -102,7 +102,7 @@ describe("Choconut, a 1x1 on a 72 spot plot", () => {
    */
   it("is slower than the old deterministic estimate", () => {
     const e = est("choconut", 470, 7);
-    const old = totalSeconds(7, plantingSeconds("choconut", data, { ...BARE, uniqueCrops: 1 }) ?? 0, 1);
+    const old = totalSeconds(7, plantingSeconds("choconut", data, BARE) ?? 0, 1);
 
     expect(e.deterministicSeconds).toBeCloseTo(old, 6);
     expect(e.expectedSeconds).toBeGreaterThan(old);
@@ -168,7 +168,7 @@ describe("Snoozling, a 3x3 on a 4 spot plot", () => {
    */
   it("waits for the slowest input before its own twenty stages", () => {
     const e = est("snoozling", 6, 2);
-    const stage = stageFor("snoozling");
+    const stage = stageFor();
     const inputStages = Math.max(
       ...data.mutations.snoozling.requirements.map((r) => data.mutations[r.crop]?.growth_stages ?? data.crops[r.crop]?.growth_stages ?? 0)
     );
@@ -200,7 +200,7 @@ describe("Lonelily, zero growth stages", () => {
 
   it("is floored at exactly one growth cycle", () => {
     const e = est("lonelily", 100, 1);
-    expect(e.plantingSeconds).toBeCloseTo(stageFor("lonelily"), 6);
+    expect(e.plantingSeconds).toBeCloseTo(stageFor(), 6);
   });
 
   it("never renders as instant anywhere the UI would show it", () => {
@@ -215,6 +215,54 @@ describe("Lonelily, zero growth stages", () => {
   /** Weight 6 and no crops to scale it, so the chance is the weight itself. */
   it("rolls at its bare 6% weight", () => {
     expect(est("lonelily", 100, 1).spawnChance).toBeCloseTo(0.06, 12);
+  });
+});
+
+describe("spawn timing and mutation maturation stay separate", () => {
+  it("treats Veilshroom as ready after its spawn roll, not as a zero-second spawn", () => {
+    const result = est("veilshroom", 1, 1);
+
+    expect(result.breakdown.mutationStages).toBe(0);
+    expect(result.breakdown.rollStages).toBeGreaterThanOrEqual(1);
+    expect(result.plantingSeconds).toBeGreaterThan(0);
+    expect(result.completionMode).toBe("single-sowing");
+    expect(result.breakdown.cyclesToFill).toBeCloseTo(1 / result.spawnChance, 8);
+    expect(result.breakdown.p90CyclesToFill).toBe(7);
+    // The job ends when its first successful roll lands. It is not charged for
+    // the unused tail of the optimiser's fixed harvest window.
+    expect(result.expectedSeconds).toBeCloseTo(
+      (result.breakdown.inputStages - 1 + result.breakdown.cyclesToFill) * result.breakdown.stageSeconds,
+      6,
+    );
+  });
+
+  it("keeps Magic Jellybean's full 120-stage maturation after it appears", () => {
+    const result = est("magic_jellybean", 1, 1);
+
+    expect(result.breakdown.mutationStages).toBe(120);
+    expect(result.plantingSeconds).toBeGreaterThanOrEqual(120 * result.breakdown.stageSeconds);
+  });
+});
+
+describe("base crop expiry through the planner path", () => {
+  it("caps a non-decaying mutation field at the base crop's 72-hour window", () => {
+    const fixture = {
+      ...data,
+      mutations: {
+        ...data.mutations,
+        magic_jellybean: {
+          ...data.mutations.magic_jellybean,
+          requirements: [{ crop: "sugar_cane", count: 5 }],
+        },
+      },
+    };
+    const economies = { magic_jellybean: { yield: 1, crops: { sugar_cane: 5 } } };
+    const result = nodeEstimate(node("magic_jellybean", 1, 1), fixture, economies, BARE);
+
+    expect(result).not.toBeNull();
+    expect(result!.maxWindow).toBe(
+      Math.floor((BASE_CROP_DECAY_DAYS.value * 86400) / result!.breakdown.stageSeconds),
+    );
   });
 });
 
@@ -313,22 +361,22 @@ describe("the fill line", () => {
 
   it("says what the reported case actually is", () => {
     // Two Soggybud, two spots, a 25% per spot chance: 5.71 cycles, rounded.
-    expect(fillLabel(bill(2, expectedCyclesToFill(2, 0.25, 2)))).toBe("2 spots, about 6 cycles for both to fill");
+    expect(fillLabel(bill(2, expectedCyclesToFill(2, 0.25, 2)))).toBe("2 spawn spots · about 6 growth cycles for both to fill");
   });
 
   it("says the other half of the choice too", () => {
     // The 90% sizing, which is what the control buys.
-    expect(fillLabel(bill(8, expectedCyclesToFill(8, 0.25, 2)))).toBe("8 spots, about 1 cycle to fill them");
+    expect(fillLabel(bill(8, expectedCyclesToFill(8, 0.25, 2)))).toBe("8 spawn spots · about 1 growth cycle to fill them");
   });
 
   it("agrees with itself on one spot", () => {
-    expect(fillLabel(bill(1, 4))).toBe("1 spot, about 4 cycles to fill it");
+    expect(fillLabel(bill(1, 4))).toBe("1 spawn spot · about 4 growth cycles to fill it");
   });
 
   it("never reads as instant, because a roll only lands on the tick", () => {
     // A fraction of a cycle is still a cycle of waiting, and "about 0 cycles"
     // beside a real duration would look like a bug rather than a number.
-    expect(fillLabel(bill(40, 0.4))).toBe("40 spots, about 1 cycle to fill them");
+    expect(fillLabel(bill(40, 0.4))).toBe("40 spawn spots · about 1 growth cycle to fill them");
   });
 
   it("declines rather than fabricating a clause", () => {
@@ -347,6 +395,35 @@ describe("the fill line", () => {
     const e = est("choconut", 2624, 37);
     expect(e.breakdown.spots).toBe(e.spots);
     expect(e.breakdown.cyclesToFill).toBe(expectedCyclesToFill(e.spots, e.spawnChance, 2624));
+  });
+});
+
+describe("the field cycle headline", () => {
+  it("keeps a finite cycle count when the request needs more than one sowing", () => {
+    const estimate = est("choconut", 181, 3);
+
+    expect(estimate.breakdown.cyclesToFill).toBe(Number.POSITIVE_INFINITY);
+    expect(expectedGrowthCyclesLeft(estimate)).toBe(
+      Math.round(estimate.expectedSecondsLeft / estimate.breakdown.stageSeconds),
+    );
+    expect(expectedGrowthCyclesLeft(estimate)).toBeGreaterThan(0);
+  });
+
+  it("does not invent a value without a usable clock", () => {
+    expect(expectedGrowthCyclesLeft(null)).toBeNull();
+    expect(expectedGrowthCyclesLeft({
+      expectedSecondsLeft: 100,
+      breakdown: {
+        inputStages: 0,
+        inputName: null,
+        rollStages: 0,
+        mutationStages: 0,
+        totalStages: 0,
+        stageSeconds: 0,
+        spots: 1,
+        cyclesToFill: 1,
+      },
+    })).toBeNull();
   });
 });
 

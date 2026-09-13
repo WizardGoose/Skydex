@@ -1,0 +1,64 @@
+.shards-dev-fusion { --profile-bg: var(--profile-surface); container-type: inline-size; min-width: 0; }
+.shards-dev-fusion:has(> .shards-calculation-status) { position: relative; min-height: 31rem; }
+.shards-calculation-status { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 1rem; color: var(--profile-text); text-align: center; }
+.shards-calculation-wonder { display: grid; place-items: center; }
+.shards-calculation-mark { width: 76px; aspect-ratio: 35 / 12; overflow: visible; }
+.shards-calculation-status strong { display: block; font-size: .8125rem; font-weight: 700; }
+.shards-calculation-results { min-width: 0; }
+.shards-calculation-results.is-updating { visibility: hidden; }
+.shards-dev-fusion .grouped-fusion { padding: 12px 0; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+.shards-dev-fusion .recipe-dial { max-width: none; --dial-item-size: 64px; }
+.shards-dev-fusion .recipe-dial-stage { overflow: clip; }
+.shards-dev-fusion .recipe-dial-face { background: none; }
+.shards-dev-fusion .recipe-dial .shards-sequence-picture { flex-basis: var(--dial-item-size); width: var(--dial-item-size); }
+.shards-dev-fusion .recipe-dial .profile-item-tile-icon { transform: scale(1.23); }
+.shards-dev-fusion .recipe-dial .profile-item-tile-count { font-size: 10px; }
+.shards-dev-fusion .recipe-dial-face .shared-equation,
+.shards-dev-fusion .wheel-preview-items { display: grid; grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr) 12px minmax(0, 1fr); gap: 2px; }
+.shards-dev-fusion .recipe-dial-face .shared-equation { top: calc(50% - 74px); left: 6px; right: 6px; }
+.shards-dev-fusion .recipe-dial-face .equation-operand,
+.shards-dev-fusion .wheel-preview-operand { display: contents; }
+.shards-dev-fusion .recipe-dial-face .equation-input,
+.shards-dev-fusion .recipe-dial .dial-result,
+.shards-dev-fusion .wheel-preview-operand > div { width: 100%; min-width: 0; }
+.shards-dev-fusion .dial-shard-name,
+.shards-dev-fusion .wheel-preview-operand small { width: 100%; overflow-wrap: normal; word-break: normal; }
+.shards-dev-fusion .recipe-dial-face .equation-symbol { width: 12px; height: var(--dial-item-size); font-size: 18px; }
+.shards-dev-fusion .equation-input-toggle { width: var(--dial-item-size); height: 24px; }
+.shards-dev-fusion .recipe-dial-navigation { top: calc(50% + 64px); }
+.shards-dev-fusion .dial-cycle-caption { top: calc(50% + 104px); }
+.shards-dev-fusion .recipe-wheel-neighbor { left: 6px; right: 6px; --dial-item-size: 52px; }
+.shards-dev-fusion .recipe-wheel-neighbor .profile-item-tile-icon { transform: none; }
+.shards-dev-fusion .wheel-preview-operand > span { width: 12px; }
+.shards-dev-fusion .recipe-wheel-neighbor.wheel-offset--2 { transform: translateY(calc(-50% - 242px)) scale(.92); }
+.shards-dev-fusion .recipe-wheel-neighbor.wheel-offset-1 { transform: translateY(calc(-50% + 157px)) scale(.96); }
+.shards-dev-fusion .recipe-wheel-neighbor.wheel-offset-2 { transform: translateY(calc(-50% + 254px)) scale(.92); }
+.shards-direct-dial { position: absolute; inset: 0; }
+.shards-direct-dial > .dial-result { position: absolute; top: calc(50% - 74px); left: 0; right: 0; }
+.shards-direct-dial p { position: absolute; top: calc(50% + 40px); left: 12px; right: 12px; margin: 0; color: var(--profile-muted); font-size: 12px; line-height: 16px; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.shards-dev-targets { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 10px 0 2px; }
+.shards-dev-targets button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; border: 0; background: none; color: var(--profile-label); font-size: 12px; }
+.shards-dev-targets button[aria-pressed="false"] { color: var(--profile-muted); }
+.shards-dev-targets button:focus-visible { outline: 1px solid var(--profile-accent); outline-offset: 3px; }
+.shards-target-picture { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-width: 1px; border-style: solid; border-radius: 5px; flex: 0 0 auto; }
+.shards-dev-targets button > span:last-child { font-weight: 700; font-size: 13px; }
+.shards-dev-targets button[aria-pressed="false"] .shards-target-picture { opacity: 0.7; }
+.shards-dev-fusion.is-single-target .grouped-fusion { grid-template-columns: minmax(0, 1fr); }
+.shards-dev-fusion.is-single-target .recipe-dial { width: 100%; max-width: 620px; }
+.shards-dev-fusion.is-single-target .shards-dev-targets { justify-content: center; }
+.shards-dev-fusion.is-single-target .shards-dev-targets button { padding: 9px 4px; }
+.shards-dev-comparisons { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.shards-dev-comparison { min-width: 0; }
+.shards-dev-comparison > h3, .shards-dev-state > strong { margin: 12px 0; color: var(--profile-label); font-size: 13px; font-weight: 700; }
+.shards-dev-comparison .compact-map { margin-top: 14px; }
+.shards-dev-state { margin: 16px 0; font-size: 12px; color: var(--profile-muted); }
+.shards-dev-state > span { display: flex; gap: 6px; align-items: center; }
+@container (min-width: 700px) {
+  .shards-dev-fusion .grouped-fusion:has(> :nth-child(2)) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 650px) {
+  .shards-dev-comparisons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 1060px) {
+  .shards-dev-fusion .grouped-fusion:has(> :nth-child(3)) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

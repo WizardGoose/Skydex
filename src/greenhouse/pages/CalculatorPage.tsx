@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Play, Grid3x3, Sprout, Menu, X } from "lucide-react";
-import { PageHeader, PANEL, BTN_QUIET, SplitPage } from "../../ui/kit";
+import { PageHeader, PANEL, BTN_QUIET } from "../../ui/kit";
 import { useGridState, useGreenhouseData, useLockedPlacements } from "../context";
 import { GridManagerModal, FirstTimeVisitorModal } from "../components";
 import { MutationTargets, SolverResults, CropConfigurationsPanel, SendToGameButton } from "../components";
@@ -8,11 +8,15 @@ import { solveGreenhouseWithJob } from "../services";
 import { LocalStorageManager } from "../utilities";
 import type { SolveResponse, MutationGoal, JobProgress } from "../types/greenhouse";
 import type { LayoutItem } from "../../island/layout";
+import { ManagedInventoryPanel } from "../../components/common/ManagedInventoryPanel";
+import { greenhouseHoldingsItems } from "../../inventory";
+import { GreenhouseCapabilityFrame } from "../GreenhouseCapabilityFrame";
 
-export const CalculatorPage: React.FC = () => {
+export const CalculatorPage: React.FC<{ embedded?: boolean; showFirstTimeModal?: boolean }> = ({ embedded = false, showFirstTimeModal = true }) => {
   const { getUnlockedCellsArray, unlockedCells } = useGridState();
-  const { selectedMutations, isLoading: dataLoading, getCropDef, getMutationDef } = useGreenhouseData();
+  const { selectedMutations, crops, mutations, isLoading: dataLoading, getCropDef, getMutationDef } = useGreenhouseData();
   const { getLocksForAPI, priorities, lockedPlacements } = useLockedPlacements();
+  const holdingsItems = useMemo(() => greenhouseHoldingsItems(crops, mutations), [crops, mutations]);
 
   // Modal state
   const [isGridModalOpen, setIsGridModalOpen] = useState(false);
@@ -23,6 +27,7 @@ export const CalculatorPage: React.FC = () => {
 
   // Check if user is a first-time visitor
   useEffect(() => {
+    if (!showFirstTimeModal) return;
     // Small delay to ensure contexts have initialized
     const timer = setTimeout(() => {
       // Check if the user has actually customized anything
@@ -61,7 +66,7 @@ export const CalculatorPage: React.FC = () => {
     }, 100); // Small delay to let contexts initialize
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [showFirstTimeModal]);
 
   // Solver state
   const [isLoading, setIsLoading] = useState(false);
@@ -170,6 +175,10 @@ export const CalculatorPage: React.FC = () => {
 
   const unlockedCount = unlockedCells.size;
 
+  const solverHeading = (
+    <PageHeader title="Solver" sub="Optimal plot layout for the mutations you pick" icon={Sprout} />
+  );
+
   // Determine what to show in the results area
   const displayResult = result || previewResult;
 
@@ -223,8 +232,11 @@ export const CalculatorPage: React.FC = () => {
     <>
       {/* The signature split: configuration in the rail under the logo,
           results under the tabs. Same furniture positions as every page. */}
-      <SplitPage
+      <GreenhouseCapabilityFrame
+        embedded={embedded}
+        variant="band"
         railLabel="Solver configuration"
+        leading={solverHeading}
         rail={
           <>
             {/* Narrow viewports collapse the rail behind one button. */}
@@ -236,6 +248,7 @@ export const CalculatorPage: React.FC = () => {
             </div>
 
             <div className={`${sidebarOpen ? "block" : "hidden min-[900px]:block"} space-y-4`}>
+              {!embedded && <ManagedInventoryPanel items={holdingsItems} defaultOpen={false} />}
             {/* The bespoke panel string was PANEL by hand; use the real one. */}
             <div className={`${PANEL} p-3 sm:p-4`}>
               <div className="flex items-center justify-between mb-3">
@@ -302,7 +315,6 @@ export const CalculatorPage: React.FC = () => {
           </>
         }
       >
-        <PageHeader title="Solver" sub="Optimal plot layout for the mutations you pick" icon={Sprout} />
         <SolverResults
           result={displayResult}
           error={error}
@@ -311,7 +323,7 @@ export const CalculatorPage: React.FC = () => {
           queuePosition={queuePosition}
           onClear={handleClearResults}
         />
-      </SplitPage>
+      </GreenhouseCapabilityFrame>
 
       {/* Grid Manager Modal */}
       <GridManagerModal 
@@ -321,7 +333,7 @@ export const CalculatorPage: React.FC = () => {
 
       {/* First Time Visitor Modal */}
       <FirstTimeVisitorModal
-        isOpen={isFirstTimeModalOpen}
+        isOpen={showFirstTimeModal && isFirstTimeModalOpen}
         onClose={() => setIsFirstTimeModalOpen(false)}
         onConfigureGrid={() => setIsGridModalOpen(true)}
       />

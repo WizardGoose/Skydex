@@ -9,8 +9,8 @@
  * verifies the two agree on the things the planner actually depends on:
  * the mutation roster, each one's rarity, and its spreading requirements.
  *
- * Reads the local wiki dump (data/wiki/pages/Mutations.json) so it runs
- * offline; re-run `pnpm data:wiki` to refresh that first.
+ * Reads the committed wiki snapshot (data/wiki/pages/Mutations.json) so it runs
+ * offline. Its results describe that snapshot, not a fresh wiki response.
  */
 import { readFileSync } from "node:fs";
 

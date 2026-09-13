@@ -1,0 +1,1395 @@
+.profile-aux-preview {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.72rem;
+}
+
+.profile-aux-head {
+  display: flex;
+  min-width: 0;
+  min-height: 4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.72rem 0.82rem;
+  border-radius: 0.65rem;
+}
+
+.profile-aux-head > div:first-child {
+  min-width: 0;
+}
+
+.profile-aux-head span,
+.profile-aux-table-head,
+.profile-net-worth-balances small {
+  color: var(--profile-label);
+  font-size: 0.72rem;
+  font-weight: 680;
+  letter-spacing: 0.085em;
+  text-transform: uppercase;
+}
+
+.profile-aux-head h2,
+.profile-aux-state h2 {
+  margin: 0.16rem 0 0;
+  color: var(--profile-text);
+  font-size: 1rem;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+
+.profile-aux-head > strong {
+  flex: none;
+  color: rgb(176 188 200 / 0.74);
+  font-size: 0.6rem;
+  font-weight: 560;
+  letter-spacing: 0.035em;
+}
+
+.profile-minions-preview .profile-aux-head h2 {
+  color: #70defb;
+}
+
+.profile-minions-preview {
+  --profile-skill-accent: #50d0f3;
+}
+
+.profile-minion-head-progress {
+  display: grid;
+  width: min(13rem, 42%);
+  flex: none;
+  justify-items: end;
+  gap: 0.32rem;
+}
+
+.profile-minion-head-progress > strong {
+  color: rgb(207 220 230 / 0.82);
+  font-size: 0.62rem;
+  font-weight: 620;
+}
+
+.profile-minion-head-progress > .profile-skill-progress {
+  width: 100%;
+}
+
+.profile-aux-state {
+  display: grid;
+  min-height: 14rem;
+  place-content: center;
+  gap: 0.7rem;
+  padding: 1.4rem;
+  border-radius: 0.65rem;
+  text-align: center;
+}
+
+.profile-aux-state p,
+.profile-aux-empty {
+  margin: 0;
+  color: var(--profile-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.profile-aux-state-copy {
+  display: grid;
+  justify-items: center;
+  gap: 0.65rem;
+}
+
+.profile-aux-state-copy a {
+  color: var(--profile-accent);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.profile-aux-skeleton {
+  display: grid;
+  width: min(22rem, 72vw);
+  gap: 0.42rem;
+}
+
+.profile-aux-skeleton i {
+  display: block;
+  height: 0.48rem;
+  border-radius: 0.18rem;
+  background: rgb(169 184 199 / 0.16);
+}
+
+.profile-aux-skeleton i:nth-child(2) {
+  width: 82%;
+}
+
+.profile-aux-skeleton i:nth-child(3) {
+  width: 58%;
+}
+
+.profile-aux-notice {
+  margin: 0;
+  padding: 0.55rem 0.72rem;
+  border-left: 2px solid rgb(56 199 244 / 0.55);
+  background: rgb(56 199 244 / 0.045);
+  color: rgb(190 205 218 / 0.8);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.profile-aux-search {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.profile-aux-search > svg {
+  position: absolute;
+  left: 0.72rem;
+  width: 0.82rem;
+  height: 0.82rem;
+  color: var(--profile-muted);
+  pointer-events: none;
+}
+
+.profile-aux-search input {
+  width: 100%;
+  min-width: 0;
+  height: 2.2rem;
+  padding: 0.44rem 0.7rem 0.44rem 2rem;
+  border: 1px solid var(--profile-border);
+  border-radius: 0.5rem;
+  outline: 0;
+  background: rgb(5 9 14 / 0.54);
+  color: var(--profile-text);
+  font: inherit;
+  font-size: 0.72rem;
+}
+
+.profile-aux-search input::placeholder {
+  color: rgb(155 169 186 / 0.62);
+}
+
+.profile-aux-search input:focus-visible,
+.profile-aux-disclosure summary:focus-visible,
+.profile-net-worth-provenance button:focus-visible {
+  outline: 1px solid rgb(56 199 244 / 0.72);
+  outline-offset: 1px;
+}
+
+.profile-aux-disclosures {
+  display: grid;
+  min-width: 0;
+  gap: 0.42rem;
+}
+
+.profile-aux-disclosure {
+  min-width: 0;
+  border-radius: 0.52rem;
+  overflow: clip;
+  content-visibility: auto;
+  contain-intrinsic-size: 2.4rem 16rem;
+}
+
+.profile-aux-disclosure summary {
+  min-height: 2.18rem;
+  padding: 0.5rem 0.68rem;
+  color: var(--profile-label);
+  cursor: pointer;
+}
+
+.profile-aux-disclosure summary > span {
+  margin-left: 0.28rem;
+  font-size: 0.72rem;
+  font-weight: 680;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.profile-aux-disclosure summary > small {
+  float: right;
+  margin-top: 0.08rem;
+  color: rgb(176 188 200 / 0.7);
+  font-size: 0.6rem;
+  font-weight: 540;
+  letter-spacing: 0.035em;
+}
+
+.profile-aux-disclosure[open] summary {
+  border-bottom: 1px solid rgb(255 255 255 / 0.085);
+}
+
+.profile-inventory-preview {
+  gap: 0.72rem;
+}
+
+.profile-inventory-board {
+  display: grid;
+  min-width: 0;
+  gap: 0.42rem;
+}
+
+.profile-inventory-board-head {
+  padding: 0 0.08rem;
+  color: var(--profile-label);
+  font-size: 0.72rem;
+  font-weight: 680;
+  letter-spacing: 0.085em;
+  text-transform: uppercase;
+}
+
+.profile-inventory-card-board {
+  display: grid;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.56rem;
+}
+
+.profile-inventory-card-board--containers {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+}
+
+.profile-inventory-card-board--sets {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+}
+
+.profile-inventory-container-card,
+.profile-inventory-item-set-card {
+  width: 100%;
+  min-width: 0;
+  border-radius: 0.52rem;
+  overflow: clip;
+  content-visibility: auto;
+  contain-intrinsic-size: 12rem 23.5rem;
+}
+
+.profile-inventory-container-card > header,
+.profile-inventory-item-set-card > header {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.42rem 0.58rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(5 9 14 / 0.38);
+}
+
+.profile-inventory-container-card > header strong,
+.profile-inventory-item-set-card > header strong,
+.profile-inventory-item-set-title strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--profile-label);
+  font-size: 0.67rem;
+  font-weight: 680;
+  letter-spacing: 0.035em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.profile-inventory-item-set-card > header small {
+  color: var(--profile-muted);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-inventory-item-set-card > header:has(> button) {
+  padding: 0;
+}
+
+.profile-inventory-item-set-card > header > button {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 2rem;
+  grid-template-columns: minmax(0, 1fr) auto 0.9rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.42rem 0.58rem;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.profile-inventory-item-set-card > header > button strong,
+.profile-inventory-item-set-card > header > button .profile-inventory-item-set-title {
+  overflow: hidden;
+  color: var(--profile-label);
+  font-size: 0.67rem;
+  font-weight: 680;
+  letter-spacing: 0.035em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.profile-inventory-item-set-card > header > button small {
+  color: var(--profile-muted);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-inventory-item-set-card > header > button svg {
+  width: 0.82rem;
+  height: 0.82rem;
+  color: rgb(160 177 190 / 0.7);
+  transition: transform 140ms ease;
+}
+
+.profile-inventory-item-set-card.is-open > header > button svg {
+  transform: rotate(180deg);
+}
+
+.profile-inventory-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  min-width: 0;
+  gap: 0.27rem;
+  padding: 0.42rem;
+}
+
+.profile-inventory-slot,
+.profile-inventory-empty-slot {
+  display: block;
+  min-width: 0;
+  aspect-ratio: 1;
+}
+
+.profile-inventory-slot > .profile-item-tile-wrap,
+.profile-inventory-slot .profile-item-tile {
+  height: 100%;
+}
+
+.profile-inventory-empty-slot {
+  border: 1px solid rgb(126 146 163 / 0.16);
+  border-radius: 0.42rem;
+  background: rgb(2 6 10 / 0.34);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.018);
+}
+
+.profile-inventory-slot.is-search-miss {
+  opacity: 0.18;
+}
+
+.profile-inventory-item-set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 3rem);
+  min-width: 0;
+  gap: 0.32rem;
+  padding: 0.42rem;
+}
+
+.profile-aux-empty {
+  grid-column: 1 / -1;
+  padding: 0.7rem;
+}
+
+.profile-minions-preview > [data-minion-category-board] {
+  min-width: 0;
+  margin: 0;
+  border-color: var(--profile-border);
+  border-radius: 0.65rem;
+  background: var(--profile-surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.045);
+  overflow: hidden;
+}
+
+.profile-minions-preview [data-minion-category-card],
+.profile-minions-preview [data-minion-detail-sheet] {
+  content-visibility: auto;
+  contain-intrinsic-size: 4rem 20rem;
+}
+
+.profile-net-worth-provenance {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.58rem;
+}
+
+.profile-net-worth-provenance small {
+  color: rgb(176 188 200 / 0.7);
+  font-size: 0.6rem;
+  font-weight: 540;
+  letter-spacing: 0.035em;
+  white-space: nowrap;
+}
+
+.profile-net-worth-provenance button {
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0.4rem;
+  background: rgb(5 9 14 / 0.48);
+  color: var(--profile-muted);
+  cursor: pointer;
+}
+
+.profile-net-worth-provenance button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.profile-net-worth-provenance svg {
+  width: 0.82rem;
+  height: 0.82rem;
+}
+
+.profile-net-worth-balances {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-width: 0;
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+
+.profile-net-worth-balances > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.22rem;
+  padding: 0.68rem 0.72rem;
+  border-left: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.profile-net-worth-balances > div:first-child {
+  border-left: 0;
+}
+
+.profile-net-worth-balances strong {
+  overflow: hidden;
+  color: rgb(225 233 240 / 0.9);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-net-worth-balances .is-primary strong {
+  color: var(--profile-accent);
+}
+
+.profile-net-worth-categories {
+  min-width: 0;
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+
+.profile-aux-table-head,
+.profile-net-worth-category {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.2rem minmax(5.2rem, 7.2rem);
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.profile-aux-table-head {
+  min-height: 2.05rem;
+  padding: 0.42rem 0.68rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.085);
+  background: rgb(7 11 17 / 0.42);
+  font-size: 0.64rem;
+}
+
+.profile-aux-table-head span:nth-child(2),
+.profile-aux-table-head span:nth-child(3) {
+  text-align: right;
+}
+
+.profile-net-worth-category {
+  min-height: 3rem;
+  padding: 0.38rem 0.68rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.065);
+  content-visibility: auto;
+  contain-intrinsic-size: 3rem;
+}
+
+.profile-net-worth-category:last-child {
+  border-bottom: 0;
+}
+
+.profile-net-worth-category-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.profile-net-worth-category-name > span:first-child {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.075);
+  border-radius: 0.36rem;
+  background: rgb(3 7 11 / 0.42);
+}
+
+.profile-net-worth-category-name > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.profile-net-worth-category-name strong {
+  overflow: hidden;
+  color: rgb(219 228 236 / 0.9);
+  font-size: 0.7rem;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-net-worth-category-name small,
+.profile-net-worth-category > small {
+  color: rgb(176 188 200 / 0.64);
+  font-size: 0.6rem;
+}
+
+.profile-net-worth-category > small,
+.profile-net-worth-category > strong {
+  text-align: right;
+}
+
+.profile-net-worth-category > strong {
+  color: rgb(218 228 237 / 0.88);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-net-worth-category[data-net-worth-state="private"] > strong,
+.profile-net-worth-category[data-net-worth-state="unavailable"] > strong,
+.profile-net-worth-category[data-net-worth-state="empty"] > strong {
+  color: rgb(176 188 200 / 0.56);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .profile-net-worth-provenance .is-refreshing {
+    animation: profile-net-worth-refresh 0.85s linear infinite;
+  }
+}
+
+@keyframes profile-net-worth-refresh {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 47.99rem) {
+  .profile-aux-head {
+    align-items: flex-start;
+  }
+
+  .profile-aux-head,
+  .profile-net-worth-provenance {
+    flex-wrap: wrap;
+  }
+
+  .profile-net-worth-provenance {
+    justify-content: flex-start;
+  }
+
+  .profile-net-worth-balances {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-net-worth-balances > div {
+    border-top: 1px solid rgb(255 255 255 / 0.075);
+  }
+
+  .profile-net-worth-balances > div:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .profile-net-worth-balances > div:nth-child(-n + 2) {
+    border-top: 0;
+  }
+
+}
+
+@media (max-width: 820px) {
+  .profile-inventory-card-board--containers,
+  .profile-inventory-card-board--sets {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-inventory-slot-grid {
+    gap: clamp(0.16rem, 0.8vw, 0.27rem);
+    padding: clamp(0.28rem, 1.2vw, 0.42rem);
+  }
+}
+
+@media (max-width: 31rem) {
+  .profile-inventory-slot-grid .profile-item-tile-icon {
+    width: 1.85rem;
+    height: 1.85rem;
+    transform: scale(0.86);
+  }
+
+  .profile-aux-head {
+    display: grid;
+  }
+
+  .profile-minion-head-progress {
+    width: 100%;
+    justify-items: start;
+  }
+
+  .profile-aux-table-head,
+  .profile-net-worth-category {
+    grid-template-columns: minmax(0, 1fr) minmax(4.8rem, auto);
+  }
+
+  .profile-aux-table-head span:nth-child(2),
+  .profile-net-worth-category > small {
+    display: none;
+  }
+}
+
+/* Minions progression and family matrix. */
+.profile-minion-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  gap: 0.56rem;
+}
+
+.profile-minion-metrics article {
+  display: grid;
+  min-width: 0;
+  gap: 0.18rem;
+  padding: 0.7rem 0.74rem;
+  border-radius: 0.58rem;
+}
+
+.profile-minion-metrics small,
+.profile-minion-detail small,
+.profile-minion-matrix-shell > header small,
+.profile-net-worth-composition small,
+.profile-net-worth-valuables small {
+  color: var(--profile-label);
+  font-size: 0.61rem;
+  font-weight: 680;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.profile-minion-metrics strong {
+  color: rgb(225 233 240 / 0.92);
+  font-size: 1.02rem;
+}
+
+.profile-minion-metrics span {
+  overflow: hidden;
+  color: var(--profile-muted);
+  font-size: 0.62rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-minion-detail {
+  min-width: 0;
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+
+.profile-minion-detail > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.72rem 0.78rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.profile-minion-detail h3,
+.profile-minion-matrix-shell h3,
+.profile-net-worth-composition h3,
+.profile-net-worth-valuables h3 {
+  margin: 0.12rem 0 0;
+  color: var(--profile-text);
+  font-size: 0.85rem;
+  font-weight: 740;
+}
+
+.profile-minion-detail header p {
+  margin: 0.12rem 0 0;
+  color: var(--profile-muted);
+  font-size: 0.62rem;
+}
+
+.profile-minion-detail header button {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  border-radius: 0.4rem;
+  background: rgb(3 7 11 / 0.32);
+  color: var(--profile-muted);
+  cursor: pointer;
+}
+
+.profile-minion-detail header button svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+.profile-minion-detail-progress {
+  display: grid;
+  grid-template-columns: auto minmax(5rem, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.58rem 0.78rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.065);
+  color: rgb(191 205 217 / 0.76);
+  font-size: 0.63rem;
+}
+
+.profile-minion-detail-progress > i {
+  display: block;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.07);
+  overflow: hidden;
+}
+
+.profile-minion-detail-progress > i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgb(34 149 184 / 0.72), rgb(65 208 208 / 0.88));
+}
+
+.profile-minion-detail-progress strong {
+  color: rgb(205 216 226 / 0.82);
+  font-size: 0.63rem;
+  font-weight: 620;
+}
+
+.profile-minion-next-tier,
+.profile-minion-shortages {
+  display: grid;
+  min-width: 0;
+  gap: 0.48rem;
+  padding: 0.68rem 0.78rem;
+}
+
+.profile-minion-next-tier {
+  grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+  align-items: center;
+  border-bottom: 1px solid rgb(255 255 255 / 0.065);
+}
+
+.profile-minion-next-tier > div:first-child {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.profile-minion-next-tier > div:first-child strong {
+  color: rgb(224 232 239 / 0.9);
+  font-size: 0.76rem;
+}
+
+.profile-minion-materials,
+.profile-minion-shortages {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.36rem;
+}
+
+.profile-minion-materials span,
+.profile-minion-shortages > span {
+  padding: 0.28rem 0.42rem;
+  border: 1px solid rgb(255 255 255 / 0.075);
+  border-radius: 999px;
+  background: rgb(4 8 12 / 0.28);
+  color: rgb(190 203 215 / 0.76);
+  font-size: 0.61rem;
+}
+
+.profile-minion-shortages > small {
+  width: 100%;
+}
+
+.profile-minion-matrix-shell {
+  min-width: 0;
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+
+.profile-minion-matrix-shell > header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding: 0.68rem 0.78rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.profile-minion-matrix-shell > header > span {
+  color: var(--profile-muted);
+  font-size: 0.65rem;
+}
+
+.profile-minion-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.48rem;
+  padding: 0.58rem 0.68rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.065);
+}
+
+.profile-minion-filters select {
+  height: 2.2rem;
+  min-width: 8rem;
+  padding: 0.42rem 1.8rem 0.42rem 0.62rem;
+  border: 1px solid var(--profile-border);
+  border-radius: 0.5rem;
+  background: rgb(5 9 14 / 0.76);
+  color: var(--profile-text);
+  font: inherit;
+  font-size: 0.7rem;
+}
+
+.profile-minion-categories {
+  display: grid;
+  min-width: 0;
+  gap: 0.72rem;
+  padding: 0.68rem;
+}
+
+.profile-minion-categories > section {
+  display: grid;
+  min-width: 0;
+  gap: 0.38rem;
+}
+
+.profile-minion-categories > section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.profile-minion-categories h4 {
+  margin: 0;
+  color: var(--profile-label);
+  font-size: 0.66rem;
+  font-weight: 680;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.profile-minion-categories header span {
+  color: var(--profile-muted);
+  font-size: 0.6rem;
+}
+
+.profile-minion-matrix {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  gap: 0.38rem;
+}
+
+.profile-minion-matrix[data-minion-column-count="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.profile-minion-matrix[data-minion-column-count="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-minion-matrix[data-minion-column-count="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.profile-minion-column {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.38rem;
+}
+
+.profile-minion-family {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  align-items: center;
+  gap: 0.52rem;
+  padding: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 0.075);
+  border-radius: 0.48rem;
+  background: rgb(3 7 11 / 0.28);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.profile-minion-family:hover {
+  border-color: rgb(73 197 228 / 0.28);
+  background: rgb(29 116 139 / 0.08);
+}
+
+.profile-minion-family[aria-pressed="true"] {
+  border-color: rgb(73 197 228 / 0.56);
+  background: rgb(29 116 139 / 0.12);
+}
+
+.profile-minion-column > .profile-minion-detail {
+  margin: 0.08rem 0 0;
+}
+
+.profile-minion-family-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.14rem;
+}
+
+.profile-minion-family-copy strong,
+.profile-minion-family-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-minion-family-copy strong {
+  color: rgb(218 227 235 / 0.88);
+  font-size: 0.68rem;
+  font-weight: 620;
+}
+
+.profile-minion-family-copy small {
+  color: var(--profile-muted);
+  font-size: 0.58rem;
+}
+
+/* One active Inventory destination and exact page at a time. */
+.profile-inventory-search-summary {
+  margin: -0.25rem 0 0;
+  color: var(--profile-muted);
+  font-size: 0.62rem;
+}
+
+.profile-inventory-composition {
+  display: grid;
+  grid-template-columns: 11.5rem minmax(0, 1fr);
+  min-width: 0;
+  align-items: start;
+  gap: 0.62rem;
+}
+
+.profile-inventory-destinations {
+  display: grid;
+  min-width: 0;
+  gap: 0.22rem;
+  padding: 0.34rem;
+  border-radius: 0.65rem;
+}
+
+.profile-inventory-destinations button {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  min-width: 0;
+  align-items: center;
+  gap: 0.48rem;
+  padding: 0.42rem;
+  border: 1px solid transparent;
+  border-radius: 0.46rem;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-inventory-destinations button:hover,
+.profile-inventory-destinations button.is-active {
+  border-color: rgb(56 199 244 / 0.24);
+  background: rgb(56 199 244 / 0.06);
+}
+
+.profile-inventory-destinations button > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.profile-inventory-destinations strong,
+.profile-inventory-destinations small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-inventory-destinations strong {
+  color: rgb(216 226 234 / 0.88);
+  font-size: 0.66rem;
+  font-weight: 640;
+}
+
+.profile-inventory-destinations small {
+  color: var(--profile-muted);
+  font-size: 0.56rem;
+  text-transform: capitalize;
+}
+
+.profile-inventory-active {
+  display: grid;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.profile-inventory-page-tabs {
+  display: flex;
+  min-width: 0;
+  gap: 0.34rem;
+  padding-bottom: 0.1rem;
+  overflow-x: auto;
+}
+
+.profile-inventory-page-tabs button {
+  display: flex;
+  min-height: 2rem;
+  flex: none;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.34rem 0.52rem;
+  border: 1px solid rgb(255 255 255 / 0.075);
+  border-radius: 0.42rem;
+  background: rgb(3 7 11 / 0.3);
+  color: rgb(183 197 210 / 0.72);
+  font-size: 0.61rem;
+  cursor: pointer;
+}
+
+.profile-inventory-page-tabs button.is-active {
+  border-color: rgb(56 199 244 / 0.3);
+  background: rgb(56 199 244 / 0.07);
+  color: rgb(218 232 240 / 0.9);
+}
+
+.profile-inventory-page-tabs button b {
+  color: rgb(112 209 230 / 0.9);
+  font-size: 0.58rem;
+}
+
+.profile-inventory-container-card > header small {
+  color: var(--profile-muted);
+  font-family: var(--font-mono);
+  font-size: 0.57rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-inventory-destination-state {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 0.58rem;
+  color: var(--profile-muted);
+  font-size: 0.68rem;
+}
+
+/* Net Worth composition and bounded item depth. */
+.profile-net-worth-balances {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.profile-net-worth-unsoulbound {
+  display: grid;
+  min-width: 0;
+  gap: 0.4rem;
+  padding: 0.62rem 0.72rem;
+  border-radius: 0.58rem;
+}
+
+.profile-net-worth-unsoulbound > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.profile-net-worth-unsoulbound span {
+  color: var(--profile-label);
+  font-size: 0.65rem;
+  font-weight: 680;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.profile-net-worth-unsoulbound strong {
+  color: rgb(217 227 235 / 0.88);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.profile-net-worth-unsoulbound > i {
+  display: block;
+  height: 0.34rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.07);
+  overflow: hidden;
+}
+
+.profile-net-worth-unsoulbound > i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgb(67 157 184 / 0.74), rgb(84 207 184 / 0.86));
+}
+
+.profile-net-worth-composition,
+.profile-net-worth-valuables {
+  display: grid;
+  min-width: 0;
+  gap: 0.62rem;
+  padding: 0.72rem;
+  border-radius: 0.65rem;
+}
+
+.profile-net-worth-composition > header,
+.profile-net-worth-valuables > header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.profile-net-worth-composition > header > div {
+  min-width: 0;
+}
+
+.profile-net-worth-composition > header > strong,
+.profile-net-worth-valuables > header > strong {
+  color: rgb(225 233 240 / 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-net-worth-bar {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 0.78rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.055);
+  overflow: hidden;
+}
+
+.profile-net-worth-bar button {
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  border-right: 1px solid rgb(2 6 10 / 0.38);
+  cursor: pointer;
+}
+
+.profile-net-worth-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  min-width: 0;
+  gap: 0.35rem;
+}
+
+.profile-net-worth-legend button {
+  display: grid;
+  grid-template-columns: 0.46rem minmax(0, 1fr);
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.46rem;
+  border: 1px solid rgb(255 255 255 / 0.065);
+  border-radius: 0.44rem;
+  background: rgb(3 7 11 / 0.24);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-net-worth-legend button.is-active {
+  border-color: rgb(56 199 244 / 0.3);
+  background: rgb(56 199 244 / 0.055);
+}
+
+.profile-net-worth-legend button > i {
+  width: 0.46rem;
+  height: 1.55rem;
+  border-radius: 999px;
+}
+
+.profile-net-worth-legend button > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.profile-net-worth-legend strong,
+.profile-net-worth-legend small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-net-worth-legend strong {
+  color: rgb(213 224 232 / 0.88);
+  font-size: 0.65rem;
+  font-weight: 620;
+}
+
+.profile-net-worth-legend small {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.profile-net-worth-category-states {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.32rem;
+  padding-top: 0.08rem;
+}
+
+.profile-net-worth-category-states span {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid rgb(255 255 255 / 0.065);
+  border-radius: 999px;
+  color: var(--profile-muted);
+  font-size: 0.56rem;
+}
+
+.profile-net-worth-category-states span[data-net-worth-state="private"],
+.profile-net-worth-category-states span[data-net-worth-state="unavailable"] {
+  border-color: rgb(240 181 66 / 0.16);
+  color: rgb(210 194 157 / 0.68);
+}
+
+.profile-net-worth-valuables > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.profile-net-worth-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 3rem);
+  min-width: 0;
+  gap: 0.36rem;
+}
+
+.profile-net-worth-pages {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.profile-net-worth-pages button {
+  padding: 0.4rem 0.58rem;
+  border: 1px solid rgb(56 199 244 / 0.24);
+  border-radius: 0.42rem;
+  background: rgb(56 199 244 / 0.06);
+  color: rgb(167 218 235 / 0.9);
+  font-size: 0.64rem;
+  cursor: pointer;
+}
+
+.profile-net-worth-pages button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.profile-net-worth-pages span {
+  color: var(--profile-muted);
+  font-size: 0.62rem;
+}
+
+.profile-minion-family:focus-visible,
+.profile-minion-detail button:focus-visible,
+.profile-inventory-destinations button:focus-visible,
+.profile-inventory-page-tabs button:focus-visible,
+.profile-net-worth-bar button:focus-visible,
+.profile-net-worth-legend button:focus-visible,
+.profile-net-worth-pages button:focus-visible {
+  outline: 1px solid rgb(56 199 244 / 0.72);
+  outline-offset: 2px;
+}
+
+@media (max-width: 51.25rem) {
+  .profile-inventory-composition {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-inventory-destinations {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .profile-inventory-destinations button {
+    width: 10rem;
+    flex: none;
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .profile-minion-metrics {
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  }
+
+  .profile-minion-filters,
+  .profile-minion-next-tier {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-minion-filters select {
+    width: 100%;
+  }
+
+  .profile-minion-matrix {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-minion-detail-progress {
+    grid-template-columns: auto minmax(4rem, 1fr);
+  }
+
+  .profile-minion-detail-progress strong {
+    grid-column: 1 / -1;
+  }
+
+  .profile-net-worth-balances {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 26.25rem) {
+  .profile-minion-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-minion-matrix {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-net-worth-legend {
+    grid-template-columns: 1fr;
+  }
+}

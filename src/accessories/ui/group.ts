@@ -1,7 +1,14 @@
 import { matchesQuery } from "./display";
 import type { AccessoryView, SourceCategory } from "./types";
-import type { AccessoryGroup, Attainability } from "..";
-import { ATTAINABILITY_ORDER } from "..";
+import type { AccessoryGroup } from "..";
+import { isNormalAccessory } from "../catalogue";
+import {
+  ACQUISITION_ORDER,
+  type AccessoryAcquisitionCategory,
+} from "../acquisition";
+
+export { ACQUISITION_LABEL, ACQUISITION_ORDER } from "../acquisition";
+export type { AccessoryAcquisitionCategory } from "../acquisition";
 
 /**
  * What the page is currently showing, and why.
@@ -108,110 +115,72 @@ export function filterEntries(
  * complete, useful page; what they do not get is a fabricated verdict.
  */
 export type Grouped =
-  | { mode: "catalogue"; all: AccessoryView[]; rift: AccessoryView[] }
+  | { mode: "catalogue"; all: AccessoryView[] }
   | {
       mode: "reach";
-      tiers: { tier: Attainability; entries: AccessoryView[] }[];
+      groups: { group: AccessoryAcquisitionCategory; entries: AccessoryView[] }[];
       owned: AccessoryView[];
-      /**
-       * The Rift band, rendered as two flat sections at the bottom ("Rift -
-       * missing" and "Rift - owned") rather than one nested band with its own
-       * split inside. Flat sections are what this shape already expresses:
-       * everything in `Grouped` is a list the page hands to one
-       * `AccessorySection` panel, and a band-with-a-split-inside would need a
-       * new container component for exactly one use. Two more lists cost
-       * nothing and read the same on screen.
-       *
-       * Not-owned covers missing AND locked here: a locked Rift accessory
-       * still wears its lock glyph and blocking line on the tile, and giving
-       * the Rift band its own locked section would slice 29 accessories three
-       * ways.
-       */
-      riftMissing: AccessoryView[];
-      riftOwned: AccessoryView[];
     };
+
+/**
+ * Acquisition routes are stronger evidence than a generic progress estimate.
+ * An event-only merchant is still an event item, and a Dark Auction purchase
+ * is still Dark Auction even when the player already meets every requirement.
+ * Everything else is divided into on-demand and gated work.
+ */
+export function acquisitionGroupOf(entry: AccessoryView): AccessoryAcquisitionCategory {
+  return entry.acquisition.category;
+}
 
 /**
  * How the page is laid out once a bag has been read.
  *
- * ATTAINABILITY IS THE PRIMARY GROUPING, AND THAT IS THE POINT
- * ------------------------------------------------------------
- * The page used to split into Missing, Locked and Owned. That is a description
- * of state, and the page asks a different question: what can I get right
- * now, what can I grind towards to get soon, and what is long set out. So the
- * sections are the answer to that question, and Locked stops being a place
- * items go and becomes a property a tile carries (its blocking requirement is
- * still shown on it, wherever it sits).
+ * ACQUISITION IS THE PRIMARY GROUPING, AND THAT IS THE POINT
+ * ----------------------------------------------------------
+ * Parser confidence is not an acquisition route. The page answers with the
+ * stable acquisition routes instead: collections, upgrade lines, activities,
+ * vendors, auctions, events, and a conservative review queue. Readiness stays
+ * a property of the tile, so its concrete profile-specific blocker remains
+ * visible without changing the route heading.
  *
  * Owned still collapses to the bottom, unchanged: it is the one group nobody
  * opening this page is asking about.
  */
 export function groupForDisplay(entries: readonly AccessoryView[], ownedKnown: boolean): Grouped {
   /*
-   * The Rift split comes first in both shapes, because it is a property of the
-   * ITEM rather than of the player: a Rift accessory works only inside the
-   * Rift, grants no Magical Power out here, and mostly lives in the Rift's own
-   * inventory rather than the bag, so listing it among the normal missing
-   * accessories was pure clutter. Even the keyless catalogue
-   * separates it, since "this one is a Rift accessory" needs no profile.
+   * Rift-only accessories belong to the dedicated Rift tab. Transferable
+   * Rift-origin items remain here because they work outside the Rift and count
+   * towards the same collection. The predicate is shared with the snapshot's
+   * figures so a section and its number cannot disagree.
    */
-  /*
-   * RIFT-TRANSFERABLES APPEAR IN BOTH AREAS: a transferable accessory is
-   * listed in the Rift area and outside it. The two flags ask
-   * different questions and together give three honest cases:
-   *
-   *   rift, not transferable          the Rift area only, exactly as before
-   *   rift AND transferable           both areas
-   *   transferable, not rift-origin   its normal section, plus the Rift area
-   *
-   * This is DISPLAY duplication only: `entries` still carries each accessory
-   * once, so every count, the Magical Power figure and the filters are
-   * untouched. A section's own header states its own tally, which for the
-   * Rift band now legitimately includes the transferables standing in both.
-   */
-  const inRiftArea = (e: AccessoryView) => e.rift || e.riftTransferable;
-  const inNormalArea = (e: AccessoryView) => !e.rift || e.riftTransferable;
+  const normal = entries.filter(isNormalAccessory);
 
   if (!ownedKnown) {
-    return {
-      mode: "catalogue",
-      all: entries.filter(inNormalArea),
-      rift: entries.filter(inRiftArea),
-    };
+    return { mode: "catalogue", all: normal };
   }
 
   const owned: AccessoryView[] = [];
-  const riftMissing: AccessoryView[] = [];
-  const riftOwned: AccessoryView[] = [];
-  const byTier = new Map<Attainability, AccessoryView[]>();
-  for (const tier of ATTAINABILITY_ORDER) byTier.set(tier, []);
+  const byGroup = new Map<AccessoryAcquisitionCategory, AccessoryView[]>();
+  for (const group of ACQUISITION_ORDER) byGroup.set(group, []);
 
-  for (const entry of entries) {
-    if (inRiftArea(entry)) {
-      (entry.status === "owned" ? riftOwned : riftMissing).push(entry);
-    }
-    if (inNormalArea(entry)) {
-      if (entry.status === "owned") owned.push(entry);
-      else byTier.get(entry.attainability)!.push(entry);
-    }
+  for (const entry of normal) {
+    if (entry.status === "owned") owned.push(entry);
+    else byGroup.get(acquisitionGroupOf(entry))!.push(entry);
   }
 
-  // Empty tiers are dropped rather than rendered as empty headings.
-  const tiers = ATTAINABILITY_ORDER.map((tier) => ({ tier, entries: byTier.get(tier)! })).filter(
-    (t) => t.entries.length > 0
+  // Empty groups are dropped rather than rendered as empty headings.
+  const groups = ACQUISITION_ORDER.map((group) => ({ group, entries: byGroup.get(group)! })).filter(
+    (section) => section.entries.length > 0
   );
 
-  return { mode: "reach", tiers, owned, riftMissing, riftOwned };
+  return { mode: "reach", groups, owned };
 }
 
 /** Total across whichever shape came back, for "nothing matches" decisions. */
 export function groupedTotal(grouped: Grouped): number {
   return grouped.mode === "catalogue"
-    ? grouped.all.length + grouped.rift.length
-    : grouped.tiers.reduce((n, t) => n + t.entries.length, 0) +
-        grouped.owned.length +
-        grouped.riftMissing.length +
-        grouped.riftOwned.length;
+    ? grouped.all.length
+    : grouped.groups.reduce((n, section) => n + section.entries.length, 0) + grouped.owned.length;
 }
 
 /** Toggle one activity in the multi-select group filter. Same rule as sources. */

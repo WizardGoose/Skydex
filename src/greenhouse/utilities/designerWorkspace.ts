@@ -18,10 +18,20 @@ export interface DesignerTimeline {
   present: DesignerWorkspace;
   past: DesignerWorkspace[];
   future: DesignerWorkspace[];
+  pastCellEdits: (DesignerCellEdit | null)[];
+  futureCellEdits: (DesignerCellEdit | null)[];
 }
 
 interface PushOptions {
   now?: number;
+  cellEdit?: DesignerCellEdit;
+}
+
+export interface DesignerCellEdit {
+  before: string[];
+  after: string[];
+  beforeSource: "hypixel" | "browser";
+  afterSource: "browser";
 }
 
 const HISTORY_LIMIT = 50;
@@ -68,6 +78,8 @@ export const createDesignerTimeline = (present: DesignerWorkspace): DesignerTime
   },
   past: [],
   future: [],
+  pastCellEdits: [],
+  futureCellEdits: [],
 });
 
 export const pushDesignerTimeline = (
@@ -89,6 +101,8 @@ export const pushDesignerTimeline = (
     present,
     past: [...timeline.past, timeline.present].slice(-HISTORY_LIMIT),
     future: [],
+    pastCellEdits: [...timeline.pastCellEdits, options.cellEdit ?? null].slice(-HISTORY_LIMIT),
+    futureCellEdits: [],
   };
 };
 
@@ -99,6 +113,8 @@ export const undoDesignerTimeline = (timeline: DesignerTimeline): DesignerTimeli
     present: previous,
     past: timeline.past.slice(0, -1),
     future: [timeline.present, ...timeline.future].slice(0, HISTORY_LIMIT),
+    pastCellEdits: timeline.pastCellEdits.slice(0, -1),
+    futureCellEdits: [timeline.pastCellEdits.at(-1) ?? null, ...timeline.futureCellEdits].slice(0, HISTORY_LIMIT),
   };
 };
 
@@ -109,6 +125,8 @@ export const redoDesignerTimeline = (timeline: DesignerTimeline): DesignerTimeli
     present: next,
     past: [...timeline.past, timeline.present].slice(-HISTORY_LIMIT),
     future: timeline.future.slice(1),
+    pastCellEdits: [...timeline.pastCellEdits, timeline.futureCellEdits[0] ?? null].slice(-HISTORY_LIMIT),
+    futureCellEdits: timeline.futureCellEdits.slice(1),
   };
 };
 
@@ -134,15 +152,15 @@ interface ShortcutEvent {
 }
 
 export const designerShortcut = (event: ShortcutEvent): "undo" | "redo" | null => {
-  if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey) return null;
+  if ((!event.ctrlKey && !event.metaKey) || event.altKey) return null;
 
   const target = event.target as { tagName?: string; isContentEditable?: boolean } | null | undefined;
   const tag = target?.tagName?.toUpperCase();
   if (target?.isContentEditable || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return null;
 
   const key = event.key.toLowerCase();
-  if (key === "z") return "undo";
-  if (key === "u") return "redo";
+  if (key === "z") return event.shiftKey ? "redo" : "undo";
+  if (key === "y" && !event.shiftKey) return "redo";
   return null;
 };
 

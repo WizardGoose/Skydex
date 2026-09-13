@@ -11,7 +11,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["src/**/__tests__/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     /*
      * Many solver tests run real searches under WALL-CLOCK budgets, and the
      * whole suite runs those files in parallel. Under that contention several

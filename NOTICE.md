@@ -177,7 +177,7 @@ proves only that the author was consistent. This is the same arrangement as
 `src/island/__tests__/fixtures/island-ref.json`, which is a real captured
 island. None of it ships in a build.
 
-## NotEnoughUpdates data (accessory upgrade chains)
+## NotEnoughUpdates data (accessory chains, item lore, pet textures, and Bestiary)
 
 The accessories page supplements its wiki-derived upgrade chains with the
 `talisman_upgrades` constant from the **NotEnoughUpdates-REPO** by the NEU
@@ -188,9 +188,17 @@ team:
   Licensed under the MIT License (LICENSE at the repository root, verified
   2026-08-03).
 
-**What is taken, exactly:** one constant, the `talisman_upgrades` map inside
+**What is taken, exactly:** the `talisman_upgrades` map inside
 `constants/misc.json`, which states which Hypixel accessory ids upgrade into
-which. Nothing else in that file or that repository is read.
+which; the signed texture property from the current `<PET>;<rarity>.json` item
+record when the public Hypixel item resource does not contain a base pet; and
+`constants/bestiary.json` for Bestiary family grouping, bracket ladders, caps,
+in-game name colours, and official mob and location icon properties. Generic item
+tooltips also use `internalname`, `displayname`, and `lore` from individual
+`items/<ID>.json` records. Captured inventory lore takes precedence over these
+base item descriptions. Newly crafted pet descriptions substitute level-one
+`statNums` and `otherNums` from `constants/petnums.json` at the item's stated
+rarity. No other NEU fields are used.
 
 **How it is taken:** fetched at runtime by the visitor's own browser from
 `raw.githubusercontent.com`, the same arrangement as the SkyHelper price list
@@ -199,7 +207,16 @@ above, and cached in the visitor's localStorage under
 in a build; MIT would permit bundling, but runtime fetching means the data
 stays exactly as current as the repository itself. The parsing lives in
 `src/accessories/neuUpgrades.ts`, which names this provenance in its own
-header.
+header. Pet texture records use the same runtime-only arrangement and are
+cached under `skyindex.pets.neu-textures.v1`; their narrow parser lives in
+`src/profile/petTextures.ts`. The Bestiary catalogue is likewise fetched only
+at runtime and cached under `skyindex.bestiary.neu.v1`; its narrow parser lives
+in `src/profile/bestiaryResource.ts`.
+
+Item lore is requested when its tooltip opens, validated against the requested
+item ID, and cached for a day under `skyindex.items.neu-lore.v1`. The parser in
+`src/items/itemLore.ts` retains Minecraft text formatting; no item records are
+bundled with the site.
 
 The wiki remains the primary source of upgrade chains; the NEU constant fills
 in chains whose wiki articles do not state their infobox upgrade fields.
@@ -468,7 +485,7 @@ weight the site sets.
 |---|---|---|---|
 | Space Grotesk | `space-grotesk-latin-var.woff2` (22,288 bytes), `space-grotesk-latin-ext-var.woff2` (18,940 bytes) | 400-700 | Copyright 2020 The Space Grotesk Project Authors (https://github.com/floriankarsten/space-grotesk) |
 | JetBrains Mono | `jetbrains-mono-latin-var.woff2` (31,432 bytes), `jetbrains-mono-latin-ext-var.woff2` (11,624 bytes) | 400-700 | Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) |
-| Montserrat | `montserrat-latin-var.woff2` (37,956 bytes), `montserrat-latin-ext-var.woff2` (70,688 bytes) | 600-800 | Copyright 2024 The Montserrat.Git Project Authors (https://github.com/JulietaUla/Montserrat.git) |
+| Montserrat | `montserrat-latin-var.woff2` (37,956 bytes), `montserrat-latin-ext-var.woff2` (70,688 bytes) | 400-800 | Copyright 2024 The Montserrat.Git Project Authors (https://github.com/JulietaUla/Montserrat.git) |
 
 | | |
 |---|---|

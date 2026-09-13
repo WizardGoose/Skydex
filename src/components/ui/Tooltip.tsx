@@ -67,7 +67,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     if (visible === false) return;
     e.preventDefault();
     e.stopPropagation();
-    setInternalVisible(!internalVisible);
+    setInternalVisible((value) => !value);
   };
 
   useEffect(() => {

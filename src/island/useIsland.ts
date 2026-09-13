@@ -3,8 +3,17 @@ import { decodeIslandCode } from "./code";
 import { decodeFeeds, encodeFeeds, ISLAND_KEY } from "./storage";
 import { applyLiveMessage, applyLivePayload, EVENTS_PATH, ISLAND_EVENT } from "./live";
 import { mergeFeeds, modFeed } from "./merge";
+import type { StorageIdentityExpectation } from "./storageIdentity";
+import { clearContainerFeeds } from "./containerReset";
 import { apiFeed, chooseProfile, fetchProfiles, shouldAutoRefresh } from "./hypixel";
-import { currentAccess, hasApiProfileAccess, writeAccess } from "./apiKey";
+import {
+  currentAccess,
+  hasApiProfileAccess,
+  identityMatches,
+  identityTokenForAccess,
+  subscribeApiAccess,
+  writeAccess,
+} from "./apiKey";
 import { makeGate } from "./gate";
 import { applyApiGameMode } from "../profile/useProfile";
 import type { FeedSet, MergedIsland } from "./merge";
@@ -99,10 +108,22 @@ export interface IslandState {
   apiProfiles: ApiProfile[];
 }
 
-const readFromDisk = (): FeedSet => {
+const identityStorageKey = (identity: string): string => identity === "v1:anonymous" ? ISLAND_KEY : `${ISLAND_KEY}.${identity}`;
+const mergeIdentityForAccess = (): StorageIdentityExpectation => {
+  const access = currentAccess();
+  return {
+    playerUuids: [access.uuid],
+    // A saved name/key/profile selection is still a connected-account
+    // expectation, even before the API resolves its UUID. In that window a
+    // cached mod feed must stay withheld rather than flash under a new account.
+    hasConnectedAccount: Boolean(access.key || access.name || access.uuid || access.profileId),
+  };
+};
+let activeStorageKey = identityStorageKey(identityTokenForAccess(currentAccess()));
+const readFromDisk = (storageKey = activeStorageKey): FeedSet => {
   if (typeof localStorage === "undefined") return {};
   try {
-    return decodeFeeds(localStorage.getItem(ISLAND_KEY));
+    return decodeFeeds(localStorage.getItem(storageKey));
   } catch {
     return {};
   }
@@ -112,7 +133,7 @@ const readFromDisk = (): FeedSet => {
 // is what makes the v1 -> v2 migration safe: a legacy blob is always parsed
 // forward before the first write could replace it.
 let feeds: FeedSet = readFromDisk();
-let merged: MergedIsland = mergeFeeds(feeds);
+let merged: MergedIsland = mergeFeeds(feeds, { identity: mergeIdentityForAccess() });
 
 /**
  * Recompute the merged view.
@@ -123,7 +144,7 @@ let merged: MergedIsland = mergeFeeds(feeds);
  * through it rather than each call site remembering to pass the flag.
  */
 const recompute = () => {
-  merged = mergeFeeds(feeds, { modLive: status === "live" });
+  merged = mergeFeeds(feeds, { modLive: status === "live", identity: mergeIdentityForAccess() });
 };
 
 let status: IslandStatus = merged.snapshot ? "offline" : "empty";
@@ -223,14 +244,37 @@ const setFeeds = (next: FeedSet): boolean => {
   feeds = next;
   recompute();
   try {
-    if (encoded !== null) localStorage.setItem(ISLAND_KEY, encoded);
-    else localStorage.removeItem(ISLAND_KEY);
+    if (encoded !== null) localStorage.setItem(activeStorageKey, encoded);
+    else localStorage.removeItem(activeStorageKey);
   } catch {
     // Private mode, quota, a locked-down browser. The in-memory copy still
     // drives this session; only persistence across reloads is lost.
   }
   return true;
 };
+
+/** Drop private feeds when the credential/account/profile identity changes. */
+const resetForIdentity = () => {
+  const nextStorageKey = identityStorageKey(identityTokenForAccess(currentAccess()));
+  if (nextStorageKey === activeStorageKey) return;
+  activeStorageKey = nextStorageKey;
+  feeds = readFromDisk(activeStorageKey);
+  lastEncoded = (() => {
+    try {
+      return feeds.mod || feeds.api ? encodeFeeds(feeds) : null;
+    } catch {
+      return null;
+    }
+  })();
+  apiProfiles = [];
+  apiStatus = "idle";
+  apiError = null;
+  lastError = null;
+  status = merged.snapshot ? "offline" : "empty";
+  publish();
+};
+
+subscribeApiAccess(resetForIdentity);
 
 // ---------------------------------------------------------------------------
 // The mod transport: stream first, poll second
@@ -466,6 +510,12 @@ const subscribe = (fn: () => void) => {
   };
 };
 
+/**
+ * Read-only store face for non-React consumers such as WebMCP tools.
+ * Subscribing keeps the existing Settings link gate and shared transport.
+ */
+export const islandStore = { subscribe, getSnapshot };
+
 // ---------------------------------------------------------------------------
 // The Hypixel pull. On demand only.
 // ---------------------------------------------------------------------------
@@ -481,12 +531,12 @@ const subscribe = (fn: () => void) => {
  * by design, and stashing them here rather than rebuilding a gate per call
  * keeps one gate, therefore one floor, for the life of the module.
  */
-let pendingPull: { account: HypixelAccount; key: string } | null = null;
+let pendingPull: { account: HypixelAccount; key: string; profileId: string | null } | null = null;
 
 const apiGate = makeGate(async () => {
   const job = pendingPull;
   if (!job) return;
-  await runApiPull(job.account, job.key);
+  await runApiPull(job.account, job.key, job.profileId);
 }, API_MIN_GAP);
 
 /**
@@ -547,7 +597,7 @@ const refreshApi = async (force = false): Promise<void> => {
    * starts nothing without moving the window. Set the job first: the gate may
    * run the thunk synchronously up to its first await.
    */
-  pendingPull = { account: { uuid: access.uuid, name: access.name }, key: access.key };
+  pendingPull = { account: { uuid: access.uuid, name: access.name }, key: access.key, profileId: access.profileId };
   await apiGate.run();
 };
 
@@ -557,7 +607,9 @@ const refreshApi = async (force = false): Promise<void> => {
  * Split out so that `apiInFlight` can hold exactly one promise per request. The
  * body is unchanged from when it lived inline; only the guards moved out.
  */
-const runApiPull = async (account: HypixelAccount, key: string): Promise<void> => {
+const runApiPull = async (account: HypixelAccount, key: string, profileId: string | null): Promise<void> => {
+  const expectedIdentity = identityTokenForAccess({ key, uuid: account.uuid, profileId }, profileId);
+  if (!identityMatches(expectedIdentity, currentAccess())) return;
   apiStatus = "loading";
   apiError = null;
   publish();
@@ -566,6 +618,7 @@ const runApiPull = async (account: HypixelAccount, key: string): Promise<void> =
     // The key that passed the guard, not one re-read now, so the request uses
     // the credential the caller was actually checked against.
     const res = await fetchProfiles(account, key);
+    if (!identityMatches(expectedIdentity, currentAccess())) return;
 
     if (!res.ok) {
       // Only an auth failure says anything about the key itself. A network blip
@@ -581,7 +634,7 @@ const runApiPull = async (account: HypixelAccount, key: string): Promise<void> =
     writeAccess({ keyState: "valid", checkedAt: fetchedAt });
     apiProfiles = res.value;
 
-    const profile = chooseProfile(res.value, currentAccess().profileId);
+    const profile = chooseProfile(res.value, profileId);
     if (!profile) {
       apiStatus = "error";
       apiError = "Hypixel returned no usable profile for that account.";
@@ -604,6 +657,7 @@ const runApiPull = async (account: HypixelAccount, key: string): Promise<void> =
      */
     applyApiGameMode(profile.gameMode);
 
+    if (!identityMatches(expectedIdentity, currentAccess())) return;
     setFeeds({ ...feeds, api: apiFeed(profile, account, fetchedAt) });
     apiStatus = "idle";
     apiError = null;
@@ -633,7 +687,7 @@ const selectApiProfile = (profileId: string) => {
 // updates. Only our key, and only ever a re-read.
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
-    if (e.key !== ISLAND_KEY) return;
+    if (e.key !== activeStorageKey) return;
 
     // Another tab wrote. Read it back and compare on the same yardstick the
     // write path uses, because with the page open twice every capture fires
@@ -704,6 +758,16 @@ export const useIsland = () => {
     publish();
   }, []);
 
+  /** Reset only container observations; keep profile identity, key, and preferences. */
+  const clearInventorySnapshot = useCallback(() => {
+    setFeeds(clearContainerFeeds(feeds));
+    if (status !== "live") status = merged.snapshot ? "offline" : "empty";
+    lastError = null;
+    apiError = null;
+    apiStatus = "idle";
+    publish();
+  }, []);
+
   const refresh = useCallback((force = false) => refreshApi(force), []);
   const selectProfile = useCallback((profileId: string) => selectApiProfile(profileId), []);
 
@@ -724,5 +788,6 @@ export const useIsland = () => {
     refreshApi: refresh,
     selectProfile,
     clear,
+    clearInventorySnapshot,
   };
 };

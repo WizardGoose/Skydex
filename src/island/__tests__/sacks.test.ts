@@ -6,7 +6,9 @@ import {
   liveSackEntries,
   mergeArticleItems,
   parseSackArticle,
+  parseSackArticleRows,
   parseSackTable,
+  sackDisplayFamily,
   sackFamily,
   sackOf,
   UNSORTED_SACK,
@@ -145,6 +147,30 @@ describe("parseSackTable", () => {
     expect(parseSackTable("just prose")).toEqual([]);
     expect(parseSackTable("")).toEqual([]);
   });
+
+  it("keeps current rows whose Items cell points to a Sack Items tier", () => {
+    const current = parseSackTable(`== Types ==
+{| class="wikitable"
+!Icon
+!Name
+!Items
+!Source
+|-
+|{{Slot|*Agronomy Sack}}
+|[[Agronomy Sack]]
+|{{Sack Items|Small Agronomy Sack}}
+|{{Crafting Table|*Small Agronomy Sack}}
+|}`);
+
+    expect(current).toEqual([
+      {
+        sack: "Agronomy Sack",
+        icon: "Large Agronomy Sack",
+        items: [],
+        itemsSource: "Small Agronomy Sack",
+      },
+    ]);
+  });
 });
 
 /**
@@ -177,6 +203,26 @@ const ARTICLE = `{{Update}}
 
 The '''Fishing Sack''' is a [[Sacks|Sack]].
 `;
+
+const CURRENT_ARTICLE = `{{Sack Items Table|
+{{Sack Items Row
+|sack = Beginner Agronomy Sack
+|capacity = 640
+|items =
+*Brown Mushroom
+*Cactus
+}}
+{{Sack Items Row
+|sack = Small Agronomy Sack
+|sack2 = Medium Agronomy Sack
+|sack3 = Large Agronomy Sack
+|capacity = 2,240
+|items =
+*Wheat
+*[[Cocoa Beans]]
+*Ench Melon
+}}
+}}`;
 
 describe("parseSackArticle", () => {
   const items = parseSackArticle(ARTICLE);
@@ -215,6 +261,14 @@ describe("parseSackArticle", () => {
   it("has nothing to say about an article with no sack infobox", () => {
     expect(parseSackArticle("just prose")).toEqual([]);
   });
+
+  it("reads the current row format without mixing different tiers", () => {
+    const rows = parseSackArticleRows(CURRENT_ARTICLE);
+    expect(rows["Beginner Agronomy Sack"]).toEqual(["Brown Mushroom", "Cactus"]);
+    expect(rows["Small Agronomy Sack"]).toEqual(["Wheat", "Cocoa Beans", "Enchanted Melon"]);
+    expect(rows["Medium Agronomy Sack"]).toEqual(rows["Small Agronomy Sack"]);
+    expect(rows["Large Agronomy Sack"]).toEqual(rows["Small Agronomy Sack"]);
+  });
 });
 
 describe("mergeArticleItems", () => {
@@ -240,6 +294,14 @@ describe("mergeArticleItems", () => {
     const merged = mergeArticleItems(DEFS, {});
     expect(merged).toEqual(DEFS);
   });
+
+  it("uses the exact tier named by a current Sack Items cell", () => {
+    const [merged] = mergeArticleItems(
+      [{ sack: "Agronomy Sack", icon: "Large Agronomy Sack", items: [], itemsSource: "Small Agronomy Sack" }],
+      parseSackArticleRows(CURRENT_ARTICLE)
+    );
+    expect(merged.items).toEqual(["Wheat", "Cocoa Beans", "Enchanted Melon"]);
+  });
 });
 
 describe("sackFamily", () => {
@@ -251,6 +313,13 @@ describe("sackFamily", () => {
   it("leaves every other sack name alone", () => {
     expect(sackFamily("Bronze Trophy Fishing Sack")).toBe("Bronze Trophy Fishing Sack");
     expect(sackFamily("Witch's Sack")).toBe("Witch's Sack");
+  });
+
+  it("removes capacity tiers from a content-family label without collapsing trophy tiers", () => {
+    expect(sackDisplayFamily("Beginner Combat Sack")).toBe("Combat Sack");
+    expect(sackDisplayFamily("Large Combat Sack")).toBe("Combat Sack");
+    expect(sackDisplayFamily("Large Enchanted Agronomy Sack")).toBe("Agronomy Sack");
+    expect(sackDisplayFamily("Bronze Trophy Fishing Sack")).toBe("Bronze Trophy Fishing Sack");
   });
 });
 
@@ -287,6 +356,41 @@ describe("sackOf", () => {
     expect(sackOf("BROWN_MUSHROOM", EMPTY_SACK_INDEX)).toBeNull();
   });
 
+  it("uses exact source-backed destinations for current sack entries the tables omit", () => {
+    const sourceBacked = buildSackIndex([
+      { sack: "Mining Sack", icon: "Large Mining Sack", items: [] },
+      { sack: "Agronomy Sack", icon: "Large Agronomy Sack", items: [] },
+      { sack: "Mutations Sack", icon: "Large Mutations Sack", items: [] },
+      { sack: "Slayer Sack", icon: "Large Slayer Sack", items: [] },
+      { sack: "Bronze Trophy Fishing Sack", icon: "Bronze Trophy Fishing Sack", items: [] },
+      { sack: "Silver Trophy Fishing Sack", icon: "Silver Trophy Fishing Sack", items: [] },
+    ], {});
+
+    expect({
+      ENCHANTED_NETHERRACK: sackOf("ENCHANTED_NETHERRACK", sourceBacked),
+      ENCHANTED_FLINT: sackOf("ENCHANTED_FLINT", sourceBacked),
+      ENCHANTED_COAL_BLOCK: sackOf("ENCHANTED_COAL_BLOCK", sourceBacked),
+      MUTANT_NETHER_STALK: sackOf("MUTANT_NETHER_STALK", sourceBacked),
+      RUBY_VEILSHROOM: sackOf("RUBY_VEILSHROOM", sourceBacked),
+      REVENANT_VISCERA: sackOf("REVENANT_VISCERA", sourceBacked),
+      OBFUSCATED_FISH_1_BRONZE: sackOf("OBFUSCATED_FISH_1_BRONZE", sourceBacked),
+      OBFUSCATED_FISH_1_SILVER: sackOf("OBFUSCATED_FISH_1_SILVER", sourceBacked),
+    }).toEqual({
+      ENCHANTED_NETHERRACK: "Mining Sack",
+      ENCHANTED_FLINT: "Mining Sack",
+      ENCHANTED_COAL_BLOCK: "Mining Sack",
+      MUTANT_NETHER_STALK: "Agronomy Sack",
+      RUBY_VEILSHROOM: "Mutations Sack",
+      REVENANT_VISCERA: "Slayer Sack",
+      OBFUSCATED_FISH_1_BRONZE: "Bronze Trophy Fishing Sack",
+      OBFUSCATED_FISH_1_SILVER: "Silver Trophy Fishing Sack",
+    });
+  });
+
+  it("does not create an override destination the parsed article does not contain", () => {
+    expect(sackOf("ENCHANTED_FLINT", INDEX)).toBeNull();
+  });
+
   /**
    * The Rune Sack is the one sack with no list: its article gives its contents
    * as the single word "Runes" and says in prose that it holds every rune. So
@@ -311,12 +415,13 @@ describe("sackOf", () => {
   });
 });
 
-/* ------------------------------------------------------- the zero filter */
+/* ----------------------------------------------------- source-backed rows */
 
 describe("liveSackEntries", () => {
-  it("drops the zero counts and keeps the rest", () => {
+  it("keeps zero counts because they are known-empty entries", () => {
     const entries = liveSackEntries({ BROWN_MUSHROOM: 25600, BLAZE_ROD: 0, CHOCONUT: 4 });
-    expect(entries.map((e) => e.id)).toEqual(["BROWN_MUSHROOM", "CHOCONUT"]);
+    expect(entries.map((e) => e.id)).toEqual(["BROWN_MUSHROOM", "BLAZE_ROD", "CHOCONUT"]);
+    expect(entries.find((entry) => entry.id === "BLAZE_ROD")?.count).toBe(0);
   });
 
   it("drops a count that could not describe a possession", () => {
@@ -346,7 +451,7 @@ describe("liveSackEntries", () => {
    * so that snapshot is not going to be rewritten and must simply display
    * correctly.
    */
-  it("filters an old stored snapshot that still carries its zeros", () => {
+  it("renders every valid entry from an old stored snapshot", () => {
     const old: StoredIsland = {
       receivedAt: 1_700_000_000_000,
       snapshot: {
@@ -367,7 +472,14 @@ describe("liveSackEntries", () => {
     };
 
     const entries = liveSackEntries(old.snapshot.sacks);
-    expect(entries.map((e) => e.id)).toEqual(["ENCHANTED_BROWN_MUSHROOM", "BLAZE_ROD"]);
+    expect(entries.map((e) => e.id)).toEqual([
+      "ENCHANTED_BROWN_MUSHROOM",
+      "WHEAT",
+      "SEEDS",
+      "POTATO_ITEM",
+      "BLAZE_ROD",
+      "BONE",
+    ]);
     expect(Object.keys(old.snapshot.sacks)).toHaveLength(6);
   });
 
@@ -384,7 +496,7 @@ describe("liveSackEntries", () => {
 
     const entries = liveSackEntries(sacks);
 
-    expect(entries).toHaveLength(2);
+    expect(entries).toHaveLength(4);
     expect(sacks).toEqual(pristine);
     expect(Object.keys(sacks)).toEqual(Object.keys(pristine));
   });
@@ -425,9 +537,10 @@ describe("groupSacks", () => {
     expect(agronomy.icon).toBe("Large Agronomy Sack");
   });
 
-  it("does not render a sack the player owns nothing from", () => {
-    const groups = groupSacks(entriesFor({ BROWN_MUSHROOM: 10 }), INDEX);
-    expect(groups.map((g) => g.sack)).toEqual(["Agronomy Sack"]);
+  it("renders a family whose reported items are all empty", () => {
+    const groups = groupSacks(entriesFor({ BROWN_MUSHROOM: 10, BLAZE_ROD: 0 }), INDEX);
+    expect(groups.map((g) => g.sack)).toEqual(["Agronomy Sack", "Combat Sack"]);
+    expect(groups[1].total).toBe(0);
   });
 
   it("folds the enchanted forms in with their base sack", () => {

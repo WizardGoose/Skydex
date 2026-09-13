@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { AppWithRedirect } from "./components/AppWithRedirect";
+import { canonicalLocalReviewUrl } from "./routeRedirect";
 
 /**
  * Upstream SkyShards ran a localStorage "cleanup" here on every page load: a
@@ -19,8 +20,14 @@ import { AppWithRedirect } from "./components/AppWithRedirect";
  * the moment they are added.
  */
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <AppWithRedirect />
-  </StrictMode>
-);
+const canonicalReviewUrl = canonicalLocalReviewUrl(window.location);
+
+if (canonicalReviewUrl) {
+  window.location.replace(canonicalReviewUrl);
+} else {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <AppWithRedirect />
+    </StrictMode>
+  );
+}

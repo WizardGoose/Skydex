@@ -152,7 +152,7 @@ export const CropImage: React.FC<CropImageProps> = ({
     maxWidth: "100%",
     maxHeight: "100%",
     objectFit: "contain",
-    ...(applyPixelated && { imageRendering: "pixelated" as any }),
+    ...(applyPixelated && { imageRendering: "pixelated" as CSSProperties["imageRendering"] }),
     ...(shouldGlow && { filter: CROP_IMAGE_GLOW_FILTER }),
   };
   
@@ -191,6 +191,8 @@ export const CropImage: React.FC<CropImageProps> = ({
       <img
         src={getCropImagePath(cropId)}
         alt={cropName || cropId}
+        loading="lazy"
+        decoding="async"
         className={`object-contain pointer-events-none ${imageClassName}`}
         style={finalImageStyle}
         onError={handleError}

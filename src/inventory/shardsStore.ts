@@ -27,6 +27,34 @@ export type ShardCounts = Record<string, number>;
 
 const EMPTY: ShardCounts = {};
 
+/**
+ * Merge a complete shard read into the shared legacy inventory object without
+ * treating that object as shard-only storage. The catalogue is the authority
+ * for which keys belong to the shard suite: known shard keys are replaced,
+ * while every other key (including an explicit zero) remains untouched.
+ *
+ * This is deliberately pure. The caller owns the writable management store;
+ * keeping the merge here lets the read bridge and the import path agree on the
+ * same key classification without making this mirror a second writer.
+ */
+export const mergeShardInventory = (
+  existing: ReadonlyMap<string, number>,
+  knownShardKeys: Iterable<string>,
+  replacement: Iterable<readonly [string, number]>,
+): Map<string, number> => {
+  const known = new Set(knownShardKeys);
+  const next = new Map<string, number>();
+
+  for (const [key, amount] of existing) {
+    if (!known.has(key)) next.set(key, amount);
+  }
+  for (const [key, amount] of replacement) {
+    if (known.has(key)) next.set(key, amount);
+  }
+
+  return next;
+};
+
 const read = (): ShardCounts => {
   if (typeof localStorage === "undefined") return EMPTY;
   try {

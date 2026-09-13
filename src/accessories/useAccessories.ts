@@ -1,9 +1,10 @@
-import { useSyncExternalStore } from "react";
+import { adminItemsStore } from "../items/wikiAdmin";
+import { useMemo, useSyncExternalStore } from "react";
 import { recipesStore } from "../items/useItemData";
 import { currentAccess, hasApiProfileAccess } from "../island/apiKey";
 import { fetchProfileMember } from "../island/hypixel";
 import { setApiBioanalysis } from "../island/profileStats";
-import { accessoriesFromIndex, buildAccessoryCatalogue } from "./catalogue";
+import { accessoriesFromIndex, buildAccessoryCatalogue, isNormalAccessory } from "./catalogue";
 import type { AccessoryCatalogue, AccessoryEntry } from "./catalogue";
 import {
   bioanalysisRank,
@@ -11,6 +12,7 @@ import {
   readAbiphoneContacts,
   readConsumedPrism,
   readOwnedFromMember,
+  type OwnedBag,
 } from "./owned";
 import type { EventKey } from "./skyblockCalendar";
 import {
@@ -40,12 +42,19 @@ import { buildChainIndex, EMPTY_CHAINS, type ChainIndex, type IdUpgradeEdge, typ
 import { fetchNeuUpgrades, NEU_TTL, readNeuCache, writeNeuCache } from "./neuUpgrades";
 import { computeFolds } from "./dedup";
 import {
+  activeAccessories,
   computeMagicalPower,
   NO_MP_INPUTS,
   type MagicalPowerFigure,
   type MagicalPowerInputs,
 } from "./magicalPower";
 import { attainabilityOf, groupOf, type AccessoryGroup, type Attainability } from "./grouping";
+import {
+  acquisitionOf,
+  readinessOf,
+  type AccessoryAcquisition,
+  type AccessoryReadiness,
+} from "./acquisition";
 
 /**
  * The accessories page's one shared value.
@@ -72,6 +81,10 @@ export type { SourceCategory };
 export interface AccessoryView extends AccessoryEntry {
   status: AccessoryStatus;
   source: SourceCategory;
+  /** Stable Ironman acquisition route, separate from player readiness. */
+  acquisition: AccessoryAcquisition;
+  /** What the currently loaded profile actually proves about the next step. */
+  readiness: AccessoryReadiness;
   /**
    * Every requirement this accessory carries, already measured against the
    * player. Shown on the tile whatever the status is, because "what does this
@@ -101,6 +114,10 @@ export interface AccessoryView extends AccessoryEntry {
    * chip and the hover card's line list are made of.
    */
   foldedHigher: readonly FoldedRung[];
+  /** Same-effect variants represented by this tile; they are not upgrade rungs. */
+  equivalentAlternatives?: readonly AccessoryRungSummary[];
+  /** Nearest lower rung the player actually holds, when one can be proven. */
+  ownedPrerequisite: AccessoryRungSummary | null;
   /** Which part of the game this belongs to. */
   group: AccessoryGroup;
   /** How far away it is, given what we could measure. */
@@ -115,11 +132,23 @@ export interface AccessoryView extends AccessoryEntry {
   eventKey: EventKey | null;
 }
 
-/** A folded rung, carried with enough to render its name in its rarity colour. */
-export interface FoldedRung {
+/** A family rung, carried with enough to identify and render it. */
+export interface AccessoryRungSummary {
   id: string;
   name: string;
   tier: string | null;
+}
+
+export type FoldedRung = AccessoryRungSummary;
+
+export interface AccessoryStatSummary {
+  key: string;
+  value: number;
+}
+
+export interface AccessoryEnrichmentSummary {
+  key: string;
+  count: number;
 }
 
 export interface AccessoriesSnapshot {
@@ -133,29 +162,33 @@ export interface AccessoriesSnapshot {
    */
   ownedKnown: boolean;
   /**
-   * Status counts over the WHOLE catalogue, Rift included, because they are
-   * the truth about everything indexed. The page's header derives its
-   * normal-only figures by subtracting `riftCounts`, so that Rift accessories
-   * appear in the header only under their own label.
+   * Status counts over the WHOLE catalogue, Rift included. This remains useful
+   * to the future Rift page and to data-quality checks; the normal Accessories
+   * header reads `normalCounts` directly so transferables are never subtracted.
    */
   counts: { total: number; owned: number; missing: number; locked: number };
   /**
-   * The same status counts over the Rift accessories alone (Hypixel's
-   * `origin: "RIFT"`). They render as their own band with their own header
-   * figure: a Rift accessory works only inside the Rift and mostly lives in
-   * the Rift's own inventory rather than the bag, so folding it into the
-   * normal missing sections both cluttered them and implied Magical Power it
-   * would never give.
+   * Status counts for the normal Accessories page. Rift-only entries are
+   * excluded, while Rift-origin transferables remain because they work in the
+   * overworld and contribute to a hypermaxed accessory collection.
+   */
+  normalCounts: { total: number; owned: number; missing: number; locked: number };
+  /**
+   * Status counts over every Rift-origin accessory. This intentionally includes
+   * transferables as well as Rift-only entries: origin describes where an item
+   * came from, while `normalCounts` describes whether it belongs on this page.
    */
   riftCounts: { total: number; owned: number; missing: number; locked: number };
   sourceCounts: Record<SourceCategory, number>;
+  /** Source counts over the same normal-page set as `normalCounts`. */
+  normalSourceCounts: Record<SourceCategory, number>;
   /** How many requirements of each kind the catalogue carries. */
   requirementCounts: Record<string, number>;
   /**
    * How many NOT-owned accessories sit in each attainability tier. Rungs, not
-   * lines, and NORMAL accessories only: the Rift band is its own section with
-   * its own figure, so a Crux rung must not pad the "Missing Accessories"
-   * count it will never appear under.
+   * lines, and normal-page accessories only. A Crux rung cannot pad a count for
+   * a section it will never appear under, while a transferable Rift-origin item
+   * must contribute because it works outside the Rift.
    */
   reachCounts: Record<Attainability, number>;
   /**
@@ -173,6 +206,16 @@ export interface AccessoriesSnapshot {
    * was read. Never exact by construction; the page owns saying why.
    */
   magicalPower: MagicalPowerFigure | null;
+  /** Highest held rung per line, including uncatalogued ids proven by the bag. */
+  activeCount: number | null;
+  /** Active stacks that actually carry a recombobulator flag. */
+  activeRecombobulated: number | null;
+  /** Base item stats granted by the active accessory set. */
+  statContributions: AccessoryStatSummary[];
+  /** Enrichments on active accessories, grouped by their exact profile value. */
+  enrichments: AccessoryEnrichmentSummary[];
+  /** Active duplicate ids whose conflicting enrichment values were deliberately not guessed. */
+  ambiguousEnrichments: number;
   /**
    * Bag ids of which at least one stack carries `rarity_upgrades` - the same
    * set the MP model consumes, surfaced here so the tiles can wear the
@@ -203,13 +246,20 @@ const EMPTY: AccessoriesSnapshot = {
   entries: [],
   ownedKnown: false,
   counts: { total: 0, owned: 0, missing: 0, locked: 0 },
+  normalCounts: { total: 0, owned: 0, missing: 0, locked: 0 },
   riftCounts: { total: 0, owned: 0, missing: 0, locked: 0 },
   sourceCounts: EMPTY_SOURCE_COUNTS,
+  normalSourceCounts: EMPTY_SOURCE_COUNTS,
   requirementCounts: {},
   reachCounts: { now: 0, soon: 0, long: 0, unknownReach: 0 },
   nextStepCounts: { now: 0, soon: 0, long: 0, unknownReach: 0 },
   foldedCount: 0,
   magicalPower: null,
+  activeCount: null,
+  activeRecombobulated: null,
+  statContributions: [],
+  enrichments: [],
+  ambiguousEnrichments: 0,
   recombobulated: new Set<string>(),
   groupCounts: {
     combat: 0, mining: 0, farming: 0, fishing: 0, foraging: 0, dungeons: 0, rift: 0, event: 0, other: 0,
@@ -245,6 +295,44 @@ const asCollectionRequirement = (block: CollectionBlock): CheckedRequirement => 
   // very different errands.
   gap: Math.max(0, block.required - block.have),
 });
+
+/**
+ * Find the highest lower rung the player physically holds.
+ *
+ * `chains[id]` is transitive, while the catalogue family remains a safe
+ * fallback for pure compose tests and for a page rendered before wiki/NEU
+ * edges arrive. Covered rungs do not count: this answers what is in the bag,
+ * not what a higher item implies was consumed in the past.
+ */
+const nearestHeldPrerequisite = (
+  entry: AccessoryEntry,
+  catalogue: AccessoryCatalogue,
+  chains: ChainIndex,
+  held: ReadonlySet<string>,
+): AccessoryRungSummary | null => {
+  const lower = new Set(chains[entry.id] ?? []);
+
+  if (entry.family && entry.familyRank !== null) {
+    const family = catalogue.families[entry.family];
+    for (const id of family?.members ?? []) {
+      const candidate = catalogue.byId[id];
+      if (candidate && candidate.familyRank !== null && candidate.familyRank < entry.familyRank) lower.add(id);
+    }
+  }
+
+  const candidates = [...lower]
+    .filter((id) => held.has(id) && catalogue.byId[id])
+    .sort((left, right) => {
+      const leftEntry = catalogue.byId[left];
+      const rightEntry = catalogue.byId[right];
+      const leftDepth = chains[left]?.length ?? leftEntry?.familyRank ?? 0;
+      const rightDepth = chains[right]?.length ?? rightEntry?.familyRank ?? 0;
+      return rightDepth - leftDepth || left.localeCompare(right);
+    });
+
+  const found = candidates[0] ? catalogue.byId[candidates[0]] : null;
+  return found ? { id: found.id, name: found.name, tier: found.tier } : null;
+};
 
 /**
  * Fold everything into the snapshot the page renders.
@@ -298,13 +386,16 @@ export function composeSnapshot(
    * recombed stacks, a consumed Rift Prism, the Abiphone contact count. All
    * read off the same profile pull as the bag; the default claims nothing.
    */
-  mpInputs: MagicalPowerInputs = NO_MP_INPUTS
+  mpInputs: MagicalPowerInputs = NO_MP_INPUTS,
+  /** The decoded stacks themselves, for enrichments and other per-stack facts. */
+  ownedBag: OwnedBag | null = null,
 ): AccessoriesSnapshot {
   const ownedKnown = ownedIds !== null;
   const sets = collapseOwned(ownedIds ?? [], catalogue, chainIndex);
 
   const entries: AccessoryView[] = [];
   const sourceCounts = { ...EMPTY_SOURCE_COUNTS };
+  const normalSourceCounts = { ...EMPTY_SOURCE_COUNTS };
   const requirementCounts: Record<string, number> = {};
   const reachCounts: Record<Attainability, number> = { now: 0, soon: 0, long: 0, unknownReach: 0 };
   const groupCounts: Record<AccessoryGroup, number> = {
@@ -315,10 +406,13 @@ export function composeSnapshot(
   let locked = 0;
   let unresolvedCollections = 0;
   const riftCounts = { total: 0, owned: 0, missing: 0, locked: 0 };
+  const normalCounts = { total: 0, owned: 0, missing: 0, locked: 0 };
 
   for (const entry of catalogue.entries) {
-    const source = resolveSource(entry.craftable, sources[entry.name]);
+    const learnedSource = sources[entry.name];
+    const source = resolveSource(entry.craftable, learnedSource);
     sourceCounts[source] += 1;
+    if (isNormalAccessory(entry)) normalSourceCounts[source] += 1;
 
     // Measured for every accessory, owned or not, because the tile shows them
     // regardless and a keyless visitor should still learn what a thing asks.
@@ -370,6 +464,26 @@ export function composeSnapshot(
     });
     groupCounts[group] += 1;
 
+    const ownedPrerequisite = ownedKnown
+      ? nearestHeldPrerequisite(entry, catalogue, chainIndex, sets.held)
+      : null;
+    const acquisition = acquisitionOf({
+      entry,
+      source,
+      learnedSource,
+      checked,
+      group,
+      locations: locationSignals[entry.name] ?? [],
+    });
+    const readiness = readinessOf({
+      ownedKnown,
+      status,
+      blockedBy,
+      acquisition,
+      craftable: entry.craftable,
+      ownedPrerequisite,
+    });
+
     /*
      * Attainability is a statement about work remaining, so it is only computed
      * for something the player does not already have. An owned accessory has no
@@ -381,8 +495,9 @@ export function composeSnapshot(
      */
     const attainability = attainabilityOf({ checked, source, collectionRequired });
 
-    // The Rift tally, alongside the overall one rather than instead of it:
-    // `counts` stays the whole truth and the page subtracts.
+    // The origin tally sits alongside the overall count. Normal-page counts
+    // are built independently below because Rift transferables belong to both
+    // sets and therefore cannot be derived by subtraction.
     if (entry.rift) {
       riftCounts.total += 1;
       if (status === "owned") riftCounts.owned += 1;
@@ -390,15 +505,25 @@ export function composeSnapshot(
       else riftCounts.missing += 1;
     }
 
+    if (isNormalAccessory(entry)) {
+      normalCounts.total += 1;
+      if (status === "owned") normalCounts.owned += 1;
+      else if (status === "locked") normalCounts.locked += 1;
+      else normalCounts.missing += 1;
+    }
+
     entries.push({
       ...entry,
       status,
       source,
+      acquisition,
+      readiness,
       checked,
       blockedBy,
       coveredByFamily,
       foldedBehind: null,
       foldedHigher: [],
+      ownedPrerequisite,
       group,
       attainability,
       // Only an event accessory carries a key; `unknown` inside the index is
@@ -451,7 +576,7 @@ export function composeSnapshot(
     // Rift accessories have their own band and their own header figure, so
     // they stay out of the tier counts entirely: a count is a promise about
     // what its section holds.
-    if (e.rift) continue;
+    if (!isNormalAccessory(e)) continue;
     reachCounts[e.attainability] += 1;
     if (e.foldedBehind === null) nextStepCounts[e.attainability] += 1;
   }
@@ -472,18 +597,56 @@ export function composeSnapshot(
   const magicalPower = ownedKnown
     ? computeMagicalPower(sets.held, catalogue, chainIndex, { ...mpInputs, uncatalogued })
     : null;
+  const active = ownedKnown ? activeAccessories(sets.held, chainIndex) : new Set<string>();
+  const statTotals = new Map<string, number>();
+  const enrichmentTotals = new Map<string, number>();
+
+  for (const id of active) {
+    const stats = catalogue.byId[id]?.stats;
+    if (stats) {
+      for (const [key, raw] of Object.entries(stats)) {
+        if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+        const normalizedKey = key.trim().toLowerCase();
+        if (!normalizedKey) continue;
+        statTotals.set(normalizedKey, (statTotals.get(normalizedKey) ?? 0) + raw);
+      }
+    }
+
+    const enrichment = ownedBag?.enrichments.get(id);
+    if (enrichment) enrichmentTotals.set(enrichment, (enrichmentTotals.get(enrichment) ?? 0) + 1);
+  }
+
+  const statContributions = [...statTotals]
+    .filter(([, value]) => value !== 0)
+    .map(([key, value]) => ({ key, value }))
+    .sort((left, right) => left.key.localeCompare(right.key));
+  const enrichments = [...enrichmentTotals]
+    .map(([key, count]) => ({ key, count }))
+    .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key));
+  const ambiguousEnrichments = ownedBag
+    ? [...ownedBag.ambiguousEnrichments].filter((id) => active.has(id)).length
+    : 0;
 
   return {
     entries,
     ownedKnown,
     counts: { total: catalogue.entries.length, owned, missing, locked },
+    normalCounts,
     riftCounts,
     sourceCounts,
+    normalSourceCounts,
     requirementCounts,
     reachCounts,
     nextStepCounts,
     foldedCount,
     magicalPower,
+    activeCount: ownedKnown ? active.size : null,
+    activeRecombobulated: ownedKnown
+      ? [...active].filter((id) => mpInputs.recombobulated.has(id)).length
+      : null,
+    statContributions,
+    enrichments,
+    ambiguousEnrichments,
     recombobulated: mpInputs.recombobulated,
     groupCounts,
     unresolvedCollections,
@@ -503,6 +666,7 @@ const listeners = new Set<() => void>();
 let catalogue: AccessoryCatalogue | null = null;
 let collectionKeys = new Map<string, string>();
 let ownedIds: string[] | null = null;
+let ownedBag: OwnedBag | null = null;
 /** Recombed stacks, the prism flag and the contact count, from the profile. */
 let mpInputs: MagicalPowerInputs = NO_MP_INPUTS;
 let sources: SourceIndex = {};
@@ -523,7 +687,7 @@ const publish = () => {
   snapshot = catalogue
     ? composeSnapshot(
         catalogue, ownedIds, sources, progress, collectionKeys, loading, error, player, chains,
-        locationSignals, locationGroups, eventKeys, mpInputs
+        locationSignals, locationGroups, eventKeys, mpInputs, ownedBag
       )
     : { ...EMPTY, loading, error };
   for (const fn of listeners) fn();
@@ -564,7 +728,7 @@ const rebuildCatalogue = () => {
     return;
   }
 
-  catalogue = buildAccessoryCatalogue(list, items);
+  catalogue = buildAccessoryCatalogue(list, items, adminItemsStore.getSnapshot().names);
   collectionKeys = buildCollectionKeys(items);
   loading = false;
   error = itemsError;
@@ -756,8 +920,10 @@ export const refreshOwned = async (force = false): Promise<void> => {
     // goes first rather than being shown against the new player's name.
     cachedFor = identity;
     ownedIds = null;
+    ownedBag = null;
     mpInputs = NO_MP_INPUTS;
     progress = NO_COLLECTIONS;
+    player = NO_PROGRESS;
     bagReadAt = 0;
     setApiBioanalysis(null);
     publish();
@@ -771,20 +937,16 @@ export const refreshOwned = async (force = false): Promise<void> => {
   try {
     const result = await fetchProfileMember({ uuid: access.uuid, name: access.name }, access.key, access.profileId);
     if (!result.ok) {
-      // Deliberately not an error banner. A rejected key or a private profile
-      // leaves the catalogue perfectly usable, and the page already says
-      // plainly that no bag was read.
-      ownedIds = null;
-      mpInputs = NO_MP_INPUTS;
-      progress = NO_COLLECTIONS;
-      player = NO_PROGRESS;
-      setApiBioanalysis(null);
-      publish();
+      // A refresh failure says nothing new about a bag already read for this
+      // same identity. Keep that last-good answer, matching the shared Profile
+      // snapshot's stale-on-error rule. A profile switch cleared the old
+      // identity above, so this cannot leak one player's ownership into another.
       return;
     }
 
     bagReadAt = result.fetchedAt ?? Date.now();
     const bag = await readOwnedFromMember(result.value.member);
+    ownedBag = bag;
     ownedIds = bag?.ids ?? null;
     // Everything the MP model detects, off the member we already hold: the
     // recombed stacks from the bag NBT, the consumed-prism flag and the
@@ -821,17 +983,94 @@ const subscribe = (fn: () => void) => {
   // The item index is the floor everything else stands on, so the catalogue is
   // rebuilt whenever it publishes. Unsubscribing from it is part of teardown.
   const stopRecipes = recipesStore.subscribe(rebuildCatalogue);
+  const stopAdmin = adminItemsStore.subscribe(rebuildCatalogue);
   rebuildCatalogue();
   void refreshOwned();
 
   return () => {
     listeners.delete(fn);
     stopRecipes();
+    stopAdmin();
   };
 };
 
-export const useAccessories = (): AccessoriesSnapshot =>
-  useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+/**
+ * Public Profile Viewer subscriptions need the shared catalogue and wiki
+ * classifications, but must never trigger or consume the visitor's saved
+ * accessory-bag reader. The composed result below supplies the viewed
+ * profile's bag explicitly and keeps personal progression neutral.
+ */
+const subscribeCatalogueOnly = (fn: () => void) => {
+  listeners.add(fn);
+  const stopRecipes = recipesStore.subscribe(rebuildCatalogue);
+  const stopAdmin = adminItemsStore.subscribe(rebuildCatalogue);
+  rebuildCatalogue();
+
+  return () => {
+    listeners.delete(fn);
+    stopRecipes();
+    stopAdmin();
+  };
+};
+
+export interface CachedMagicalPowerInputs {
+  /** Sanitized profile value retained beside the decoded bag snapshot. */
+  abiphoneContacts?: number | null;
+  /** Sanitized permanent Rift Prism flag retained beside the decoded bag snapshot. */
+  consumedPrism?: boolean;
+}
+
+export interface AccessoriesReadOptions {
+  /** Keep a supplied public-profile bag isolated from the visitor's saved account and progression. */
+  isolatedProfile?: boolean;
+}
+
+export const useAccessories = (
+  parsedBag?: OwnedBag,
+  cachedProfileInputs: CachedMagicalPowerInputs = {},
+  options: AccessoriesReadOptions = {},
+): AccessoriesSnapshot => {
+  const isolated = options.isolatedProfile === true;
+  const shared = useSyncExternalStore(isolated ? subscribeCatalogueOnly : subscribe, getSnapshot, getSnapshot);
+
+  return useMemo(() => {
+    if (!isolated && (shared.ownedKnown || parsedBag === undefined || catalogue === null)) return shared;
+
+    if (catalogue === null) {
+      return { ...EMPTY, loading: shared.loading, error: shared.error };
+    }
+
+    // The decoded profile cache is a real bag read, not a catalogue guess. It
+    // carries the same per-stack rarity and enrichment facts as the direct
+    // reader. Sanitized profile-only bonuses are supplied beside that bag when
+    // they were retained by the cached profile model.
+    const cachedInputs: MagicalPowerInputs = parsedBag
+      ? {
+          ...NO_MP_INPUTS,
+          abiphoneContacts: cachedProfileInputs.abiphoneContacts ?? null,
+          consumedPrism: cachedProfileInputs.consumedPrism ?? false,
+          recombobulated: parsedBag.recombobulated,
+          bagTiers: parsedBag.tiers,
+        }
+      : NO_MP_INPUTS;
+    return composeSnapshot(
+      catalogue,
+      parsedBag?.ids ?? null,
+      sources,
+      isolated ? NO_COLLECTIONS : progress,
+      collectionKeys,
+      shared.loading,
+      shared.error,
+      isolated ? NO_PROGRESS : player,
+      chains,
+      locationSignals,
+      locationGroups,
+      eventKeys,
+      cachedInputs,
+      parsedBag ?? null,
+    );
+  }, [cachedProfileInputs.abiphoneContacts, cachedProfileInputs.consumedPrism, isolated, parsedBag, shared]);
+};
 
 /** Read outside React, for anything that is not a component. */
 export const currentAccessories = (): AccessoriesSnapshot => snapshot;

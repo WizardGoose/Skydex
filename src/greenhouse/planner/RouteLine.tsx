@@ -12,7 +12,7 @@ import { LABEL, NUM, TILE, TILE_HOVER } from "../../ui/kit";
 
 /**
  * The Line: the plan rendered the way a chess engine shows its principal
- * variation, one board per move (design: docs/route-engine-design.md).
+ * variation, one board per move.
  *
  * A move is a planting inside a cycle. Each card shows the plot that move
  * actually sows, sized the way the bill costed it, with the move's expected
@@ -202,7 +202,7 @@ export const RouteLine: React.FC<{
            * rule). The openable card takes the hover variant;
            * a covered move is not a destination and stays a plain TILE.
            */
-          const shell = `flex w-40 shrink-0 flex-col gap-1 p-2.5 text-left`;
+          const shell = `sd-route-card flex w-40 shrink-0 flex-col gap-1 p-2.5 text-left`;
           return openable ? (
             <button
               key={`${move.cycleIndex}-${move.node.id}`}

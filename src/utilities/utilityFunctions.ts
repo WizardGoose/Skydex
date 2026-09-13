@@ -68,10 +68,31 @@ export function debounce<TArgs extends unknown[], TReturn>(func: (...args: TArgs
 }
 
 // Stat icon configurations for color mapping
+export type SkyBlockStatColorClass =
+  | "text-stat-white"
+  | "text-stat-red"
+  | "text-stat-dark-red"
+  | "text-stat-green"
+  | "text-stat-dark-green"
+  | "text-stat-blue"
+  | "text-stat-aqua"
+  | "text-stat-dark-aqua"
+  | "text-stat-gold"
+  | "text-stat-yellow"
+  | "text-stat-light-purple"
+  | "text-stat-dark-purple";
+
 interface StatIconConfig {
-  color: string;
+  color: SkyBlockStatColorClass;
   keywords: readonly string[];
-  specific?: Record<string, string>;
+  specific?: Record<string, SkyBlockStatColorClass>;
+  percent?: boolean;
+}
+
+export interface SkyBlockStatPresentation {
+  glyph: string;
+  colorClass: SkyBlockStatColorClass;
+  percent: boolean;
 }
 
 // Stat colours are game data, not theme.
@@ -90,57 +111,127 @@ interface StatIconConfig {
 // are those same Minecraft colour names. Where this map disagreed with the
 // game it has been corrected, not preserved.
 const STAT_ICON_CONFIG: Record<string, StatIconConfig> = {
-  "❤": { color: "text-stat-red", keywords: ["Health"] },
-  "❁": { color: "text-stat-red", keywords: ["Strength", "Damage"] },
+  "❤": { color: "text-stat-red", keywords: ["Health", "Rift Health", "Hearts"] },
+  "❁": {
+    color: "text-stat-red",
+    keywords: ["Strength", "Damage"],
+    specific: { "Rift Damage": "text-stat-dark-purple" },
+  },
+  "☣": { color: "text-stat-blue", keywords: ["Crit Chance", "Critical Chance"], percent: true },
   // Crit Damage is &9 blue in game, not red. Same code as the Rare tier.
-  "☠": { color: "text-stat-blue", keywords: ["Crit Damage"] },
+  "☠": { color: "text-stat-blue", keywords: ["Crit Damage", "Critical Damage"], percent: true },
   // Vitality is &4 dark red; Heat Resistance shares the glyph but is &c red.
   "♨": { color: "text-stat-dark-red", keywords: ["Vitality"], specific: { "Heat Resistance": "text-stat-red" } },
   "❈": { color: "text-stat-green", keywords: ["Defense"] },
   // Health Regen is &c red in game. It is a health stat, not a defense one.
-  "❣": { color: "text-stat-red", keywords: ["Health Regen"] },
+  "❣": { color: "text-stat-red", keywords: ["Health Regen", "Health Regeneration"] },
   "∮": { color: "text-stat-dark-green", keywords: ["Sweep"] },
+  "ൠ": { color: "text-stat-dark-green", keywords: ["Bonus Pest Chance"], percent: true },
   // Intelligence is &b aqua. It was blue here, which is Crit Damage's colour.
   "✎": { color: "text-stat-aqua", keywords: ["Intelligence"] },
-  "α": { color: "text-stat-dark-aqua", keywords: ["Sea Creature Chance"] },
+  "⚡": { color: "text-stat-aqua", keywords: ["Mana Regen"] },
+  "ф": { color: "text-stat-green", keywords: ["Rift Time"] },
+  "α": { color: "text-stat-dark-aqua", keywords: ["Sea Creature Chance"], percent: true },
   "⚓": { color: "text-stat-blue", keywords: ["Double Hook Chance"] },
   "⚶": { color: "text-stat-dark-aqua", keywords: ["Respiration"] },
   "☂": { color: "text-stat-aqua", keywords: ["Fishing Speed"] },
   "❍": { color: "text-stat-blue", keywords: ["Pressure Resistance"] },
+  "❄": { color: "text-stat-aqua", keywords: ["Cold Resistance", "Cold"] },
   // Every skill Fortune is &6 gold. Hunter Fortune is the odd one out at &d.
   "☘": {
-    color: "text-stat-light-purple",
-    keywords: ["Hunter Fortune"],
+    color: "text-stat-gold",
+    keywords: [
+      "Mining Fortune",
+      "Farming Fortune",
+      "Foraging Fortune",
+      "Fig Fortune",
+      "Mangrove Fortune",
+      "Helix Fortune",
+      "Block Fortune",
+      "Gemstone Fortune",
+      "Ore Fortune",
+      "Dwarven Metal Fortune",
+      "Crop Fortune",
+      "Wheat Fortune",
+      "Carrot Fortune",
+      "Potato Fortune",
+      "Pumpkin Fortune",
+      "Melon Fortune",
+      "Melon Slice Fortune",
+      "Mushroom Fortune",
+      "Cactus Fortune",
+      "Sugar Cane Fortune",
+      "Nether Stalk Fortune",
+      "Nether Wart Fortune",
+      "Cocoa Beans Fortune",
+      "Moonflower Fortune",
+      "Sunflower Fortune",
+      "Wild Rose Fortune",
+      "Crafting Fortune",
+    ],
     specific: {
-      "Mining Fortune": "text-stat-gold",
-      "Farming Fortune": "text-stat-gold",
-      "Foraging Fortune": "text-stat-gold",
-      "Fig Fortune": "text-stat-gold",
-      "Mangrove Fortune": "text-stat-gold",
-      "Block Fortune": "text-stat-gold",
-      "Overbloom": "text-stat-yellow",
+      "Hunter Fortune": "text-stat-light-purple",
     },
   },
   // Attack Speed is &e yellow. This is the entry that was rendering blue.
-  "⚔": { color: "text-stat-yellow", keywords: ["Bonus Attack Speed", "Attack Speed"] },
+  "⚔": { color: "text-stat-yellow", keywords: ["Bonus Attack Speed", "Attack Speed"], percent: true },
   "✯": { color: "text-stat-aqua", keywords: ["Magic Find"] },
   // Trophy and Mining Speed are &6 gold, which is a warmer orange-gold than
   // the &e yellow above. The game splits them, so this map does too.
-  "♔": { color: "text-stat-gold", keywords: ["Trophy Fish Chance"] },
+  "♔": { color: "text-stat-gold", keywords: ["Trophy Chance", "Trophy Fish Chance"], percent: true },
+  "⛃": { color: "text-stat-gold", keywords: ["Treasure Chance"], percent: true },
   "⸕": { color: "text-stat-gold", keywords: ["Mining Speed"] },
   "☀": { color: "text-stat-yellow", keywords: ["Overbloom"] },
   "♣": { color: "text-stat-light-purple", keywords: ["Pet Luck"] },
   // Every Wisdom is &3 dark aqua. This was purple, so it would have gone blue.
   "☯": {
     color: "text-stat-dark-aqua",
-    keywords: ["Foraging Wisdom", "Fishing Wisdom", "Hunting Wisdom", "Mining Wisdom", "Farming Wisdom", "Enchanting Wisdom", "Taming Wisdom", "Combat Wisdom", "Wisdom"],
+    keywords: [
+      "Alchemy Wisdom",
+      "Carpentry Wisdom",
+      "Combat Wisdom",
+      "Enchanting Wisdom",
+      "Farming Wisdom",
+      "Fishing Wisdom",
+      "Foraging Wisdom",
+      "Global Wisdom",
+      "Hunting Wisdom",
+      "Mining Wisdom",
+      "Runecrafting Wisdom",
+      "Social Wisdom",
+      "Taming Wisdom",
+      "Wisdom",
+    ],
   },
-  "✦": { color: "text-stat-white", keywords: ["Speed"] },
+  "✦": { color: "text-stat-white", keywords: ["Speed", "Walk Speed"] },
   "❂": { color: "text-stat-white", keywords: ["True Defense"] },
   // Pristine is &5 dark purple in game, the same code as the Epic tier.
   "✧": { color: "text-stat-dark-purple", keywords: ["Pristine"] },
   "❃": { color: "text-stat-light-purple", keywords: ["Tracking"] },
   "✿": { color: "text-stat-dark-green", keywords: ["Mythological"] },
+};
+
+const normalizedStatName = (value: string): string => value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const STAT_PRESENTATION_OVERRIDES: Readonly<Record<string, SkyBlockStatPresentation>> = {
+  // Fear shares Crit Damage's skull, but not its blue colour or percentage unit.
+  fear: { glyph: "☠", colorClass: "text-stat-dark-purple", percent: false },
+};
+
+/** Resolve the icon and Minecraft colour assigned to an exact SkyBlock stat. */
+export const skyBlockStatPresentation = (name: string): SkyBlockStatPresentation | null => {
+  const normalized = normalizedStatName(name);
+  const override = STAT_PRESENTATION_OVERRIDES[normalized];
+  if (override) return override;
+  for (const [glyph, config] of Object.entries(STAT_ICON_CONFIG)) {
+    for (const [specificName, colorClass] of Object.entries(config.specific ?? {})) {
+      if (normalizedStatName(specificName) === normalized) return { glyph, colorClass, percent: config.percent ?? false };
+    }
+    if (config.keywords.some((keyword) => normalizedStatName(keyword) === normalized)) {
+      return { glyph, colorClass: config.color, percent: config.percent ?? false };
+    }
+  }
+  return null;
 };
 
 const RARITY_COLORS = {

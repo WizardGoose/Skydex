@@ -1,10 +1,28 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Coffee, Github, Menu, Settings, X } from "lucide-react";
+import { Bug, Coffee, Github, Menu, Settings, X } from "lucide-react";
 import { FOCUS } from "../../ui/kit";
 import { Wordmark } from "../../ui/Wordmark";
 import { parseGreenhouseHash } from "../../greenhouse/route";
 import { SETTINGS_PARAM, settingsLocation } from "./settingsRoute";
+
+const BUG_REPORT_URL = `https://github.com/WizardGoose/Skydex/issues/new?${new URLSearchParams({
+  title: "Skydex bug report",
+  body: `<!-- BUG BUG BUG!!! GROSS FREAKIN' BUG!!! Oh wait, I could be freaking out for no reason if its a suggestion... -->
+
+### What needs'a fixin'?
+<!-- Anything other than adding more explosives, that is being taken care of, what would you like to see changed/fixed? -->
+
+
+### Setup/Settings?
+<!-- For calculators, include the item/mutation/shard & other settings if you've changed them.  -->
+
+
+### Screenshot?
+<!-- Providing a screenshot really really helps me understand better as I am more visual, and also providing if you're using an iPhone / Safari or PC / Chrome greatly helps! -->
+
+`,
+})}`;
 
 /**
  * The masthead, ported from the design bench (the glass re-vamp).
@@ -16,15 +34,11 @@ import { SETTINGS_PARAM, settingsLocation } from "./settingsRoute";
  *
  * The glass itself is `.sd-bar`: the shared theme's 76% -> 64% ground tint,
  * strongly blurred with a 2px stroke on
- * the bottom edge. Height is the `--sd-bar-h` token (68px): the mock's canvas
- * puts the bar at ~7.4% of viewport height, which is an ~80px masthead you
- * notice more than the page; 68px keeps the drawing's wordmark-to-bar
- * proportion at a size that behaves like site chrome.
+ * the bottom edge. Height is the `--sd-bar-h` token (52px), keeping the
+ * wordmark and full-height section targets compact without crowding them.
  *
  * What the bench did not have to carry, and this bar does:
  *
- *   - The tools strip (Greenhouse's Planner/Solver/Designer, Shards' four).
- *     Real function, kept as a slim second strip under the bar.
  *   - A working mobile menu. The bench deferred narrow viewports outright.
  *
  * The Ironman/Normal toggle is deliberately NOT here.
@@ -35,6 +49,7 @@ import { SETTINGS_PARAM, settingsLocation } from "./settingsRoute";
 
 interface Section {
   label: string;
+  title?: string;
   path: string;
   /** Any route starting with one of these belongs to this section. */
   match: string[];
@@ -50,46 +65,59 @@ interface Section {
  * rendered as a tab, which is also what makes the dashboard state read
  * correctly: no section is highlighted, because the logo is what is selected.
  */
-export const SECTIONS: Section[] = [
+const SECTIONS: Section[] = [
   { label: "Dashboard", path: "/", match: ["/", "/dashboard"], tools: [] },
   {
     /* No tools row, deliberately -
        the profile page carries its own tab bar, Accessories included. */
     label: "Profile",
-    path: "/island",
-    match: ["/island", "/accessories"],
+    path: "/profile",
+    match: ["/profile", "/pv", "/accessories"],
     tools: [],
   },
-  { label: "Crafting", path: "/items", match: ["/items"], tools: [] },
-  { label: "Forge", path: "/forge", match: ["/forge"], tools: [] },
+  { label: "Recipes", path: "/recipes", match: ["/recipes", "/crafting", "/items", "/forge"], tools: [] },
+  {
+    label: "Storage",
+    path: "/storage",
+    match: ["/storage", "/island"],
+    tools: [],
+  },
   {
     label: "Greenhouse",
     path: "/greenhouse",
     match: ["/greenhouse"],
-    tools: [
-      { label: "Planner", path: "/greenhouse#planner" },
-      { label: "Solver", path: "/greenhouse#solver" },
-      { label: "Designer", path: "/greenhouse#designer" },
-    ],
+    tools: [],
   },
   {
     label: "Shards",
-    path: "/fusion",
-    match: ["/fusion", "/recipes", "/shards", "/fusion-lines"],
-    tools: [
-      { label: "Fusion", path: "/fusion" },
-      { label: "Recipes", path: "/recipes" },
-      /* "Overview" is the honest label: the page is per-shard rates and
-         reference, and the old label "Owned" promised an inventory it never
-         held (the real owned list lives in Fusion's Manage Inventory). */
-      { label: "Overview", path: "/shards" },
-      { label: "Lines", path: "/fusion-lines" },
-    ],
+    path: "/shards",
+    match: ["/fusion", "/shard-recipes", "/shards", "/fusion-lines"],
+    tools: [],
   },
 ];
 
 /** The tabs actually drawn. See the SECTIONS comment: Dashboard is the logo. */
 const TAB_SECTIONS = SECTIONS.filter((s) => s.label !== "Dashboard");
+
+const SECTION_WARMUPS: Readonly<Record<string, () => Promise<unknown>>> = {
+  "/profile": () => import("../../profile-view/ProfileView"),
+  "/recipes": () => import("../../pages/ItemsPage"),
+  "/storage": () => import("../../pages/StoragePage"),
+  "/greenhouse": () => Promise.all([
+    import("../../greenhouse/GreenhouseShell"),
+    import("../../greenhouse/pages/PlannerPage"),
+  ]),
+  "/shards": () => import("../../pages/SettingsPage"),
+};
+const warmedSections = new Set<string>();
+
+/** Start the existing route import while the pointer is already travelling. */
+const warmSection = (path: string) => {
+  const load = SECTION_WARMUPS[path];
+  if (!load || warmedSections.has(path)) return;
+  warmedSections.add(path);
+  void load().catch(() => warmedSections.delete(path));
+};
 
 /**
  * The section the current route belongs to, or null on a page outside every
@@ -97,7 +125,7 @@ const TAB_SECTIONS = SECTIONS.filter((s) => s.label !== "Dashboard");
  * as a prefix, because `startsWith("//")` is true for no real path.
  */
 const sectionFor = (pathname: string): Section | null => {
-  const hit = SECTIONS.filter((s) => s.match.some((m) => pathname === m || pathname.startsWith(`${m}/`))).sort(
+  const hit = SECTIONS.filter((section) => section.match.some((match) => pathname === match || pathname.startsWith(`${match}/`))).sort(
     (a, b) => Math.max(...b.match.map((m) => m.length)) - Math.max(...a.match.map((m) => m.length))
   )[0];
   return hit ?? null;
@@ -122,8 +150,12 @@ export const Navigation: React.FC = () => {
       <Link
         key={s.path}
         to={s.path}
+        onPointerEnter={() => warmSection(s.path)}
+        onFocus={() => warmSection(s.path)}
         onClick={() => setOpen(false)}
         aria-current={on ? "page" : undefined}
+        aria-label={s.title}
+        title={s.title}
         style={{
           fontFamily: "var(--font-chrome)",
           fontWeight: on ? 800 : 700,
@@ -192,13 +224,23 @@ export const Navigation: React.FC = () => {
               row the bar's height fixes the target and the rule together, and
               moves nothing horizontally. */}
           <div
-            className="hidden h-full min-w-0 items-center gap-3.5 md:flex lg:gap-5"
+            className="hidden h-full min-w-0 items-center gap-3 md:flex lg:gap-4"
             style={{ paddingLeft: "var(--sd-inset)" }}
           >
             {TAB_SECTIONS.map(tab)}
           </div>
 
           <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
+            <a
+              href={BUG_REPORT_URL}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Report a bug on GitHub"
+              title="Report a bug on GitHub"
+              className={`cursor-pointer rounded-md p-2 text-slate-300 transition-colors hover:bg-white/8 hover:text-slate-50 active:translate-y-px ${FOCUS}`}
+            >
+              <Bug className="h-[18px] w-[18px]" />
+            </a>
             <a
               href="https://github.com/WizardGoose/Skydex"
               target="_blank"
@@ -252,7 +294,7 @@ export const Navigation: React.FC = () => {
            comes from the same token the offset adds, so the two cannot
            disagree. */
         <div
-          className="sd-tools hidden h-[var(--sd-tools-h)] items-center gap-4 border-b border-white/10 bg-black/25 md:flex"
+          className="sd-tools relative z-10 hidden h-[var(--sd-tools-h)] items-center gap-4 border-b border-white/10 bg-black/25 md:flex"
           style={{ paddingLeft: "calc(var(--sd-col) + var(--sd-inset))" }}
         >
           {active.tools.map((t) => {
@@ -278,7 +320,7 @@ export const Navigation: React.FC = () => {
       )}
 
       {open && (
-        <div className="space-y-2 border-t border-white/10 bg-slate-950/95 px-3 py-2 md:hidden">
+        <div className="relative z-10 space-y-2 border-t border-white/10 bg-slate-950/95 px-3 py-2 md:hidden">
           {TAB_SECTIONS.map((s) => (
             <div key={s.path}>
               <Link
@@ -315,6 +357,11 @@ export const Navigation: React.FC = () => {
               )}
             </div>
           ))}
+          <a href={BUG_REPORT_URL} target="_blank" rel="noreferrer" aria-label="Report a bug on GitHub"
+            onClick={() => setOpen(false)}
+            className={`flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-[13px] text-slate-300 hover:text-slate-50 ${FOCUS}`}>
+            <Bug className="h-3.5 w-3.5" />Report a bug
+          </a>
           <a
             href="https://github.com/WizardGoose/Skydex"
             target="_blank"

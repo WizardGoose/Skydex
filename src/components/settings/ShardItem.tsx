@@ -48,7 +48,7 @@ export const ShardItem: React.FC<ShardItemProps> = React.memo(({ shard, title, d
 
   return (
     <div
-      className="bg-white/5 border border-white/10 rounded-md p-3 hover:bg-white/10 transition-colors duration-200 flex"
+      className="sd-shard-rate-card bg-white/5 border border-white/10 rounded-md p-3 hover:bg-white/10 transition-colors duration-200 flex"
       onClick={onCardClick}
       tabIndex={onCardClick ? 0 : undefined}
       role={onCardClick ? "button" : undefined}

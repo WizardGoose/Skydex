@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  ACQUISITION_LABEL,
+  ACQUISITION_ORDER,
+  acquisitionGroupOf,
   filterEntries,
   filterIsIdle,
   groupForDisplay,
@@ -9,6 +12,13 @@ import {
 } from "../group";
 import type { AccessoryView } from "../types";
 
+const route = (category: AccessoryView["acquisition"]["category"]): AccessoryView["acquisition"] => ({
+  category,
+  detail: null,
+  alternatives: [],
+  evidence: "fallback",
+});
+
 const view = (over: Partial<AccessoryView> & { id: string }): AccessoryView => ({
   name: over.id,
   tier: null,
@@ -16,6 +26,8 @@ const view = (over: Partial<AccessoryView> & { id: string }): AccessoryView => (
   familyRank: null,
   itemId: null,
   craftable: false,
+  recipe: null,
+  recipeYields: 1,
   unlocks: null,
   requirements: [],
   checked: [],
@@ -26,10 +38,13 @@ const view = (over: Partial<AccessoryView> & { id: string }): AccessoryView => (
   attainability: "unknownReach",
   status: "missing",
   source: "wiki",
+  acquisition: route("needsReview"),
+  readiness: { kind: "unknown", label: "Acquisition route still needs review." },
   blockedBy: null,
   coveredByFamily: false,
   foldedBehind: null,
   foldedHigher: [],
+  ownedPrerequisite: null,
   eventKey: null,
   ...over,
 });
@@ -142,36 +157,86 @@ describe("filterEntries", () => {
 
 describe("groupForDisplay", () => {
   const entries: AccessoryView[] = [
-    view({ id: "a", status: "missing", attainability: "now" }),
-    view({ id: "b", status: "owned", attainability: "now" }),
-    view({ id: "c", status: "locked", attainability: "soon" }),
-    view({ id: "d", status: "owned", attainability: "long" }),
-    view({ id: "e", status: "missing", attainability: "long" }),
+    view({ id: "a", status: "missing", acquisition: route("collections") }),
+    view({ id: "b", status: "owned", acquisition: route("collections") }),
+    view({ id: "c", status: "locked", acquisition: route("slayer") }),
+    view({ id: "d", status: "owned", acquisition: route("events") }),
+    view({ id: "e", status: "missing", acquisition: route("needsReview") }),
   ];
 
-  it("splits by how far away things are, with owned collapsed out", () => {
+  it("uses stable acquisition routes, with owned collapsed out", () => {
     /*
-     * The page's question is "what can I get right now", so the sections are
-     * the answer to it rather than a description of state. A locked item is not
-     * a section any more: it lands in the tier its requirement gap puts it in
-     * and carries the requirement on its tile.
+     * The page's question is "how do I get this", so parser-confidence labels
+     * never become headings. Readiness remains on the tile instead of moving
+     * an item between route sections as the profile changes.
      */
     const grouped = groupForDisplay(entries, true);
     expect(grouped.mode).toBe("reach");
     if (grouped.mode !== "reach") throw new Error("expected a reach split");
 
-    expect(grouped.tiers.map((t) => t.tier)).toEqual(["now", "soon", "long"]);
-    expect(grouped.tiers[0].entries.map((e) => e.id)).toEqual(["a"]);
-    expect(grouped.tiers[1].entries.map((e) => e.id)).toEqual(["c"]);
-    expect(grouped.tiers[2].entries.map((e) => e.id)).toEqual(["e"]);
-    // Owned never enters a tier: it has no distance left to describe.
+    expect(grouped.groups.map((section) => section.group)).toEqual(["collections", "slayer", "needsReview"]);
+    expect(grouped.groups[0].entries.map((e) => e.id)).toEqual(["a"]);
+    expect(grouped.groups[1].entries.map((e) => e.id)).toEqual(["c"]);
+    expect(grouped.groups[2].entries.map((e) => e.id)).toEqual(["e"]);
+    // Owned never enters an acquisition group: there is nothing left to get.
     expect(grouped.owned.map((e) => e.id)).toEqual(["b", "d"]);
   });
 
-  it("drops empty tiers rather than rendering blank headings", () => {
+  it("uses the exact requested labels and order", () => {
+    expect(ACQUISITION_ORDER.map((group) => ACQUISITION_LABEL[group])).toEqual([
+      "Collections",
+      "Upgrade paths",
+      "Slayer",
+      "Dungeons",
+      "Kuudra",
+      "Mining & Forge",
+      "Garden & farming",
+      "Fishing",
+      "Dragons & Draconic Altar",
+      "Quests",
+      "NPC shops",
+      "Mob & RNG drops",
+      "Shen's Auction",
+      "Events",
+      "Dark Auction",
+      "General crafting",
+      "Legacy / unobtainable",
+      "Needs review",
+    ]);
+  });
+
+  it("groups on the classified route rather than the old reach estimate", () => {
+    const routes: AccessoryView[] = [
+      view({ id: "collection", acquisition: route("collections"), attainability: "long" }),
+      view({ id: "upgrade", acquisition: route("upgradePaths"), status: "locked", attainability: "soon" }),
+      view({ id: "event", acquisition: route("events"), status: "locked", attainability: "now" }),
+      view({ id: "shen", acquisition: route("shensAuction"), attainability: "now" }),
+      view({ id: "review", acquisition: route("needsReview"), attainability: "now" }),
+    ];
+
+    expect(routes.map(acquisitionGroupOf)).toEqual([
+      "collections",
+      "upgradePaths",
+      "events",
+      "shensAuction",
+      "needsReview",
+    ]);
+
+    const grouped = groupForDisplay(routes, true);
+    if (grouped.mode !== "reach") throw new Error("expected a reach split");
+    expect(grouped.groups.map((section) => section.group)).toEqual([
+      "collections",
+      "upgradePaths",
+      "shensAuction",
+      "events",
+      "needsReview",
+    ]);
+  });
+
+  it("drops empty groups rather than rendering blank headings", () => {
     const grouped = groupForDisplay([view({ id: "a", attainability: "now" })], true);
     if (grouped.mode !== "reach") throw new Error("expected a reach split");
-    expect(grouped.tiers).toHaveLength(1);
+    expect(grouped.groups).toHaveLength(1);
   });
 
   /**
@@ -197,83 +262,65 @@ describe("groupForDisplay", () => {
     expect(entries).toEqual(original);
   });
 
-  /**
-   * The Rift split. A Rift accessory works only inside the Rift, so it never
-   * pads the reach tiers or the Owned band: its own two sections at the
-   * bottom are the only place it appears, split missing/owned only.
-   */
-  it("pulls Rift accessories out of every tier and into their own band", () => {
+  it("excludes Rift-only accessories while retaining transferable ones", () => {
     const withRift: AccessoryView[] = [
       view({ id: "wolf", status: "missing", attainability: "now" }),
       view({ id: "crux-1", rift: true, status: "missing", attainability: "now" }),
       view({ id: "crux-2", rift: true, status: "locked", attainability: "soon" }),
-      view({ id: "iq", rift: true, status: "owned", attainability: "now" }),
+      view({ id: "iq", rift: true, riftTransferable: true, status: "owned", attainability: "now" }),
       view({ id: "owned-normal", status: "owned", attainability: "now" }),
     ];
 
     const grouped = groupForDisplay(withRift, true);
     if (grouped.mode !== "reach") throw new Error("expected a reach split");
 
-    expect(grouped.tiers).toHaveLength(1);
-    expect(grouped.tiers[0].entries.map((e) => e.id)).toEqual(["wolf"]);
-    expect(grouped.owned.map((e) => e.id)).toEqual(["owned-normal"]);
-    // Locked rides with missing in the band: the tile still wears its lock.
-    expect(grouped.riftMissing.map((e) => e.id)).toEqual(["crux-1", "crux-2"]);
-    expect(grouped.riftOwned.map((e) => e.id)).toEqual(["iq"]);
-    expect(groupedTotal(grouped)).toBe(withRift.length);
+    expect(grouped.groups).toHaveLength(1);
+    expect(grouped.groups[0].entries.map((e) => e.id)).toEqual(["wolf"]);
+    expect(grouped.owned.map((e) => e.id)).toEqual(["iq", "owned-normal"]);
+    expect(groupedTotal(grouped)).toBe(3);
   });
 
-  it("separates Rift accessories even in the keyless catalogue", () => {
-    // "This one is a Rift accessory" is a fact about the item, not the
-    // player, so it needs no profile.
+  it("applies the same Rift-only exclusion in the keyless catalogue", () => {
     const withRift: AccessoryView[] = [
       view({ id: "wolf" }),
       view({ id: "crux-1", rift: true }),
+      view({ id: "iq", rift: true, riftTransferable: true }),
     ];
     const grouped = groupForDisplay(withRift, false);
     if (grouped.mode !== "catalogue") throw new Error("expected a flat catalogue");
-    expect(grouped.all.map((e) => e.id)).toEqual(["wolf"]);
-    expect(grouped.rift.map((e) => e.id)).toEqual(["crux-1"]);
+    expect(grouped.all.map((e) => e.id)).toEqual(["wolf", "iq"]);
     expect(groupedTotal(grouped)).toBe(2);
   });
 
-  /**
-   * The display rule: a rift-transferable accessory belongs both in the
-   * Rift area and outside it. Three cases, and the display duplication must
-   * never touch the entries array itself.
-   */
-  it("lists a rift-transferable in BOTH areas, in both shapes", () => {
+  it("lists each transferable exactly once on the normal page", () => {
     const entries: AccessoryView[] = [
-      // Rift-origin AND transferable: both areas.
+      // Rift-origin AND transferable: normal page.
       view({ id: "silver-fang", rift: true, riftTransferable: true, status: "missing", attainability: "now" }),
-      // Rift-origin only: the Rift area alone, exactly as before.
+      // Rift-origin only: future Rift tab, absent here.
       view({ id: "crux-1", rift: true, status: "missing", attainability: "now" }),
-      // Transferable but overworld-origin: its normal tier, plus the Rift area.
+      // Transferable but overworld-origin: normal page.
       view({ id: "cake-slice", riftTransferable: true, status: "missing", attainability: "now" }),
-      // Plain overworld accessory: its tier only.
+      // Plain overworld accessory: its acquisition group only.
       view({ id: "wolf", status: "missing", attainability: "now" }),
     ];
 
     const reach = groupForDisplay(entries, true);
     if (reach.mode !== "reach") throw new Error("expected a reach split");
-    expect(reach.tiers[0].entries.map((e) => e.id)).toEqual(["silver-fang", "cake-slice", "wolf"]);
-    expect(reach.riftMissing.map((e) => e.id)).toEqual(["silver-fang", "crux-1", "cake-slice"]);
+    expect(reach.groups[0].entries.map((e) => e.id)).toEqual(["silver-fang", "cake-slice", "wolf"]);
+    expect(groupedTotal(reach)).toBe(3);
 
     const catalogue = groupForDisplay(entries, false);
     if (catalogue.mode !== "catalogue") throw new Error("expected a flat catalogue");
     expect(catalogue.all.map((e) => e.id)).toEqual(["silver-fang", "cake-slice", "wolf"]);
-    expect(catalogue.rift.map((e) => e.id)).toEqual(["silver-fang", "crux-1", "cake-slice"]);
   });
 
-  it("keeps an owned transferable owned in both areas", () => {
+  it("keeps an owned Rift-origin transferable in normal ownership", () => {
     const entries: AccessoryView[] = [
       view({ id: "silver-fang", rift: true, riftTransferable: true, status: "owned" }),
     ];
     const reach = groupForDisplay(entries, true);
     if (reach.mode !== "reach") throw new Error("expected a reach split");
     expect(reach.owned.map((e) => e.id)).toEqual(["silver-fang"]);
-    expect(reach.riftOwned.map((e) => e.id)).toEqual(["silver-fang"]);
-    expect(reach.riftMissing).toHaveLength(0);
   });
 });
 

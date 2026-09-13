@@ -29,12 +29,14 @@ export interface ApiAccess {
   keyState: KeyState;
   checkedAt: number | null;
   /**
-   * When the key stops working, as a `YYYY-MM-DD` calendar date, or null when
-   * the player has not said.
+   * When the key stops working, as a precise millisecond expiry instant, or null when
+   * there is no date to count down to. Legacy `YYYY-MM-DD` values are read
+   * as local-midnight instants for compatibility.
    *
-   * Typed in rather than fetched, because Hypixel does not publish it. The
-   * `/key` endpoint that used to answer this was deprecated in June 2023 and
-   * removed that August, and nothing replaced it: the current spec at
+   * Stamped locally or typed rather than fetched, because Hypixel does not
+   * publish it. The `/key` endpoint that used to answer this was deprecated in
+   * June 2023 and removed that August, and nothing replaced it: the current
+   * spec at
    * api.hypixel.net lists 35 paths and none of them is a key endpoint. The
    * `RateLimit-*` response headers Hypixel points at instead do carry the limit
    * and the remaining budget, but not an expiry date, and they are unreadable
@@ -43,14 +45,16 @@ export interface ApiAccess {
    * spec safelists, and no rate limit header is among them. They are on the
    * wire and visible to curl; `headers.get` returns null for them in a browser.
    *
-   * So a field the player fills in is the honest option. A countdown invented
-   * from nothing is not, and a proxy to read the headers would mean handing
-   * somebody else's key to a server, which is the one thing this must not do.
+   * So a local date is the honest option. A newly typed key is conservatively
+   * stamped 47 hours ahead, matching Hypixel's 48 hour lifetime while giving
+   * up the last hour; the player can still correct or clear that date. A proxy
+   * to read the headers would mean handing somebody else's key to a server,
+   * which is the one thing this must not do.
    *
    * Optional in the strong sense. Null is a normal, permanent state and nothing
    * in the UI asks twice.
    */
-  keyExpiresOn: string | null;
+  keyExpiresAt: number | null;
   /** Undashed, the form Hypixel's `members` map is keyed by. */
   uuid: string;
   name: string;
@@ -64,14 +68,14 @@ export const withoutPersonalApiKey = (access: ApiAccess): ApiAccess => ({
   key: "",
   keyState: "unchecked",
   checkedAt: null,
-  keyExpiresOn: null,
+  keyExpiresAt: null,
 });
 
 const BLANK: ApiAccess = {
   key: "",
   keyState: "unchecked",
   checkedAt: null,
-  keyExpiresOn: null,
+  keyExpiresAt: null,
   uuid: "",
   name: "",
   profileId: null,
@@ -127,6 +131,19 @@ const parseCalendarDate = (iso: string): Date | null => {
   return at;
 };
 
+
+/** The local-midnight instant represented by a human-entered date. */
+export const expiryInstantForDate = (iso: string): number | null => parseCalendarDate(iso)?.getTime() ?? null;
+
+/** The local calendar date shown by the date-only control for an exact instant. */
+export const expiryDateForInstant = (instant: number | null): string | null => {
+  if (instant === null || !Number.isFinite(instant)) return null;
+  const at = new Date(instant);
+  if (Number.isNaN(at.getTime())) return null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return at.getFullYear() + "-" + pad(at.getMonth() + 1) + "-" + pad(at.getDate());
+};
+
 /**
  * How long is left, or null when there is nothing to count.
  *
@@ -139,12 +156,16 @@ const parseCalendarDate = (iso: string): Date | null => {
  * Pure, and takes `now` as an argument, so the thresholds are testable without
  * a clock.
  */
-export const readExpiry = (iso: string | null, now: number): KeyExpiry | null => {
-  if (!iso) return null;
-  const at = parseCalendarDate(iso);
+export const readExpiry = (expiresAt: number | string | null, now: number): KeyExpiry | null => {
+  if (expiresAt === null || expiresAt === "") return null;
+  const at =
+    typeof expiresAt === "number"
+      ? Number.isFinite(expiresAt)
+        ? expiresAt
+        : null
+      : expiryInstantForDate(expiresAt);
   if (at === null) return null;
-
-  const msLeft = at.getTime() - now;
+  const msLeft = at - now;
   return {
     msLeft,
     hoursLeft: Math.floor(msLeft / HOUR_MS),
@@ -180,30 +201,34 @@ export const expiryLabel = (expiry: KeyExpiry): string => {
 const STAMP_AHEAD_MS = 47 * HOUR_MS;
 
 /**
- * The calendar date to stamp beside a key that was just typed in.
+ * The legacy calendar date displayed beside a key just typed.
  *
- * The field holds `YYYY-MM-DD` and nothing finer, so the 47th hour has to land
- * on some day, and it lands on the UTC one: this is the instant 47 hours out,
- * read as a UTC calendar date.
- *
- * That rounding is the whole subtlety, and it is worth stating plainly because
- * `readExpiry` counts down to LOCAL midnight of the day named here. The margin
- * a reader actually sees therefore moves with their offset and with the hour
- * they pasted at. The stamp names the LOCAL calendar day, the same clock the
- * countdown reads, so the countdown always ends at or before the forty-seven
- * hour mark and never trusts a key past its real death; the remainder of the
- * hour of slack is simply given up. A field that cannot hold hours cannot
- * promise hours; what it can promise is that the key is never trusted on a
- * day it might already be dead.
+ * `keyExpiresAt` now stores the precise 47-hour instant. This helper remains
+ * date-only for the old date control and compatibility tests, deriving the
+ * local calendar date from that instant; exact countdowns use
+ * `expiryInstantForKey` instead.
  *
  * Pure, and takes `now`, so the arithmetic pins down in a test without a
- * clock. The same bargain `readExpiry` makes.
+ * clock.
  */
+export const expiryInstantForKey = (key: string, now: number): number | null =>
+  key.trim() ? now + STAMP_AHEAD_MS : null;
+
 export const stampExpiry = (now: number): string => {
-  const at = new Date(now + STAMP_AHEAD_MS);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return at.getFullYear() + "-" + pad(at.getMonth() + 1) + "-" + pad(at.getDate());
+  const date = expiryDateForInstant(now + STAMP_AHEAD_MS);
+  if (date === null) throw new Error("Cannot stamp an invalid expiry instant");
+  return date;
 };
+
+/**
+ * The expiry date that belongs beside a key edit.
+ *
+ * Kept here, at the shared credential boundary, so the tutorial and Settings
+ * cannot disagree about whether a freshly typed key gets the conservative
+ * 47-hour stamp. An empty input clears both halves of that one gesture.
+ */
+export const expiryDateForKey = (key: string, now: number): string | null =>
+  expiryDateForInstant(expiryInstantForKey(key, now));
 
 const read = (): ApiAccess => {
   if (typeof localStorage === "undefined") return BLANK;
@@ -212,16 +237,23 @@ const read = (): ApiAccess => {
     if (!raw) return BLANK;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return BLANK;
-    const p = parsed as Partial<Record<keyof ApiAccess, unknown>>;
+    const p = parsed as Partial<Record<keyof ApiAccess, unknown>> & { keyExpiresOn?: unknown };
+    const storedExpiry =
+      typeof p.keyExpiresAt === "number" && Number.isFinite(p.keyExpiresAt)
+        ? p.keyExpiresAt
+        : p.keyExpiresAt === null
+          ? null
+          : typeof p.keyExpiresOn === "string"
+            ? expiryInstantForDate(p.keyExpiresOn)
+            : null;
     return {
       key: typeof p.key === "string" ? p.key : "",
       keyState: p.keyState === "valid" || p.keyState === "invalid" ? p.keyState : "unchecked",
       checkedAt: typeof p.checkedAt === "number" && Number.isFinite(p.checkedAt) ? p.checkedAt : null,
       // Absent on every record written before this field existed, which is why
       // it is read defensively and never written back as anything but a valid
-      // date or null. Nothing is migrated and no other key is touched.
-      keyExpiresOn:
-        typeof p.keyExpiresOn === "string" && parseCalendarDate(p.keyExpiresOn) !== null ? p.keyExpiresOn : null,
+      // instant or null. Nothing else in the record is touched.
+      keyExpiresAt: storedExpiry,
       uuid: typeof p.uuid === "string" ? undash(p.uuid) : "",
       name: typeof p.name === "string" ? p.name : "",
       profileId: typeof p.profileId === "string" && p.profileId ? p.profileId : null,
@@ -238,7 +270,7 @@ let current: ApiAccess = read();
  * was approved. Remove that obsolete secret at the first safe opportunity,
  * but keep the account and selected profile the player already chose.
  */
-if (usesProductionHypixelApi() && (current.key || current.keyExpiresOn || current.keyState !== "unchecked")) {
+if (usesProductionHypixelApi() && (current.key || current.keyExpiresAt || current.keyState !== "unchecked")) {
   current = withoutPersonalApiKey(current);
   try {
     if (current.uuid) localStorage.setItem(KEY, JSON.stringify(current));
@@ -250,7 +282,7 @@ if (usesProductionHypixelApi() && (current.key || current.keyExpiresOn || curren
 
 const listeners = new Set<() => void>();
 
-const subscribe = (fn: () => void) => {
+export const subscribeApiAccess = (fn: () => void) => {
   listeners.add(fn);
   return () => listeners.delete(fn);
 };
@@ -292,19 +324,17 @@ export const writeAccess = (patch: Partial<ApiAccess>) => {
     ...current,
     ...patch,
     ...(keyChanged && patch.keyState === undefined ? { keyState: "unchecked" as KeyState, checkedAt: null } : {}),
-    ...(keyChanged && patch.keyExpiresOn === undefined ? { keyExpiresOn: null } : {}),
+    ...(keyChanged && patch.keyExpiresAt === undefined ? { keyExpiresAt: null } : {}),
   };
   if (patch.uuid !== undefined) current.uuid = undash(current.uuid);
-  // Normalised at the boundary, the same way the uuid is, so every reader
-  // downstream can take the field at face value. Anything that is not a real
-  // calendar date becomes null rather than sitting in state as a date-shaped
-  // string that no countdown can use.
-  if (current.keyExpiresOn !== null && parseCalendarDate(current.keyExpiresOn) === null) current.keyExpiresOn = null;
+  if (patch.keyExpiresAt !== undefined) {
+    current.keyExpiresAt = typeof patch.keyExpiresAt === "number" && Number.isFinite(patch.keyExpiresAt) ? patch.keyExpiresAt : null;
+  }
   persist();
   for (const fn of listeners) fn();
 };
 
-/** Forget this connection. Removes exactly this one browser-storage record. */
+/** Forget the credential. Removes exactly this one key, and only from a button. */
 export const clearAccess = () => {
   current = BLANK;
   try {
@@ -346,14 +376,59 @@ export const uuidForName = (account: Pick<ApiAccess, "uuid" | "name">, typed: st
   account.name && account.name.toLowerCase() === typed.toLowerCase() ? account.uuid : "";
 
 export const useApiAccess = () => {
-  const access = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const access = useSyncExternalStore(subscribeApiAccess, getSnapshot, getSnapshot);
 
-  const setKey = useCallback((key: string) => writeAccess({ key }), []);
+  /*
+   * A key and its conservative expiry stamp are one action. Keeping that rule
+   * here means every credential input gets the same behaviour, while the
+   * lower-level writer can still report API verdicts without moving the date.
+   */
+  const setKey = useCallback(
+    (key: string) => writeAccess({ key, keyExpiresAt: expiryInstantForKey(key, Date.now()) }),
+    []
+  );
   const setAccount = useCallback((uuid: string, name: string) => writeAccess({ uuid, name }), []);
   const setProfileId = useCallback((profileId: string | null) => writeAccess({ profileId }), []);
   /** An empty field is a cleared field. `writeAccess` rejects anything malformed. */
-  const setExpiresOn = useCallback((iso: string) => writeAccess({ keyExpiresOn: iso.trim() || null }), []);
+  const setExpiresOn = useCallback(
+    (iso: string) => writeAccess({ keyExpiresAt: iso.trim() ? expiryInstantForDate(iso.trim()) : null }),
+    []
+  );
   const clear = useCallback(() => clearAccess(), []);
 
   return { access, setKey, setAccount, setProfileId, setExpiresOn, clear };
 };
+
+/**
+ * The cache identity is deliberately separate from the credential record. It
+ * contains no key material: the account/profile/key tuple is reduced to a
+ * short deterministic fingerprint before it can leave memory.
+ */
+export type ApiIdentityInput = Pick<ApiAccess, "key" | "uuid" | "profileId">;
+
+const fingerprint = (value: string): string => {
+  // FNV-1a over two 32-bit lanes. This is an invalidation token, not a secret
+  // verifier; its job is to distinguish cache identities without persisting a
+  // key or making a second authenticated request.
+  let left = 0x811c9dc5;
+  let right = 0x01000193;
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    left = Math.imul(left ^ code, 0x01000193);
+    right = Math.imul(right ^ (code + i), 0x01000193);
+  }
+  return `${(left >>> 0).toString(16).padStart(8, "0")}${(right >>> 0).toString(16).padStart(8, "0")}`;
+};
+
+/** Stable cache/request identity. The raw API key never appears in the token. */
+export const identityTokenForAccess = (access: ApiIdentityInput, profileOverride?: string | null): string => {
+  const uuid = undash(access.uuid.trim());
+  const profileId = (profileOverride === undefined ? access.profileId : profileOverride)?.trim() ?? "";
+  const key = access.key.trim();
+  if (!uuid && !profileId && !key) return "v1:anonymous";
+  return `v1:${fingerprint(`${uuid}\u0000${profileId}\u0000${key}`)}`;
+};
+
+/** Pure response guard shared by the two stores and their focused tests. */
+export const identityMatches = (expected: string, access: ApiIdentityInput): boolean =>
+  expected === identityTokenForAccess(access);

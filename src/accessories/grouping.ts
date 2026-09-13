@@ -94,7 +94,11 @@ export function attainabilityOf(input: AttainabilityInput): Attainability {
   const unmet = checked.filter((r) => r.state === "unmet");
 
   if (unmet.length === 0) {
-    // Nothing in the way, but the door may only open at certain times of year.
+    // An unclassified source has no evidence about availability or effort. It
+    // stays in review instead of being promoted to the easiest-looking band.
+    if (source === "wiki") return "unknownReach";
+    // Nothing measurable is in the way, but the door may only open at certain
+    // times of year. `now` deliberately means no measured gate, not cheap.
     return TIME_GATED.has(source) ? "long" : "now";
   }
 
@@ -234,18 +238,15 @@ export const GROUP_LABEL: Record<AccessoryGroup, string> = {
 export const ATTAINABILITY_ORDER: readonly Attainability[] = ["now", "soon", "long", "unknownReach"];
 
 export const ATTAINABILITY_LABEL: Record<Attainability, string> = {
-  // Deliberately "Missing Accessories" rather than "Get it now", which read
-  // wrong for this section. The header stat keeps the shorter "Missing" so the
-  // stat row does not wrap; the section carries the full phrase.
-  now: "Missing Accessories",
-  soon: "Soon",
-  long: "Long haul",
-  unknownReach: "Needs a profile",
+  now: "No measured gate",
+  soon: "Near a known requirement",
+  long: "Long or time-gated",
+  unknownReach: "Source needs review",
 };
 
 export const ATTAINABILITY_HINT: Record<Attainability, string> = {
-  now: "Nothing measurable is standing in the way.",
-  soon: "A short errand away: a couple of slayer levels, a collection over halfway, or one trophy tier.",
-  long: "A deep requirement gap, or only available while an event is running.",
-  unknownReach: "Something here was never measured, so how far away it is would be a guess.",
+  now: "",
+  soon: "",
+  long: "",
+  unknownReach: "",
 };

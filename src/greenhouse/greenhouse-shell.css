@@ -1,0 +1,3424 @@
+.greenhouse-profile-shell,
+.greenhouse-profile-workspace {
+  min-height: calc(100dvh - var(--sd-chrome-h));
+}
+
+.greenhouse-routes {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Greenhouse has no second navigation bar. The active masthead link already
+   says where the player is, leaving the full width for the greenhouse itself. */
+:root:has(.greenhouse-view-root) {
+  --sd-chrome-h: var(--sd-bar-h);
+}
+
+:root:has(.greenhouse-view-root) .sd-tools {
+  display: none !important;
+}
+
+.greenhouse-workspace {
+  position: relative;
+  width: 100%;
+  margin-top: 0.85rem;
+  overflow: clip;
+  border: 1px solid var(--profile-border);
+  border-radius: 0.62rem;
+  background: var(--profile-surface);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035);
+}
+
+.greenhouse-workspace :where(button, input) {
+  font: inherit;
+}
+
+.greenhouse-workspace button {
+  cursor: pointer;
+}
+
+.greenhouse-workspace button:disabled {
+  cursor: default;
+}
+
+.greenhouse-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(14.5rem, 0.76fr) minmax(30rem, 1.58fr) minmax(15.5rem, 0.86fr);
+  min-width: 0;
+}
+
+.greenhouse-zone,
+.greenhouse-support {
+  min-width: 0;
+}
+
+.greenhouse-zone {
+  padding: 1rem;
+}
+
+.greenhouse-plot,
+.greenhouse-support {
+  border-left: 1px solid var(--profile-border);
+}
+
+.greenhouse-zone-heading {
+  min-width: 0;
+  margin-bottom: 0.85rem;
+}
+
+.greenhouse-zone-heading > span,
+.greenhouse-subheading > span,
+.greenhouse-plant-group {
+  display: block;
+  margin-bottom: 0.18rem;
+  color: #91a4b9;
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  line-height: 1.2;
+}
+
+.greenhouse-zone-heading h2 {
+  margin: 0;
+  color: var(--profile-text);
+  font-size: 1.06rem;
+  font-weight: 730;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.greenhouse-zone-heading p {
+  margin: 0.25rem 0 0;
+  overflow: hidden;
+  color: var(--profile-muted);
+  font-size: 0.76rem;
+  font-weight: 560;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+}
+
+.greenhouse-goals .greenhouse-zone-heading p.is-active {
+  color: #9fe8ff;
+  font-weight: 650;
+}
+
+.greenhouse-plant-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 2.35rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.17);
+  color: #91a4b9;
+}
+
+.greenhouse-plant-search:focus-within {
+  border-bottom-color: rgb(56 199 244 / 0.75);
+}
+
+.greenhouse-plant-search > svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
+}
+
+.greenhouse-plant-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.52rem 0.5rem;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--profile-text);
+  font-size: 0.75rem;
+}
+
+.greenhouse-plant-search input::placeholder {
+  color: #77889a;
+}
+
+.greenhouse-plant-search > button {
+  display: grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  place-items: center;
+  background: transparent;
+  color: #8193a5;
+}
+
+.greenhouse-plant-search > button svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.greenhouse-goal-search-results {
+  margin-top: 0.5rem;
+  border-block: 1px solid rgb(255 255 255 / 0.11);
+}
+
+.greenhouse-goal-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.65rem, 1fr));
+  gap: 0.34rem;
+  max-height: clamp(16.2rem, 38vh, 24rem);
+  padding: 0.55rem 0.1rem;
+  overflow-y: auto;
+}
+
+.greenhouse-goal-icon-grid .greenhouse-goal-choice {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: 0.22rem;
+  border: 1px solid color-mix(in srgb, var(--greenhouse-rarity, #6f8092) 38%, transparent);
+  border-radius: 0.32rem;
+  place-items: center;
+  background: rgb(255 255 255 / 0.018);
+  color: var(--profile-label);
+}
+
+.greenhouse-goal-icon-grid .greenhouse-goal-choice:hover,
+.greenhouse-goal-icon-grid .greenhouse-goal-choice:focus-visible {
+  outline: 0;
+  border-color: var(--greenhouse-rarity, var(--profile-accent));
+  background: color-mix(in srgb, var(--greenhouse-rarity, var(--profile-accent)) 13%, transparent);
+  box-shadow: inset 0 -2px var(--greenhouse-rarity, var(--profile-accent));
+}
+
+.greenhouse-goal-icon-grid > .greenhouse-empty-line {
+  grid-column: 1 / -1;
+}
+
+.greenhouse-goal-tooltip {
+  position: fixed;
+  z-index: 120;
+  width: min(22.5rem, calc(100vw - 1.5rem));
+  max-height: min(32.5rem, calc(100vh - 1.5rem));
+  overflow-y: auto;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--greenhouse-rarity, #8294a7) 44%, transparent);
+  border-radius: 0.48rem;
+  background: rgb(3 8 13 / 0.985);
+  box-shadow: 0 1.15rem 3rem rgb(0 0 0 / 0.52);
+}
+
+.greenhouse-goal-preview {
+  display: grid;
+  gap: 0.58rem;
+  padding: 0.7rem;
+}
+
+.greenhouse-goal-preview > header {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.58rem;
+}
+
+.greenhouse-goal-preview-art {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid color-mix(in srgb, var(--greenhouse-rarity, #8294a7) 50%, transparent);
+  border-radius: 0.35rem;
+  place-items: center;
+  background: color-mix(in srgb, var(--greenhouse-rarity, #8294a7) 8%, transparent);
+}
+
+.greenhouse-goal-preview > header > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.greenhouse-goal-preview > header strong {
+  overflow: hidden;
+  color: var(--greenhouse-rarity, var(--profile-text));
+  font-size: 0.76rem;
+  font-weight: 730;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-goal-preview > header span,
+.greenhouse-goal-preview-section > small,
+.greenhouse-goal-preview-facts small {
+  color: #8496a8;
+  font-size: 0.57rem;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  line-height: 1.35;
+}
+
+.greenhouse-goal-preview-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-block: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.greenhouse-goal-preview-facts > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+  padding: 0.42rem 0.25rem;
+  color: #bac7d2;
+  font-size: 0.61rem;
+  line-height: 1.25;
+}
+
+.greenhouse-goal-preview-facts > span + span {
+  border-left: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.greenhouse-goal-preview-facts small {
+  display: block;
+}
+
+.greenhouse-goal-preview-section {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.greenhouse-goal-preview-items {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.greenhouse-goal-preview-items > span {
+  display: grid;
+  grid-template-columns: 1.7rem auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.34rem;
+  min-width: 0;
+  color: #aebdca;
+  font-size: 0.61rem;
+}
+
+.greenhouse-goal-preview-items b {
+  color: var(--greenhouse-rarity, #b8c6d2);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.59rem;
+}
+
+.greenhouse-goal-preview-items em {
+  overflow: hidden;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-goal-preview-section p {
+  display: grid;
+  gap: 0.05rem;
+  margin: 0;
+  padding: 0.38rem 0.45rem;
+  border-left: 2px solid var(--color-emerald-500);
+  background: color-mix(in srgb, var(--color-emerald-500) 8%, transparent);
+}
+
+.greenhouse-goal-preview-section p strong {
+  color: var(--color-emerald-300);
+  font-size: 0.64rem;
+}
+
+.greenhouse-goal-preview-section p span {
+  color: #86aaab;
+  font-size: 0.58rem;
+  line-height: 1.35;
+}
+
+.greenhouse-target-list {
+  margin-top: 0.45rem;
+}
+
+.greenhouse-target-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 3.35rem;
+  padding: 0.42rem 1.55rem 0.42rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.09);
+}
+
+.greenhouse-target-row.has-wide-quantity {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.greenhouse-target-identity {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.greenhouse-target-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.greenhouse-target-copy strong,
+.greenhouse-need-row strong {
+  overflow: hidden;
+  color: var(--greenhouse-rarity, var(--profile-label));
+  font-size: 0.76rem;
+  font-weight: 690;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-target-copy span,
+.greenhouse-need-row span,
+.greenhouse-need-row small {
+  color: #8495a7;
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.greenhouse-target-controls {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.greenhouse-target-row.has-wide-quantity .greenhouse-target-controls {
+  justify-self: end;
+}
+
+.greenhouse-workspace .greenhouse-max-quantity {
+  min-height: 1.65rem;
+  padding: 0 0.15rem;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: #8ca1b3;
+  font-size: 0.68rem;
+  font-weight: 720;
+  line-height: 1;
+}
+
+.greenhouse-workspace .greenhouse-max-quantity:hover:not(:disabled),
+.greenhouse-workspace .greenhouse-max-quantity:focus-visible {
+  outline: 0;
+  border-bottom-color: var(--profile-accent);
+  color: var(--profile-accent);
+}
+
+.greenhouse-workspace .greenhouse-max-quantity:disabled {
+  opacity: 0.4;
+}
+
+.greenhouse-quantity {
+  display: grid;
+  grid-template-columns:
+    1.45rem
+    clamp(2rem, calc(var(--greenhouse-quantity-digits, 2) * 0.62ch + 0.95rem), 7rem)
+    1.45rem;
+  align-items: center;
+  border-bottom: 1px solid rgb(255 255 255 / 0.16);
+}
+
+.greenhouse-quantity button,
+.greenhouse-quantity input {
+  width: 100%;
+  height: 1.65rem;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #9babbc;
+  text-align: center;
+}
+
+.greenhouse-quantity button:hover,
+.greenhouse-quantity button:focus-visible {
+  color: var(--profile-accent);
+}
+
+.greenhouse-quantity button svg {
+  width: 0.7rem;
+  height: 0.7rem;
+  margin: auto;
+}
+
+.greenhouse-quantity input {
+  color: var(--profile-text);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  appearance: textfield;
+}
+
+.greenhouse-quantity input::-webkit-inner-spin-button,
+.greenhouse-quantity input::-webkit-outer-spin-button {
+  appearance: none;
+}
+
+.greenhouse-row-remove {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  place-items: center;
+  background: transparent;
+  color: #708193;
+}
+
+.greenhouse-row-remove:hover,
+.greenhouse-row-remove:focus-visible {
+  color: var(--color-red-400, #ff7f87);
+}
+
+.greenhouse-row-remove svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.greenhouse-empty-copy,
+.greenhouse-empty-line {
+  color: #7f91a4;
+  font-size: 0.68rem;
+  line-height: 1.55;
+}
+
+.greenhouse-empty-copy {
+  margin: 1rem 0 0;
+}
+
+.greenhouse-empty-line {
+  display: block;
+  padding: 0.75rem;
+}
+
+.greenhouse-progress {
+  margin-top: 1.2rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--profile-border);
+}
+
+.greenhouse-subheading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.greenhouse-subheading > span {
+  margin: 0;
+}
+
+.greenhouse-subheading > strong {
+  color: var(--profile-label);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  font-weight: 650;
+}
+
+.greenhouse-progress-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.38rem 0.5rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.greenhouse-progress-row > div:first-child {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 0.4rem;
+  color: #aebdcc;
+  font-size: 0.65rem;
+}
+
+.greenhouse-progress-row small {
+  flex: 0 0 auto;
+  color: #8193a5;
+  font-family: var(--font-mono, monospace);
+}
+
+.greenhouse-progress-track {
+  grid-column: 1;
+  height: 0.16rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--profile-accent);
+}
+
+.greenhouse-progress-actions {
+  display: flex;
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.greenhouse-progress-actions button {
+  display: grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  padding: 0;
+  border: 0;
+  place-items: center;
+  background: transparent;
+  color: #8495a7;
+}
+
+.greenhouse-progress-actions button:hover {
+  color: var(--profile-accent);
+}
+
+.greenhouse-progress-actions svg {
+  width: 0.72rem;
+  height: 0.72rem;
+}
+
+.greenhouse-plot {
+  display: flex;
+  flex-direction: column;
+  min-height: 43rem;
+  padding-inline: clamp(0.8rem, 1.5vw, 1.4rem);
+  background: rgb(2 6 10 / 0.24);
+}
+
+.greenhouse-plot-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.greenhouse-plot-primary {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.greenhouse-plot-legend {
+  display: flex;
+  min-height: 2rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.32rem 0.72rem;
+  color: #8194a7;
+  font-size: 0.61rem;
+  line-height: 1.25;
+}
+
+.greenhouse-plot-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  white-space: nowrap;
+}
+
+.greenhouse-plot-legend svg {
+  width: 0.72rem;
+  height: 0.72rem;
+  color: var(--profile-accent);
+}
+
+.greenhouse-plot-legend kbd {
+  color: #c4d1dc;
+  font-family: var(--font-sans, sans-serif);
+  font-size: inherit;
+  font-weight: 680;
+}
+
+.greenhouse-send-to-game button {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  padding: 0.38rem 0.7rem;
+  border: 1px solid rgb(56 199 244 / 0.52);
+  border-radius: 0.36rem;
+  background: rgb(0 179 240 / 0.15);
+  color: #bdefff;
+  font-size: 0.69rem;
+  font-weight: 720;
+  box-shadow: none;
+}
+
+.greenhouse-send-to-game button:hover:not(:disabled),
+.greenhouse-send-to-game button:focus-visible {
+  outline: 0;
+  border-color: rgb(56 199 244 / 0.84);
+  background: rgb(0 179 240 / 0.22);
+}
+
+.greenhouse-send-to-game button:disabled {
+  opacity: 0.42;
+}
+
+.greenhouse-send-to-game button svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+.greenhouse-send-to-game {
+  gap: 0.35rem;
+}
+
+.greenhouse-send-to-game > span {
+  font-size: 0.61rem;
+}
+
+.greenhouse-plot-brief {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(10.5rem, 0.8fr) repeat(2, minmax(0, 1fr));
+  margin-top: 0.65rem;
+  overflow: hidden;
+  border-block: 1px solid rgb(255 255 255 / 0.11);
+  /* The shared Profile ground already supplies the frost. Keep this layer
+     transparent so a long route never turns into a coloured backdrop glow. */
+  background: transparent;
+}
+
+.greenhouse-plot-brief-lead,
+.greenhouse-plot-brief-group {
+  min-width: 0;
+  padding: 0.72rem 0.78rem;
+}
+
+.greenhouse-plot-brief-lead {
+  display: grid;
+  align-content: start;
+  gap: 0.14rem;
+}
+
+.greenhouse-plot-brief-lead > small {
+  color: #7bdcfb;
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.greenhouse-plot-brief-lead > strong {
+  overflow: hidden;
+  color: #eef7fb;
+  font-size: clamp(0.98rem, 1.3vw, 1.16rem);
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+}
+
+.greenhouse-plot-brief-lead > span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.28rem;
+  color: #8da1b3;
+  font-size: 0.61rem;
+  line-height: 1.35;
+}
+
+.greenhouse-plot-brief-lead > span i {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #52697b;
+}
+
+.greenhouse-plot-brief-lead > span em {
+  width: 100%;
+  color: #f0bf6b;
+  font-style: normal;
+}
+
+.greenhouse-plot-brief-group {
+  border-left: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-plot-brief-group > header {
+  display: flex;
+  min-height: 1rem;
+  align-items: center;
+  gap: 0.32rem;
+  margin-bottom: 0.42rem;
+  color: #8398aa;
+}
+
+.greenhouse-plot-brief-group > header svg {
+  width: 0.76rem;
+  height: 0.76rem;
+  color: var(--profile-accent);
+}
+
+.greenhouse-plot-brief-group > header span {
+  font-size: 0.55rem;
+  font-weight: 790;
+  letter-spacing: 0.08em;
+}
+
+.greenhouse-plot-brief-group > header b {
+  margin-left: auto;
+  color: #dce9f1;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+}
+
+.greenhouse-plot-brief-group > div {
+  display: flex;
+  min-width: 0;
+  max-height: 10.5rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.24rem 0.62rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.25rem;
+  scrollbar-color: rgb(123 147 166 / 0.42) transparent;
+  scrollbar-width: thin;
+}
+
+.greenhouse-plot-brief-group > div::-webkit-scrollbar {
+  width: 0.28rem;
+}
+
+.greenhouse-plot-brief-group > div::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background-color: var(--sd-scrollbar-thumb);
+}
+
+.greenhouse-plot-brief-group > div::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sd-scrollbar-hover);
+}
+
+.greenhouse-plot-brief-item {
+  display: inline-grid;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+  grid-template-columns: 1.9rem minmax(0, max-content);
+  align-items: center;
+  gap: 0.34rem;
+  padding: 0.12rem 0;
+  border: 0;
+  background: transparent;
+  color: #8ba0b2;
+  text-align: left;
+}
+
+.greenhouse-plot-brief-item:hover,
+.greenhouse-plot-brief-item:focus-visible {
+  outline: 0;
+  color: #dff6ff;
+  filter: brightness(1.16);
+}
+
+.greenhouse-plot-brief-item > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.02rem;
+}
+
+.greenhouse-plot-brief-item strong {
+  color: var(--greenhouse-rarity, #d2dde5);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.18;
+  white-space: nowrap;
+}
+
+.greenhouse-plot-brief-item small,
+.greenhouse-plot-brief-empty {
+  color: #7790a3;
+  font-size: 0.66rem;
+  line-height: 1.25;
+}
+
+.greenhouse-plot-brief-empty {
+  padding-block: 0.28rem;
+}
+
+.greenhouse-plot-tools {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem;
+  min-height: 2.3rem;
+  padding-block: 0.25rem;
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-plot {
+  scroll-margin-top: calc(var(--sd-chrome-h) + 0.75rem);
+}
+
+.greenhouse-plot-mode {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.68rem;
+  margin-right: 0.38rem;
+}
+
+.greenhouse-plot-mode button,
+.greenhouse-plant-role > button {
+  position: relative;
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.25rem 0.08rem;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #718392;
+  font-size: 0.63rem;
+  font-weight: 650;
+}
+
+.greenhouse-plot-mode button:hover,
+.greenhouse-plant-role > button:hover {
+  border-bottom-color: var(--profile-accent);
+  color: var(--profile-accent);
+}
+
+.greenhouse-plot-mode button:focus-visible,
+.greenhouse-plant-role > button:focus-visible {
+  border-bottom-color: var(--profile-accent);
+  color: var(--profile-accent);
+  outline: 0;
+}
+
+.greenhouse-plot-mode button.is-active,
+.greenhouse-plant-role > button.is-active {
+  border-bottom-color: var(--profile-accent);
+  background: transparent;
+  color: var(--profile-accent);
+  font-weight: 720;
+}
+
+.greenhouse-plot-mode svg {
+  width: 0.72rem;
+  height: 0.72rem;
+}
+
+:is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button) {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.42rem;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: #93a5b7;
+  font-size: 0.63rem;
+  font-weight: 620;
+}
+
+:is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button):hover:not(:disabled),
+:is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button):focus-visible,
+:is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button).is-active {
+  outline: 0;
+  border-bottom-color: var(--profile-accent);
+  background: transparent;
+  color: var(--profile-accent);
+}
+
+:is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button).is-danger {
+  color: var(--color-red-300, #ffadb2);
+}
+
+:is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button):disabled {
+  opacity: 0.34;
+}
+
+:is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button) svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+.greenhouse-tool-count {
+  color: var(--profile-accent);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.54rem;
+}
+
+.greenhouse-tool-divider {
+  width: 1px;
+  height: 1.1rem;
+  margin-inline: 0.2rem;
+  background: rgb(255 255 255 / 0.14);
+}
+
+.greenhouse-loadout-panel {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  display: flex;
+  width: min(24rem, calc(100vw - 2.5rem));
+  max-height: min(34rem, calc(100dvh - 8rem));
+  flex-direction: column;
+  padding: 0.72rem;
+  border: 1px solid rgb(93 119 140 / 0.5);
+  border-radius: 0.42rem;
+  background: #03080d;
+  box-shadow: 0 1rem 2.4rem rgb(0 0 0 / 0.52);
+}
+
+.greenhouse-loadout-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-loadout-panel > header > div {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.greenhouse-loadout-panel > header span {
+  color: #89a0b6;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.greenhouse-loadout-panel > header strong {
+  color: var(--profile-text);
+  font-size: 0.84rem;
+}
+
+.greenhouse-loadout-panel > header > button,
+.greenhouse-loadout-actions button,
+.greenhouse-loadout-rename button {
+  display: grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.22rem;
+  place-items: center;
+  background: transparent;
+  color: #8296a9;
+}
+
+.greenhouse-loadout-panel button:hover:not(:disabled),
+.greenhouse-loadout-panel button:focus-visible {
+  outline: 0;
+  background: rgb(56 199 244 / 0.075);
+  color: var(--profile-accent);
+}
+
+.greenhouse-loadout-panel button:disabled {
+  opacity: 0.38;
+}
+
+.greenhouse-loadout-panel svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+.greenhouse-loadout-save {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-loadout-save label {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.42rem;
+  color: #8296a9;
+}
+
+.greenhouse-loadout-save input,
+.greenhouse-loadout-rename input {
+  width: 100%;
+  min-width: 0;
+  height: 1.8rem;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.16);
+  outline: 0;
+  background: transparent;
+  color: var(--profile-text);
+  font-size: 0.68rem;
+}
+
+.greenhouse-loadout-save input:focus,
+.greenhouse-loadout-rename input:focus {
+  border-bottom-color: var(--profile-accent);
+}
+
+.greenhouse-loadout-save > button {
+  padding: 0.2rem 0.35rem;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: #91a6b8;
+  font-size: 0.64rem;
+  font-weight: 680;
+}
+
+.greenhouse-loadout-list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.greenhouse-loadout-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-bottom: 1px solid rgb(255 255 255 / 0.085);
+}
+
+.greenhouse-loadout-row.is-recovery {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.greenhouse-loadout-main {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1.2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.25rem;
+  border: 0;
+  background: transparent;
+  color: #8fa4b7;
+  text-align: left;
+}
+
+.greenhouse-loadout-main > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.greenhouse-loadout-main strong,
+.greenhouse-loadout-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-loadout-main strong {
+  color: #b9c7d3;
+  font-size: 0.69rem;
+}
+
+.greenhouse-loadout-main small {
+  color: #768b9e;
+  font-size: 0.57rem;
+}
+
+.greenhouse-loadout-actions {
+  display: flex;
+  gap: 0.08rem;
+}
+
+.greenhouse-loadout-actions button.is-danger {
+  color: var(--color-red-300, #ffadb2);
+}
+
+.greenhouse-loadout-rename {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.22rem;
+  padding: 0.32rem 0;
+}
+
+.greenhouse-plot-measure {
+  display: grid;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 31rem;
+  place-items: center;
+  padding: 1rem 0;
+}
+
+.greenhouse-plot-canvas {
+  display: grid;
+  max-width: 100%;
+  place-items: center;
+}
+
+.greenhouse-plot-canvas [data-grid-container] {
+  touch-action: none;
+}
+
+.greenhouse-plot-placeholder {
+  display: grid;
+  width: min(28rem, calc(100vw - 3rem));
+  min-height: min(28rem, calc(100vw - 3rem));
+  align-content: center;
+  justify-items: center;
+  gap: 0.42rem;
+  padding: 1.2rem;
+  border: 1px solid rgb(74 101 121 / 0.58);
+  border-radius: 0.42rem;
+  background: rgb(4 10 16 / 0.48);
+  color: #7e94a7;
+  text-align: center;
+}
+
+.greenhouse-plot-placeholder svg {
+  width: 1.6rem;
+  height: 1.6rem;
+  color: var(--profile-accent);
+}
+
+.greenhouse-plot-placeholder strong {
+  color: #d0dde5;
+  font-size: 0.78rem;
+}
+
+.greenhouse-plot-placeholder small {
+  font-size: 0.67rem;
+}
+
+.greenhouse-plot-placeholder.is-error svg,
+.greenhouse-plot-placeholder.is-error small {
+  color: #ffb368;
+}
+
+.greenhouse-plant-tray.is-locked .greenhouse-plant-role,
+.greenhouse-plant-tray.is-locked .greenhouse-plant-search,
+.greenhouse-plant-tray.is-locked .greenhouse-plant-list {
+  opacity: 0.48;
+}
+
+.greenhouse-plot-status {
+  min-height: 1.2rem;
+  margin: 0;
+  color: #8294a7;
+  font-size: 0.65rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.greenhouse-plot-status.is-error {
+  color: var(--color-red-300, #ffadb2);
+}
+
+.greenhouse-cell-editor {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.greenhouse-cell-editor-stage {
+  position: relative;
+}
+
+.greenhouse-cell-editor-plot,
+.greenhouse-cell-editor-grid {
+  position: absolute;
+  inset: 0;
+}
+
+.greenhouse-cell-editor-plot {
+  z-index: 0;
+  pointer-events: none;
+}
+
+.greenhouse-cell-editor-grid {
+  display: grid;
+  z-index: 20;
+}
+
+.greenhouse-cell-editor-cell {
+  touch-action: manipulation;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 0.2rem;
+  background: rgb(38 49 61 / 0.32);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+
+.greenhouse-cell-editor-cell.is-unlocked {
+  border-color: rgb(137 154 170 / 0.36);
+  background: rgb(33 43 52 / 0.76);
+}
+
+.greenhouse-cell-editor-cell.is-expandable {
+  border-color: rgb(137 154 170 / 0.24);
+}
+
+.greenhouse-cell-editor-cell.is-unreachable {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.greenhouse-cell-editor-cell.is-occupied {
+  background: rgb(8 13 18 / 0.16);
+  box-shadow: inset 0 0 0 2px rgb(255 181 49 / 0.5);
+  opacity: 0.8;
+}
+
+.greenhouse-cell-editor-cell.is-permanent {
+  border-color: rgb(202 210 218 / 0.44);
+  background: rgb(55 63 71 / 0.76);
+  box-shadow: inset 0 0 0 2px rgb(224 230 235 / 0.1);
+  cursor: default;
+  opacity: 1;
+}
+
+.greenhouse-cell-editor-cell:focus-visible {
+  outline: 2px solid var(--profile-accent);
+  outline-offset: -2px;
+}
+
+.greenhouse-cell-editor-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.85rem;
+}
+
+.greenhouse-cell-editor-actions button {
+  padding: 0.2rem 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: #8fa2b5;
+  font-size: 0.65rem;
+}
+
+.greenhouse-cell-editor-actions button:hover,
+.greenhouse-cell-editor-actions button:focus-visible {
+  outline: 0;
+  border-bottom-color: var(--profile-accent);
+  color: var(--profile-accent);
+}
+
+.greenhouse-support {
+  display: flex;
+  flex-direction: column;
+}
+
+.greenhouse-support > .greenhouse-zone + .greenhouse-zone {
+  flex: 1 1 auto;
+  border-top: 1px solid var(--profile-border);
+}
+
+.greenhouse-need-list {
+  display: grid;
+  align-content: start;
+}
+
+.greenhouse-need-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.48rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.085);
+}
+
+.greenhouse-need-identity {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 2.2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.greenhouse-need-copy {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 0.07rem;
+}
+
+.greenhouse-need-row span {
+  color: #b5c3d0;
+  font-family: var(--font-mono, monospace);
+}
+
+.greenhouse-need-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.12rem 0.46rem;
+}
+
+.greenhouse-need-counts em,
+.greenhouse-need-counts b {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 620;
+}
+
+.greenhouse-need-counts svg {
+  width: 0.62rem;
+  height: 0.62rem;
+  flex: 0 0 auto;
+}
+
+.greenhouse-need-counts .is-needed {
+  color: #87dfff;
+}
+
+.greenhouse-need-counts .is-storage {
+  color: #9eb0bf;
+}
+
+.greenhouse-need-counts .is-storage:not(.is-unknown) {
+  color: #7bd5a2;
+}
+
+.greenhouse-need-counts .is-missing {
+  color: var(--color-amber-300, #ffca70);
+}
+
+.greenhouse-need-counts .is-covered {
+  color: #7bd5a2;
+}
+
+.greenhouse-need-row.is-covered .greenhouse-need-counts b {
+  color: #7bd5a2;
+}
+
+.greenhouse-workspace .greenhouse-need-detail {
+  display: inline-grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--profile-label);
+  place-items: center;
+}
+
+.greenhouse-need-detail svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.greenhouse-workspace .greenhouse-need-detail:hover,
+.greenhouse-workspace .greenhouse-need-detail:focus-visible {
+  outline: 1px solid var(--profile-border);
+  background: rgb(255 255 255 / 0.04);
+  color: var(--profile-text);
+}
+
+.greenhouse-requirement-detail {
+  padding: clamp(0.9rem, 2vw, 1.35rem);
+  border-top: 1px solid var(--profile-border);
+  scroll-margin-top: calc(var(--sd-chrome-h) + 0.75rem);
+}
+
+.greenhouse-requirement-detail-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.greenhouse-requirement-detail-heading > div {
+  min-width: 0;
+}
+
+.greenhouse-requirement-detail-heading span {
+  display: block;
+  margin-bottom: 0.18rem;
+  color: #91a4b9;
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.greenhouse-requirement-detail-heading h2,
+.greenhouse-requirement-detail-heading p {
+  margin: 0;
+}
+
+.greenhouse-requirement-detail-heading h2 {
+  color: var(--profile-text);
+  font-size: 1.06rem;
+  line-height: 1.2;
+}
+
+.greenhouse-requirement-detail-heading p {
+  margin-top: 0.25rem;
+  color: var(--profile-muted);
+  font-size: 0.7rem;
+}
+
+.greenhouse-requirement-detail-heading > button {
+  display: inline-grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: #8295a8;
+  place-items: center;
+}
+
+.greenhouse-requirement-detail-heading > button:hover,
+.greenhouse-requirement-detail-heading > button:focus-visible {
+  outline: 0;
+  background: rgb(255 255 255 / 0.055);
+  color: var(--profile-text);
+}
+
+.greenhouse-requirement-detail-heading > button svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.greenhouse-requirement-detail-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.greenhouse-requirement-detail-group {
+  min-width: 0;
+  border-top: 1px solid rgb(255 255 255 / 0.13);
+}
+
+.greenhouse-requirement-detail-group > header {
+  display: flex;
+  min-height: 2.2rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.greenhouse-requirement-detail-group h3,
+.greenhouse-requirement-detail-group > header span {
+  margin: 0;
+  font-size: 0.61rem;
+}
+
+.greenhouse-requirement-detail-group h3 {
+  color: #aebdcc;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.greenhouse-requirement-detail-group > header span {
+  color: #728599;
+  font-family: var(--font-mono, monospace);
+}
+
+.greenhouse-detail-row {
+  padding: 0.48rem 0;
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.greenhouse-detail-identity {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.greenhouse-detail-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.06rem;
+}
+
+.greenhouse-detail-copy strong {
+  overflow: hidden;
+  color: var(--greenhouse-rarity, var(--profile-label));
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-detail-copy span,
+.greenhouse-detail-copy small {
+  color: #8495a7;
+  font-size: 0.59rem;
+  line-height: 1.35;
+}
+
+.greenhouse-detail-row.is-covered .greenhouse-detail-copy small {
+  color: var(--color-emerald-300);
+}
+
+.greenhouse-plant-list {
+  max-height: 25rem;
+  margin-top: 0.45rem;
+  overflow-y: auto;
+}
+
+.greenhouse-plant-role {
+  display: flex;
+  align-items: center;
+  gap: 0.82rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.13);
+}
+
+.greenhouse-plant-role button {
+  justify-content: flex-start;
+}
+
+.greenhouse-plant-role button + button {
+  border-left: 0;
+}
+
+.greenhouse-plant-role small {
+  color: #718395;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.55rem;
+}
+
+.greenhouse-plant-group {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  margin: 0;
+  padding: 0.55rem 0 0.28rem;
+  background: rgb(3 8 13 / 0.96);
+}
+
+.greenhouse-plant-list > button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 1.9rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.35rem;
+  padding: 0.3rem 0.15rem;
+  border: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.075);
+  background: transparent;
+  color: #aab9c8;
+  text-align: left;
+}
+
+.greenhouse-plant-list > button:hover,
+.greenhouse-plant-list > button:focus-visible,
+.greenhouse-plant-list > button.is-selected {
+  outline: 0;
+  background: linear-gradient(90deg, rgb(56 199 244 / 0.095), transparent);
+  color: var(--profile-text);
+}
+
+.greenhouse-plant-list > button.is-selected {
+  box-shadow: inset 2px 0 var(--profile-accent);
+}
+
+.greenhouse-plant-list > button > span {
+  overflow: hidden;
+  color: var(--greenhouse-rarity, #aab9c8);
+  font-size: 0.69rem;
+  font-weight: 640;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-plant-list > button > small {
+  color: #738598;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.58rem;
+}
+
+.greenhouse-data-note {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--profile-border);
+  color: #d4ad65;
+  font-size: 0.64rem;
+}
+
+.greenhouse-plan-breakdown {
+  border-top: 1px solid var(--profile-border);
+  background: rgb(3 7 12 / 0.28);
+}
+
+.greenhouse-plan-breakdown-heading {
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  gap: .65rem;
+  padding: 1rem clamp(0.85rem, 1.8vw, 1.4rem);
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-plan-breakdown-heading > div:first-child {
+  min-width: 0;
+  flex: 1 1 18rem;
+}
+
+.greenhouse-plan-title { display: flex; align-items: center; gap: .5rem; }
+.greenhouse-plan-totals .utility-metric { padding: .5rem .7rem; }
+.greenhouse-plan-totals .utility-metric:first-child { padding-left: 0; }
+.greenhouse-plan-timing .utility-metric { padding: .65rem .8rem; }
+.greenhouse-plan-timing .profile-metric-hint-button svg,
+.greenhouse-plan-totals .profile-metric-hint-button svg { color: var(--profile-label); width: .85rem; height: .85rem; }
+.greenhouse-plot-mode button.is-active,
+.greenhouse-plant-role > button.is-active { color: var(--profile-text); }
+.greenhouse-need-copy,.greenhouse-need-row span { font-family: inherit; }
+.greenhouse-need-counts { font-variant-numeric: tabular-nums; }
+
+.greenhouse-plan-breakdown-heading > div:first-child > span,
+.greenhouse-plan-cycle > header span {
+  display: block;
+  margin-bottom: 0.16rem;
+  color: #79d9fb;
+  font-size: 0.59rem;
+  font-weight: 780;
+  letter-spacing: 0.11em;
+}
+
+.greenhouse-plan-breakdown-heading h2,
+.greenhouse-plan-cycle h3,
+.greenhouse-plan-supplies h3 {
+  margin: 0;
+  color: var(--profile-text);
+}
+
+.greenhouse-plan-breakdown-heading h2 {
+  font-size: 1.04rem;
+  font-weight: 730;
+  letter-spacing: -0.025em;
+}
+
+.greenhouse-plan-breakdown-heading p {
+  margin: 0.25rem 0 0;
+  color: #8395a8;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.greenhouse-plan-timing {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(255 255 255 / 0.012);
+}
+
+.greenhouse-plan-timing > span {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1.15rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.04rem 0.42rem;
+  padding: 0.6rem clamp(0.72rem, 1.5vw, 1rem);
+  border-left: 1px solid rgb(255 255 255 / 0.09);
+}
+
+.greenhouse-plan-timing > span:first-child {
+  border-left: 0;
+}
+
+.greenhouse-plan-timing svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  grid-row: 1 / 3;
+  color: #77dda1;
+}
+
+.greenhouse-plan-timing .is-speed svg {
+  color: #75dcfb;
+}
+
+.greenhouse-plan-timing .is-unique svg {
+  color: #b5a7ff;
+}
+
+.greenhouse-plan-timing .is-growth svg {
+  color: #ffca70;
+}
+
+.greenhouse-plan-timing small {
+  overflow: hidden;
+  color: #7f94a7;
+  font-size: 0.61rem;
+  font-weight: 760;
+  letter-spacing: 0.07em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-plan-timing b {
+  overflow: hidden;
+  color: #dce8f0;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.73rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-plan-timing em {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  color: #768a9c;
+  font-size: 0.61rem;
+  font-style: normal;
+}
+
+.greenhouse-plan-totals {
+  display: grid;
+  min-width: min(100%, 36rem);
+  flex: 1 1 36rem;
+  grid-template-columns: repeat(5, minmax(5.2rem, 1fr));
+}
+
+.greenhouse-plan-totals > span {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0 0.38rem;
+  padding: 0.18rem 0.7rem;
+  border-left: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-plan-totals svg {
+  width: 0.82rem;
+  height: 0.82rem;
+  grid-row: 1 / 3;
+  color: #73d49a;
+}
+
+.greenhouse-plan-totals > span:nth-child(2) svg {
+  color: #9aabfa;
+}
+
+.greenhouse-plan-totals > span:nth-child(3) svg,
+.greenhouse-plan-totals > span.is-time svg {
+  color: #ffca70;
+}
+
+.greenhouse-plan-totals small,
+.greenhouse-plan-cycle-facts small {
+  color: #728699;
+  font-size: 0.62rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+}
+
+.greenhouse-plan-totals b {
+  color: #d6e1e9;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  font-weight: 680;
+}
+
+.greenhouse-plan-breakdown-body {
+  display: block;
+}
+
+.greenhouse-plan-supplies {
+  padding: 0.85rem clamp(0.85rem, 1.8vw, 1.4rem);
+  border-bottom: 1px solid var(--profile-border);
+}
+
+.greenhouse-plan-supplies > header {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin-bottom: 0.42rem;
+}
+
+.greenhouse-plan-supplies > header svg {
+  width: 0.78rem;
+  height: 0.78rem;
+  color: var(--profile-accent);
+}
+
+.greenhouse-plan-supplies h3 {
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.greenhouse-plan-supplies > header > span {
+  margin-left: auto;
+  color: #7e91a3;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+}
+
+.greenhouse-plan-supply-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0 1rem;
+}
+
+.greenhouse-plan-item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 2.1rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.38rem 0;
+  border: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.075);
+  background: transparent;
+  text-align: left;
+}
+
+.greenhouse-plan-item:hover,
+.greenhouse-plan-item:focus-visible {
+  outline: 0;
+  background: rgb(56 199 244 / 0.055);
+}
+
+.greenhouse-plan-item > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.greenhouse-plan-item strong {
+  overflow: hidden;
+  color: var(--greenhouse-rarity, #c7d2dc);
+  font-size: 0.72rem;
+  font-weight: 690;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-plan-item small,
+.greenhouse-plan-empty {
+  color: #7e91a4;
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.greenhouse-plan-empty {
+  margin: 0;
+  padding: 0.45rem 0;
+}
+
+.greenhouse-plan-cycles {
+  min-width: 0;
+}
+
+.greenhouse-plan-sequence-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem clamp(0.85rem, 1.8vw, 1.4rem);
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-plan-sequence-heading > div:first-child > span {
+  display: block;
+  margin-bottom: 0.16rem;
+  color: #79d9fb;
+  font-size: 0.59rem;
+  font-weight: 780;
+  letter-spacing: 0.11em;
+}
+
+.greenhouse-plan-sequence-heading h3 {
+  margin: 0;
+  color: var(--profile-text);
+  font-size: 0.8rem;
+  font-weight: 710;
+}
+
+.greenhouse-plan-field-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  color: #8495a5;
+  font-size: 0.62rem;
+}
+
+.greenhouse-plan-sequence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7rem;
+}
+
+.greenhouse-plan-field-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.greenhouse-plan-field-legend i {
+  width: 0.68rem;
+  height: 0.68rem;
+  border: 1px solid #5e7181;
+  border-radius: 2px;
+  background: #1e2a34;
+}
+
+.greenhouse-plan-field-legend i.is-planted {
+  border-color: #8e6837;
+  background: #815526;
+}
+
+.greenhouse-plan-field-legend i.is-spawn {
+  border-color: #31d5f4;
+  background: #0f4a58;
+}
+
+.greenhouse-plan-field-legend i.is-later {
+  border-color: #d49a3f;
+  background: #5a3b13;
+}
+
+.greenhouse-plan-field-legend i.is-unused {
+  border-color: #283844;
+  background: #111922;
+}
+
+.greenhouse-plan-cycle-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.72rem;
+  padding: 0.72rem clamp(0.72rem, 1.5vw, 1rem) 0.9rem;
+}
+
+.greenhouse-solved-cell.is-inspectable {
+  appearance: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.greenhouse-solved-mutation {
+  box-shadow: inset 0 0 0 2px #53d58d;
+}
+
+.greenhouse-solved-mutation-wash {
+  background: rgb(5 55 41 / 0.74);
+}
+
+.greenhouse-solved-mutation.is-wave-0 {
+  box-shadow: inset 0 0 0 2px #36d4f2;
+}
+
+.greenhouse-solved-mutation.is-wave-0 .greenhouse-solved-mutation-wash {
+  background: rgb(7 55 67 / 0.76);
+}
+
+.greenhouse-solved-mutation.is-wave-1,
+.greenhouse-solved-mutation.is-wave-2 {
+  box-shadow: inset 0 0 0 2px #ffca70;
+}
+
+.greenhouse-solved-mutation.is-wave-1 .greenhouse-solved-mutation-wash,
+.greenhouse-solved-mutation.is-wave-2 .greenhouse-solved-mutation-wash {
+  background: rgb(71 46 12 / 0.72);
+}
+
+.greenhouse-solved-cell.is-inspectable:hover,
+.greenhouse-solved-cell.is-inspectable:focus-visible {
+  z-index: 20;
+  outline: 2px solid rgb(111 217 250 / 0.92);
+  outline-offset: -2px;
+  filter: brightness(1.12);
+}
+
+.greenhouse-plan-cycle {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.105);
+  border-radius: 0.55rem;
+  background: rgb(3 7 12 / 0.3);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 31rem;
+}
+
+.greenhouse-plan-cycle.is-manual {
+  grid-column: 1 / -1;
+}
+
+.greenhouse-plan-cycle > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.62rem 0.72rem 0.48rem;
+}
+
+.greenhouse-plan-cycle h3 {
+  font-size: 0.76rem;
+  font-weight: 710;
+}
+
+.greenhouse-plan-cycle > header > strong {
+  color: #ffca70;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.61rem;
+  font-weight: 650;
+}
+
+.greenhouse-plan-cycle-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.greenhouse-plan-field {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(18.6rem, auto) minmax(16rem, 1fr);
+  align-items: start;
+  gap: 0.72rem;
+  padding: 0.68rem 0.72rem 0.78rem;
+  border-top: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.greenhouse-plan-field.is-selected {
+  background: rgb(56 199 244 / 0.045);
+  box-shadow: inset 0.18rem 0 0 rgb(56 199 244 / 0.78);
+}
+
+.greenhouse-plan-field:first-child {
+  border-top-color: rgb(255 255 255 / 0.09);
+}
+
+.greenhouse-plan-field.is-covered {
+  background: rgb(77 199 128 / 0.035);
+}
+
+.greenhouse-plan-field-visual {
+  display: grid;
+  gap: 0.36rem;
+  justify-items: center;
+}
+
+.greenhouse-plan-field-visual[role="button"] {
+  cursor: pointer;
+  border-radius: 0.32rem;
+}
+
+.greenhouse-plan-field-visual[role="button"]:hover,
+.greenhouse-plan-field-visual[role="button"]:focus-visible {
+  outline: 1px solid rgb(56 199 244 / 0.62);
+  outline-offset: 0.24rem;
+}
+
+.greenhouse-plan-field-visual > span {
+  justify-self: start;
+  color: #718498;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.6rem;
+  font-weight: 730;
+  letter-spacing: 0.08em;
+}
+
+.greenhouse-plan-field-visual > .grid {
+  margin: 0;
+}
+
+.greenhouse-plan-field-placeholder {
+  display: grid;
+  width: min(18.6rem, 100%);
+  aspect-ratio: 1;
+  align-content: center;
+  justify-items: center;
+  gap: 0.35rem;
+  padding: 1rem;
+  border: 1px solid #253641;
+  border-radius: 0.34rem;
+  background: rgb(8 15 22 / 0.78);
+  color: #7c91a4;
+  text-align: center;
+}
+
+.greenhouse-plan-field-placeholder svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  color: var(--profile-accent);
+}
+
+.greenhouse-plan-field-placeholder strong {
+  color: #c5d2dc;
+  font-size: 0.7rem;
+}
+
+.greenhouse-plan-field-placeholder small {
+  max-width: 14rem;
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.greenhouse-plan-field-placeholder.is-covered svg {
+  color: #6bd595;
+}
+
+.greenhouse-plan-field-placeholder.is-error svg {
+  color: #eea75a;
+}
+
+.greenhouse-plan-field-copy {
+  min-width: 0;
+}
+
+.greenhouse-plan-field-copy > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.35rem;
+  padding-bottom: 0.52rem;
+}
+
+.greenhouse-plan-field-target {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.greenhouse-plan-field-target:hover,
+.greenhouse-plan-field-target:focus-visible {
+  outline: 0;
+  filter: brightness(1.16);
+}
+
+.greenhouse-plan-field-target > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.05rem;
+}
+
+.greenhouse-plan-field-target small {
+  color: #75899a;
+  font-size: 0.6rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.greenhouse-plan-field-target strong {
+  color: var(--greenhouse-rarity, #d3dde5);
+  font-size: clamp(0.9rem, 1.25vw, 1.08rem);
+  font-weight: 740;
+  letter-spacing: -0.022em;
+  line-height: 1.2;
+}
+
+.greenhouse-plan-field-target strong b {
+  color: #eff9fd;
+  font: inherit;
+}
+
+.greenhouse-plan-field-cycles {
+  display: grid;
+  width: 15.5rem;
+  max-width: 48%;
+  min-width: 0;
+  flex: 0 0 15.5rem;
+  grid-template-columns: 1.45rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.48rem;
+  padding-left: 0.9rem;
+  border-left: 1px solid rgb(255 255 255 / 0.11);
+}
+
+.greenhouse-plan-field-cycles > svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: #6fd9fa;
+}
+
+.greenhouse-plan-field-cycles > span {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.28rem;
+}
+
+.greenhouse-plan-field-cycles strong {
+  color: #e5f8ff;
+  font-family: var(--font-mono, monospace);
+  font-size: 1.02rem;
+  font-weight: 760;
+  line-height: 1;
+}
+
+.greenhouse-plan-field-cycles b {
+  color: #a9c1cf;
+  font-size: 0.7rem;
+  font-weight: 680;
+}
+
+.greenhouse-plan-field-cycles small {
+  grid-column: 1 / -1;
+  color: #748a9c;
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+@media (min-width: 1600px) {
+  .greenhouse-plan-cycle-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .greenhouse-plan-field {
+    grid-template-columns: 18.6rem minmax(0, 1fr);
+    gap: 0.62rem;
+  }
+
+  .greenhouse-plan-cycle-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .greenhouse-plan-field-copy > header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.58rem;
+  }
+
+  .greenhouse-plan-field-cycles {
+    width: 100%;
+    max-width: none;
+    flex: none;
+    grid-template-columns: 1.15rem minmax(0, 1fr);
+    gap: 0.38rem;
+    padding: 0.48rem 0 0;
+    border-top: 1px solid rgb(255 255 255 / 0.1);
+    border-left: 0;
+  }
+
+  .greenhouse-plan-field-cycles > svg {
+    width: 0.96rem;
+    height: 0.96rem;
+  }
+
+  .greenhouse-plan-field-cycles small {
+    font-size: 0.6rem;
+  }
+
+  .greenhouse-plan-field-mechanics > span {
+    padding-block: 0.42rem;
+  }
+}
+
+.greenhouse-plan-field-recipe > small {
+  color: #728699;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 0.6rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+}
+
+.greenhouse-plan-field-recipe {
+  padding: 0.52rem 0 0.56rem;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.greenhouse-plan-field-recipe > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.3rem;
+}
+
+.greenhouse-plan-delay-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding-top: 0.46rem;
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+  color: #93a8b8;
+  font-size: 0.68rem;
+  line-height: 1.42;
+}
+
+.greenhouse-plan-delay-note > svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+  margin-top: 0.08rem;
+  color: #53d9f7;
+}
+
+.greenhouse-plan-delay-note strong {
+  color: #8ce5fb;
+  font-weight: 720;
+}
+
+.greenhouse-plan-field-plant {
+  display: inline-grid;
+  grid-template-columns: 1.7rem minmax(0, auto) auto;
+  align-items: center;
+  gap: 0.34rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--greenhouse-rarity, #c1ced8);
+  font-size: 0.72rem;
+  text-align: left;
+}
+
+.greenhouse-plan-field-plant:hover,
+.greenhouse-plan-field-plant:focus-visible {
+  outline: 0;
+  color: #f1f7fb;
+  filter: brightness(1.15);
+}
+
+.greenhouse-plan-field-plant b {
+  color: #7fdcf9;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.greenhouse-plan-field-mechanics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0.48rem 0 0;
+  border-block: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.greenhouse-plan-field-mechanics > span {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  gap: 0.05rem 0.4rem;
+  padding: 0.5rem 0.58rem 0.52rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.greenhouse-plan-field-mechanics > span:nth-child(even) {
+  padding-left: 0.58rem;
+  border-left: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.greenhouse-plan-field-mechanics > span:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.greenhouse-plan-field-mechanics svg {
+  width: 0.82rem;
+  height: 0.82rem;
+  grid-row: 1 / 3;
+  color: #77dda1;
+}
+
+.greenhouse-plan-field-mechanics .is-spread svg {
+  color: #75dcfb;
+}
+
+.greenhouse-plan-field-mechanics .is-growth svg {
+  color: #b5a7ff;
+}
+
+.greenhouse-plan-field-mechanics .is-expiry svg {
+  color: #ffca70;
+}
+
+.greenhouse-plan-field-mechanics small {
+  color: #7e92a4;
+  font-size: 0.61rem;
+  font-weight: 760;
+  letter-spacing: 0.065em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.greenhouse-plan-field-mechanics b {
+  color: #aebdca;
+  font-size: 0.7rem;
+  font-weight: 580;
+  line-height: 1.4;
+}
+
+.greenhouse-plan-manual-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 0 1rem;
+  padding: 0 0.72rem 0.7rem;
+}
+
+.greenhouse-plan-cycle.is-manual > header span {
+  color: #cf7ff0;
+}
+
+.greenhouse-info-backdrop {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  overflow: hidden;
+  padding: 1rem;
+  background: rgb(1 5 9 / 0.78);
+  backdrop-filter: blur(9px) saturate(0.72);
+  place-items: center;
+}
+
+.greenhouse-info-modal {
+  position: relative;
+  display: flex;
+  width: min(100%, 45rem);
+  max-height: calc(100dvh - 2rem);
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(91 118 139 / 0.58);
+  border-radius: 0.62rem;
+  outline: 0;
+  background: rgb(4 10 15 / 0.97);
+  box-shadow:
+    inset 0 2px var(--greenhouse-rarity, var(--profile-accent)),
+    0 1.6rem 5rem rgb(0 0 0 / 0.58);
+}
+
+.greenhouse-info-modal.has-side-column {
+  width: min(100%, 58rem);
+}
+
+.greenhouse-info-modal.is-status {
+  width: min(100%, 24rem);
+  min-height: 9rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 1.5rem;
+  color: #c9d5de;
+  text-align: center;
+}
+
+.greenhouse-info-modal.is-status h2,
+.greenhouse-info-modal.is-status p {
+  margin: 0;
+}
+
+.greenhouse-info-modal.is-status h2 {
+  color: var(--profile-text);
+  font-size: 1rem;
+}
+
+.greenhouse-info-modal.is-status p {
+  color: #8fa2b5;
+  font-size: 0.7rem;
+}
+
+.greenhouse-info-spinner,
+.greenhouse-info-error-icon {
+  width: 1.45rem;
+  height: 1.45rem;
+  color: var(--profile-accent);
+}
+
+.greenhouse-info-spinner {
+  animation: greenhouse-spin 0.8s linear infinite;
+}
+
+.greenhouse-info-error-icon {
+  color: var(--color-amber-300, #ffca70);
+}
+
+@keyframes greenhouse-spin {
+  to { transform: rotate(360deg); }
+}
+
+.greenhouse-info-header {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.11);
+}
+
+.greenhouse-info-art {
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--greenhouse-rarity, #38c7f4) 45%, transparent);
+  border-radius: 0.38rem;
+  background: color-mix(in srgb, var(--greenhouse-rarity, #38c7f4) 8%, rgb(8 14 20));
+  place-items: center;
+}
+
+.greenhouse-info-header > div {
+  min-width: 0;
+}
+
+.greenhouse-info-header > div > span {
+  display: block;
+  margin-bottom: 0.12rem;
+  color: #88a0b5;
+  font-size: 0.56rem;
+  font-weight: 780;
+  letter-spacing: 0.12em;
+}
+
+.greenhouse-info-header h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--greenhouse-rarity, var(--profile-text));
+  font-size: 1.12rem;
+  font-weight: 740;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-info-header p {
+  margin: 0.16rem 0 0;
+  color: #8295a7;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.61rem;
+}
+
+.greenhouse-info-close {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.28rem;
+  background: transparent;
+  color: #8da0b2;
+  place-items: center;
+}
+
+.greenhouse-info-close:hover,
+.greenhouse-info-close:focus-visible {
+  outline: 0;
+  background: rgb(255 255 255 / 0.07);
+  color: #e4edf3;
+}
+
+.greenhouse-info-close svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.greenhouse-info-modal.is-status > .greenhouse-info-close {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+}
+
+.greenhouse-info-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.greenhouse-info-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-info-fact {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.05rem 0.45rem;
+  min-width: 0;
+  padding: 0.7rem 1rem;
+}
+
+.greenhouse-info-fact + .greenhouse-info-fact {
+  border-left: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-info-fact > svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  grid-row: 1 / 3;
+  color: #73d49a;
+}
+
+.greenhouse-info-fact.is-growth > svg {
+  color: #75d8fb;
+}
+
+.greenhouse-info-fact.is-decay > svg {
+  color: #ffca70;
+}
+
+.greenhouse-info-fact > span {
+  color: #728699;
+  font-size: 0.53rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+
+.greenhouse-info-fact > strong {
+  overflow: hidden;
+  color: #c6d2dc;
+  font-size: 0.67rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-info-ground {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.greenhouse-info-ground i {
+  display: inline-block;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  border-radius: 0.18rem;
+  background-position: center;
+  background-size: cover;
+}
+
+.greenhouse-info-body.has-side-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 18rem);
+}
+
+.greenhouse-info-main,
+.greenhouse-info-side {
+  min-width: 0;
+}
+
+.greenhouse-info-side {
+  border-left: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-info-section {
+  padding: 0.85rem 1rem;
+}
+
+.greenhouse-info-section + .greenhouse-info-section,
+.greenhouse-info-effect-grid,
+.greenhouse-info-side > .greenhouse-info-section + .greenhouse-info-section {
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-info-section > header {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  margin-bottom: 0.38rem;
+}
+
+.greenhouse-info-section > header svg {
+  width: 0.83rem;
+  height: 0.83rem;
+  color: var(--profile-accent);
+}
+
+.greenhouse-info-section.is-special > header svg,
+.greenhouse-info-section.is-requirements > header svg {
+  color: #ffca70;
+}
+
+.greenhouse-info-section.is-harvest > header svg {
+  color: #cf7ff0;
+}
+
+.greenhouse-info-section.is-positive > header svg {
+  color: #73d49a;
+}
+
+.greenhouse-info-section.is-negative > header svg {
+  color: #ff8c93;
+}
+
+.greenhouse-info-section h3 {
+  margin: 0;
+  color: #d0dbe3;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.greenhouse-info-section > p,
+.greenhouse-info-effects article p {
+  margin: 0;
+  color: #91a3b4;
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.greenhouse-info-effect-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.greenhouse-info-effect-grid > section + section {
+  border-left: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.greenhouse-info-effects article + article {
+  margin-top: 0.48rem;
+  padding-top: 0.48rem;
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.greenhouse-info-effects article strong {
+  display: block;
+  margin-bottom: 0.08rem;
+  color: #73d49a;
+  font-size: 0.66rem;
+}
+
+.greenhouse-info-effects.is-negative article strong {
+  color: #ff8c93;
+}
+
+.greenhouse-info-requirement-grid {
+  padding: 0.3rem 0 0.75rem;
+  border-bottom: 1px solid rgb(255 255 255 / 0.09);
+}
+
+.greenhouse-info-item-list > div {
+  display: grid;
+  grid-template-columns: 1.85rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.48rem;
+  padding: 0.42rem 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.greenhouse-info-item-list > div > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.06rem;
+}
+
+.greenhouse-info-item-list strong {
+  overflow: hidden;
+  color: var(--greenhouse-rarity, #c8d4dd);
+  font-size: 0.65rem;
+  font-weight: 670;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.greenhouse-info-item-list small {
+  color: #7d90a2;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.56rem;
+}
+
+.greenhouse-loadout-preview {
+  grid-template-columns: minmax(10rem, 12rem) minmax(0, 1fr);
+}
+
+.greenhouse-loadout-preview-grid {
+  max-width: 12rem;
+}
+
+@media (max-width: 1760px) and (min-width: 981px) {
+  .greenhouse-workspace-grid {
+    grid-template-columns: minmax(14rem, 0.72fr) minmax(27rem, 1.45fr);
+  }
+
+  .greenhouse-plot-brief {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .greenhouse-plot-brief-lead {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  }
+
+  .greenhouse-plot-brief-group:nth-child(2) {
+    border-left: 0;
+  }
+
+  .greenhouse-support {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid var(--profile-border);
+    border-left: 0;
+  }
+
+  .greenhouse-support > .greenhouse-zone + .greenhouse-zone {
+    border-top: 0;
+    border-left: 1px solid var(--profile-border);
+  }
+
+  .greenhouse-plant-list {
+    max-height: 17rem;
+  }
+}
+
+@media (max-width: 980px) {
+  .greenhouse-workspace-grid {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .greenhouse-plot,
+  .greenhouse-support {
+    border-top: 1px solid var(--profile-border);
+    border-left: 0;
+  }
+
+  .greenhouse-plot {
+    min-height: 0;
+  }
+
+  .greenhouse-plot-brief {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .greenhouse-plot-brief-lead {
+    grid-column: 1 / -1;
+    align-content: start;
+    border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  }
+
+  .greenhouse-plot-brief-group:nth-child(2) {
+    border-left: 0;
+  }
+
+  .greenhouse-support {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .greenhouse-support > .greenhouse-zone + .greenhouse-zone {
+    border-top: 0;
+    border-left: 1px solid var(--profile-border);
+  }
+
+  .greenhouse-target-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: 0 1rem;
+  }
+
+  .greenhouse-plan-breakdown-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .greenhouse-plan-breakdown-heading > div:first-child,
+  .greenhouse-plan-totals {
+    flex: 0 0 auto;
+  }
+
+  .greenhouse-plan-totals {
+    width: 100%;
+  }
+
+  .greenhouse-plan-breakdown-body {
+    display: block;
+  }
+
+  .greenhouse-plan-supplies {
+    display: block;
+    border-right: 0;
+    border-bottom: 1px solid var(--profile-border);
+  }
+
+  .greenhouse-plan-field {
+    display: block;
+  }
+
+  .greenhouse-plan-field-visual {
+    margin-bottom: 0.72rem;
+  }
+
+  .greenhouse-plan-field-copy > header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.58rem;
+  }
+
+  .greenhouse-plan-field-cycles {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    flex: none;
+    padding: 0.48rem 0 0;
+    border-top: 1px solid rgb(255 255 255 / 0.1);
+    border-left: 0;
+  }
+
+  .greenhouse-plan-field-cycles small {
+    white-space: normal;
+  }
+
+}
+
+@media (max-width: 820px) {
+  /* Greenhouse is a work surface on small screens. Replace Profile's tall
+     character stage with the same compact headed identity bar so the plot is
+     not pushed an entire viewport away. */
+  .greenhouse-view-root .profile-character-stage {
+    display: none;
+  }
+
+  .greenhouse-view-root .profile-identity {
+    display: grid;
+    min-height: 4.35rem;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    gap: 0.68rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .greenhouse-view-root .profile-identity-player-head {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .greenhouse-view-root .profile-identity h1 {
+    font-size: 1.08rem;
+  }
+
+  .greenhouse-view-root .profile-identity-actions {
+    display: none;
+  }
+
+  .greenhouse-workspace {
+    margin-top: 0.65rem;
+  }
+
+  .greenhouse-zone {
+    padding: 0.85rem 0.75rem;
+  }
+
+  .greenhouse-target-list,
+  .greenhouse-support {
+    display: block;
+  }
+
+  .greenhouse-goal-icon-grid {
+    max-height: 7.2rem;
+  }
+
+  .greenhouse-support > .greenhouse-zone + .greenhouse-zone {
+    border-top: 1px solid var(--profile-border);
+    border-left: 0;
+  }
+
+  .greenhouse-plot-heading {
+    align-items: center;
+  }
+
+  .greenhouse-plot-brief {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .greenhouse-plot-brief-lead {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  }
+
+  .greenhouse-plot-brief-group:nth-child(2) {
+    border-left: 0;
+  }
+
+  .greenhouse-plot-measure {
+    min-height: 23rem;
+    padding-block: 0.8rem;
+  }
+
+  .greenhouse-plant-list {
+    max-height: 20rem;
+  }
+
+  .greenhouse-plot-primary {
+    align-items: flex-end;
+    flex-direction: column-reverse;
+  }
+
+  .greenhouse-plot-legend {
+    justify-content: flex-start;
+  }
+
+  .greenhouse-plan-sequence-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .greenhouse-plan-sequence-actions {
+    justify-items: start;
+  }
+
+  .greenhouse-plan-timing {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .greenhouse-plan-timing > span:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .greenhouse-plan-timing > span:nth-child(n + 3) {
+    border-top: 1px solid rgb(255 255 255 / 0.09);
+  }
+
+  .greenhouse-plan-field-legend {
+    justify-content: flex-start;
+  }
+
+  .greenhouse-plan-cycle-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .greenhouse-info-body.has-side-column {
+    display: block;
+  }
+
+  .greenhouse-info-side {
+    border-top: 1px solid rgb(255 255 255 / 0.1);
+    border-left: 0;
+  }
+}
+
+@media (min-width: 821px) and (max-width: 1380px) {
+  .greenhouse-support {
+    align-items: stretch;
+  }
+
+  .greenhouse-requirements,
+  .greenhouse-plant-tray {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .greenhouse-need-list,
+  .greenhouse-plant-list {
+    flex: 1 1 auto;
+  }
+
+  .greenhouse-plant-list {
+    height: 0;
+    min-height: 0;
+    max-height: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .greenhouse-plot-heading {
+    display: grid;
+  }
+
+  .greenhouse-plot-primary {
+    justify-content: flex-start;
+  }
+
+  :is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button) span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  :is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button) {
+    width: 2rem;
+    flex: 0 0 2rem;
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .greenhouse-plot-tools {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .greenhouse-plot-tools::-webkit-scrollbar {
+    display: none;
+  }
+
+  :is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button):first-child {
+    width: auto;
+    padding-inline: 0.42rem;
+  }
+
+  :is(.greenhouse-plot-tools > button, .greenhouse-plot-tools > .utility-info > button):first-child span {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+
+  .greenhouse-plot-measure {
+    min-height: 20rem;
+  }
+
+  .greenhouse-plot-primary {
+    align-items: flex-start;
+  }
+
+  .greenhouse-plot-legend {
+    display: grid;
+    gap: 0.28rem;
+  }
+
+  .greenhouse-plan-totals {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .greenhouse-plan-totals > span:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .greenhouse-plan-totals > span:nth-child(n + 3) {
+    border-top: 1px solid rgb(255 255 255 / 0.1);
+  }
+
+  .greenhouse-plan-totals > span:last-child {
+    grid-column: 1 / -1;
+    border-left: 0;
+  }
+
+  .greenhouse-plan-supplies {
+    display: block;
+  }
+
+  .greenhouse-plan-supply-list {
+    grid-template-columns: 1fr;
+  }
+
+  .greenhouse-plan-cycle-grid {
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
+
+  .greenhouse-plan-cycle > header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.24rem;
+  }
+
+  .greenhouse-plan-field {
+    display: block;
+    padding-inline: 0.75rem;
+  }
+
+  .greenhouse-plan-field-visual {
+    margin-bottom: 0.72rem;
+  }
+
+  .greenhouse-plan-field-visual > span {
+    justify-self: center;
+  }
+
+  .greenhouse-plan-field-mechanics {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .greenhouse-plan-field-mechanics > span,
+  .greenhouse-plan-field-mechanics > span:nth-child(even) {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgb(255 255 255 / 0.06);
+    border-left: 0;
+  }
+
+  .greenhouse-plan-field-mechanics > span:last-child {
+    border-bottom: 0;
+  }
+
+  .greenhouse-info-backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .greenhouse-info-modal,
+  .greenhouse-info-modal.has-side-column {
+    width: 100%;
+    max-height: 100dvh;
+    border-width: 0;
+    border-radius: 0;
+  }
+
+  .greenhouse-info-modal.is-status {
+    width: calc(100% - 1.5rem);
+    max-height: none;
+    align-self: center;
+    justify-self: center;
+    border: 1px solid rgb(91 118 139 / 0.58);
+    border-radius: 0.62rem;
+  }
+
+  .greenhouse-info-header {
+    grid-template-columns: 3rem minmax(0, 1fr) auto;
+    gap: 0.6rem;
+    padding-inline: 0.75rem;
+  }
+
+  .greenhouse-info-art {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .greenhouse-info-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .greenhouse-info-fact + .greenhouse-info-fact {
+    border-top: 1px solid rgb(255 255 255 / 0.08);
+    border-left: 0;
+  }
+
+  .greenhouse-info-effect-grid {
+    display: block;
+  }
+
+  .greenhouse-info-effect-grid > section + section {
+    border-top: 1px solid rgb(255 255 255 / 0.1);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  .greenhouse-plan-timing {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .greenhouse-plan-timing > span,
+  .greenhouse-plan-timing > span:nth-child(n + 3) {
+    border-top: 1px solid rgb(255 255 255 / 0.09);
+    border-left: 0;
+  }
+
+  .greenhouse-plan-timing > span:first-child {
+    border-top: 0;
+  }
+
+  .greenhouse-plot-brief-item {
+    width: 100%;
+    grid-template-columns: 1.8rem minmax(0, 1fr);
+  }
+
+  .greenhouse-plot-brief-item strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .greenhouse-loadout-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .greenhouse-loadout-preview-grid {
+    justify-self: center;
+  }
+}
+
+.greenhouse-target-list { container: greenhouse-targets / inline-size; }
+.greenhouse-target-copy strong,.greenhouse-need-row strong { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.greenhouse-plan-timing { grid-template-columns: repeat(auto-fit,minmax(min(100%,11rem),1fr)); }
+.greenhouse-plan-timing > span { grid-template-columns: 1.15rem minmax(0,1fr); }
+.greenhouse-plan-timing small,.greenhouse-plan-timing b { white-space: normal; overflow: visible; text-overflow: clip; }
+.greenhouse-plan-timing em { grid-column: 2; grid-row: auto; }
+.greenhouse-plan-totals { grid-template-columns: repeat(auto-fit,minmax(8rem,1fr)); gap: .6rem 0; }
+.greenhouse-plan-field.is-selected,.greenhouse-plan-field.is-covered { background: transparent; }
+.greenhouse-plan-field.is-selected { box-shadow: inset 2px 0 var(--profile-accent); }
+.greenhouse-plot-brief { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.greenhouse-plot-brief-lead { grid-column: 1 / -1; border-bottom: 1px solid var(--profile-border); }
+.greenhouse-plot-brief-group:nth-child(2) { border-left: 0; }
+.greenhouse-plot-brief-item { grid-template-columns: 1.9rem minmax(0,1fr); }
+.greenhouse-plot-brief-item strong { white-space: normal; overflow: visible; }
+.greenhouse-plant-identity { display: grid; grid-template-columns: 2rem minmax(0,auto); align-items: center; gap: .5rem; width: fit-content; max-width: 100%; min-width: 0; }
+.greenhouse-plant-identity .profile-item-tile { width: 2rem; height: 2rem; }
+.greenhouse-plant-identity .profile-item-tile-icon { width: 26px; height: 26px; }
+.greenhouse-plant-identity .profile-item-tile-count { font-size: 11px; right: 2px; bottom: 1px; }
+.greenhouse-plant-identity .greenhouse-plant-copy { min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; }
+.greenhouse-plant-copy strong { display: block; font-size: .75rem; line-height: 1.35; overflow-wrap: anywhere; }
+.greenhouse-plant-copy small { display: block; margin-top: 2px; color: var(--profile-muted); font-size: .65rem; line-height: 1.35; }
+.greenhouse-plan-supply-list .greenhouse-plant-identity { padding-block: .35rem; }
+.utility-workbench .greenhouse-target-catalogue { display: flex; flex-direction: column; padding: 1rem 1rem .5rem; }
+.utility-workbench .greenhouse-target-catalogue > .greenhouse-zone-heading,
+.utility-workbench .utility-target-search { flex: none; }
+.utility-workbench .greenhouse-goal-search-results { display: flex; flex: 1; min-height: 0; }
+.utility-workbench .greenhouse-goal-icon-grid { width: 100%; max-height: none; min-height: 0; align-content: start; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
+.utility-workbench .greenhouse-target-list { display: block; max-height: none; margin-top: 0; padding: .45rem 1rem 1rem; }
+.utility-workbench > .greenhouse-plot { padding: 1rem; overflow: clip; }
+.utility-workbench .greenhouse-plot > .greenhouse-zone-heading,
+.utility-workbench .greenhouse-plot > .greenhouse-plot-tools { flex: none; }
+.utility-workbench .greenhouse-plot-scroll { flex: 1; }
+.utility-workbench .greenhouse-plot-measure { flex: none; min-height: 0; align-content: start; }
+.utility-workbench .greenhouse-support > .greenhouse-zone { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.utility-workbench .greenhouse-need-list,
+.utility-workbench .greenhouse-plant-list { flex: 1; max-height: none; }
+@container greenhouse-targets (max-width: 16rem) {
+  .greenhouse-target-row { grid-template-columns: minmax(0,1fr); gap: .35rem; }
+  .greenhouse-target-controls { justify-content: flex-end; }
+  .greenhouse-row-remove { top: 1.4rem; }
+}
+@container profile-workspace (max-width: 40rem) {
+  .profile-workspace .greenhouse-workspace-grid.utility-workbench { grid-template-rows: auto var(--utility-workspace-height) 36rem; }
+  .profile-workspace .utility-workbench > .greenhouse-goals.utility-rail-split { grid-template-rows: auto auto; }
+  .utility-workbench .greenhouse-goal-icon-grid { max-height: 10rem; }
+  .utility-workbench .greenhouse-target-list { max-height: 16rem; }
+}
+@container profile-workspace (max-width: 46rem) {
+  .greenhouse-workspace-grid { display: flex; flex-direction: column; }
+  .greenhouse-plot,.greenhouse-support { border-left: 0; border-top: 1px solid var(--profile-border); }
+}
+@container profile-workspace (min-width: 26rem) and (max-width: 52rem) {
+  .greenhouse-plan-timing { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .greenhouse-plan-totals { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .greenhouse-plan-totals > .utility-metric:last-child { grid-column: span 2; }
+}
+@container profile-workspace (max-width: 26rem) {
+  .greenhouse-plan-totals { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0; }
+  .greenhouse-plan-totals > .utility-metric:last-child { grid-column: 1 / -1; }
+}

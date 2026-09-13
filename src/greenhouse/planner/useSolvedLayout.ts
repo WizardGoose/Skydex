@@ -27,6 +27,20 @@ import type { SolveResponse } from "../types/greenhouse";
  */
 export const FULL_GRID = FULL_PLOT;
 
+/** A stable identity for a usable-cell shape, independent of array order. */
+export const greenhouseCellKey = (cells: readonly [number, number][]): string =>
+  [...new Set(cells.map(([row, col]) => row * 10 + col))]
+    .sort((left, right) => left - right)
+    .join(".");
+
+const FULL_GRID_KEY = greenhouseCellKey(FULL_GRID);
+
+/** Preserve the shipped full-grid cache keys; scope every other shape. */
+export const greenhouseCellCacheSuffix = (cells: readonly [number, number][]): string => {
+  const key = greenhouseCellKey(cells);
+  return key === FULL_GRID_KEY ? "" : `@cells:${key}`;
+};
+
 /**
  * Whether a plot solve strips crops that contribute nothing.
  *
@@ -65,18 +79,25 @@ export const cropBill = (placements: readonly { crop: string }[]): Record<string
  * real question through the real service with no DOM in the way. The hook adds
  * React to this and nothing else.
  */
-export const solveLayout = (
+export const solveLayout = async (
   cells: [number, number][],
   mutationIds: string[],
   spots?: number,
   signal?: AbortSignal
-): Promise<SolveResponse> =>
-  solveGreenhouseDirect(
+): Promise<SolveResponse> => {
+  const result = await solveGreenhouseDirect(
     cells,
     mutationIds.map((id) => solveGoal(id, spots)),
     signal,
     PRUNE_UNUSED_CROPS
   );
+  if (mutationIds.some((id) =>
+    result.mutations.filter((placement) => placement.mutation === id).length < (spots ?? 1)
+  )) {
+    throw new Error("No complete field was found in the current usable cells. Unlock more connected cells in Edit cells and try again.");
+  }
+  return result;
+};
 
 export interface SolvedLayout {
   result: SolveResponse | null;
@@ -95,49 +116,54 @@ export interface SolvedLayout {
 export const useSolvedLayout = (
   mutationIds: string[] | null,
   cells: [number, number][] = FULL_GRID,
-  spots?: number
+  spots?: number,
+  enabled = true,
 ): SolvedLayout => {
-  const [result, setResult] = useState<SolveResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<{
+    signature: string;
+    result: SolveResponse | null;
+    loading: boolean;
+    error: string | null;
+  }>({ signature: "", result: null, loading: false, error: null });
 
   /*
    * Stable key so we only re-solve when the question changes. The spot count is
-   * PART OF THE QUESTION and so has to be in here: the effect below depends on
-   * this string alone, deliberately, and a size that changed without moving the
-   * signature would leave the previous layout on screen looking current.
+   * PART OF THE QUESTION, as is the player's usable-cell shape. The effect
+   * below depends on this string alone deliberately; both inputs therefore
+   * have to be represented or a profile-slot refresh could leave a valid-looking
+   * solution from the wrong greenhouse on screen.
    */
-  const signature = mutationIds ? `${[...mutationIds].sort().join("|")}@${spots ?? "max"}` : "";
+  const orderedMutationIds = enabled && mutationIds ? [...mutationIds].sort() : [];
+  const signature = orderedMutationIds.length
+    ? `${orderedMutationIds.join("|")}@${spots ?? "max"}${greenhouseCellCacheSuffix(cells)}`
+    : "";
 
   useEffect(() => {
     if (!signature) {
-      setResult(null);
-      setError(null);
-      setLoading(false);
       return;
     }
 
     const controller = new AbortController();
-    setLoading(true);
-    setError(null);
+    setAnswer({ signature, result: null, loading: true, error: null });
 
-    solveLayout(cells, signature.slice(0, signature.lastIndexOf("@")).split("|"), spots, controller.signal)
+    solveLayout(cells, orderedMutationIds, spots, controller.signal)
       .then((res) => {
         if (controller.signal.aborted) return;
-        setResult(res);
-        setLoading(false);
+        setAnswer({ signature, result: res, loading: false, error: null });
       })
       .catch((err: Error) => {
         if (controller.signal.aborted) return;
-        setError(err.message);
-        setResult(null);
-        setLoading(false);
+        setAnswer({ signature, result: null, loading: false, error: err.message });
       });
 
     return () => controller.abort();
-    // `cells` is a module-level constant by default; solving keys off the set.
+    // `signature` carries the mutation set, spot count and canonical cell set.
   }, [signature]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A new shape must not display the previous shape's answer before its effect runs.
+  const { result, loading, error } = signature && answer.signature === signature
+    ? answer
+    : { result: null, loading: Boolean(signature), error: null };
   const yieldPerPlot: Record<string, number> = {};
   for (const m of result?.mutations ?? []) {
     yieldPerPlot[m.mutation] = (yieldPerPlot[m.mutation] ?? 0) + 1;

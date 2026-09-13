@@ -58,6 +58,12 @@ describe("readRequirement", () => {
     expect(req?.threshold).toBe("Tier 4");
   });
 
+  it("reads a skill level requirement", () => {
+    const req = readRequirement({ type: "SKILL", skill: "HUNTING", level: 20 });
+    expect(req).toMatchObject({ kind: "skill", target: "Hunting", threshold: "20" });
+    expect(req?.how).toBe("Reach Hunting level 20.");
+  });
+
   it("names a type it does not understand instead of hiding it", () => {
     const req = readRequirement({ type: "MELODY_HAIR" });
     expect(req?.kind).toBe("other");
@@ -197,6 +203,20 @@ describe("checkRequirement", () => {
      * is still readable and still shown; only the verdict is withheld.
      */
     const req = readRequirement({ type: "HEART_OF_THE_MOUNTAIN", tier: 4 }) as Requirement;
+    expect(checkRequirement(req, progress).state).toBe("unknown");
+  });
+
+  it("checks a skill requirement against a resource-derived level", () => {
+    const req = readRequirement({ type: "SKILL", skill: "HUNTING", level: 20 }) as Requirement;
+    expect(checkRequirement(req, { ...progress, skillLevels: { HUNTING: 29 } })).toMatchObject({
+      state: "met",
+      have: "29",
+    });
+    expect(checkRequirement(req, { ...progress, skillLevels: { HUNTING: 12 } })).toMatchObject({
+      state: "unmet",
+      have: "12",
+      gap: 8,
+    });
     expect(checkRequirement(req, progress).state).toBe("unknown");
   });
 

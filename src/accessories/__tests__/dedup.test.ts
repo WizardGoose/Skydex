@@ -124,8 +124,10 @@ describe("composeSnapshot folding", () => {
   it("counts next steps against rungs, which is the header's honesty", () => {
     const snap = snapshotFor([]);
     // Four missing rungs, but only two things to actually go and do.
-    expect(snap.reachCounts.now).toBe(4);
-    expect(snap.nextStepCounts.now).toBe(2);
+    // This synthetic wiki catalogue has no measured acquisition gate, so the
+    // conservative classifier keeps it in review instead of claiming "now".
+    expect(snap.reachCounts.unknownReach).toBe(4);
+    expect(snap.nextStepCounts.unknownReach).toBe(2);
     expect(snap.foldedCount).toBe(2);
   });
 

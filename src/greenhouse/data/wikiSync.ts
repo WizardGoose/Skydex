@@ -104,14 +104,14 @@ export const parseWikiMutations = (wikitext: string, knownNames: Map<string, str
     const rarity = RARITIES.find((r) => t.includes(`{{${r}}}`));
     const size = t.match(/'''Size:'''\s*(\d+)\s*x\s*\d+/i);
     /*
-     * The whole Growth Surface LINE first, then every {{ID|...}} on it.
+     * The whole Growth Surface LINE first, then every identity template on it.
      * Capturing one template in a single regex is exactly the bug that cost
      * Lonelily its second surface: the wiki writes multi-surface rows as
-     * `{{ID|Farmland}}, {{ID|Dirt}}` and a lone capture stops at the comma.
+     * `{{Item|Farmland}}, {{Item|Dirt}}` and a lone capture stops at the comma.
      */
     const groundLine = t.match(/'''Growth Surface:'''([^\n]*)/i);
     const grounds = groundLine
-      ? [...groundLine[1].matchAll(/\{\{ID\|([^}]+)\}\}/g)].map((m) => slug(m[1]))
+      ? [...groundLine[1].matchAll(/\{\{(?:ID|Item)\|([^}|]+)(?:\|[^}]*)?\}\}/g)].map((m) => slug(m[1]))
       : [];
     if (!rarity || !size || grounds.length === 0) continue; // not a mutation row
 
@@ -130,6 +130,10 @@ export const parseWikiMutations = (wikitext: string, knownNames: Map<string, str
     const spread = t.match(/'''Spreading Conditions:'''([^\n]*)/i);
     if (spread) {
       for (const m of spread[1].matchAll(/\{\{RD\|\s*(\d+)x\s*([^}]+?)\s*\}\}/g)) add(m[2], m[1]);
+      for (const m of spread[1].matchAll(/\{\{Item\|\s*([^}|]+)([^}]*)\}\}/g)) {
+        const amount = m[2].match(/\|\s*amount\s*=\s*(\d+)/i);
+        if (amount) add(m[1], amount[1]);
+      }
       for (const m of spread[1].matchAll(/(\d+)x\s*\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) add(m[2], m[1]);
     }
 
@@ -210,6 +214,7 @@ export const syncCooldownUntil = (): number => syncGate.cooldownUntil();
  * different about each. Refusal is not an error state worth showing as one.
  */
 export const SYNC_REFUSED = "sync-refused";
+export const WIKI_REFRESH_BLOCKED = "Live wiki refresh blocked by Cloudflare challenge";
 
 export const fetchWikiMutations = async (
   knownNames: Map<string, string>,
@@ -235,7 +240,12 @@ const runFetchWikiMutations = async (
   })}`;
 
   const res = await fetch(url, { signal });
-  if (!res.ok) throw new Error(`Wiki responded ${res.status}`);
+  if (!res.ok) {
+    if (res.headers.get("Cf-Mitigated")?.toLowerCase() === "challenge") {
+      throw new Error(WIKI_REFRESH_BLOCKED);
+    }
+    throw new Error(`Wiki responded ${res.status}`);
+  }
 
   const json = (await res.json()) as { parse?: { wikitext?: string } };
   const wikitext = json.parse?.wikitext;
@@ -264,7 +274,7 @@ export interface FieldChange {
  * decay, drops and prose from the bundled copy survive untouched. Every change
  * is reported so the UI can say what moved rather than silently differing.
  */
-export const applyWikiMutations = <T extends Record<string, any>>(
+export const applyWikiMutations = <T extends object>(
   bundled: Record<string, T>,
   wiki: Record<string, WikiMutation>
 ): { merged: Record<string, T>; changes: FieldChange[] } => {
@@ -287,6 +297,7 @@ export const applyWikiMutations = <T extends Record<string, any>>(
     }
 
     const next = { ...base } as T;
+    const baseRecord = base as unknown as Record<string, unknown>;
 
     const check = (field: keyof WikiMutation & string, fromVal: unknown, toVal: unknown) => {
       if (String(fromVal) === String(toVal)) return;
@@ -294,16 +305,16 @@ export const applyWikiMutations = <T extends Record<string, any>>(
       (next as Record<string, unknown>)[field] = toVal;
     };
 
-    check("rarity", base.rarity, w.rarity);
-    check("size", base.size, w.size);
-    check("ground", base.ground, w.ground);
+    check("rarity", baseRecord.rarity, w.rarity);
+    check("size", baseRecord.size, w.size);
+    check("ground", baseRecord.ground, w.ground);
     /*
      * The full surface list, compared as a joined key because two arrays are
      * never `String`-equal. A bundled record without `grounds` reads as its
      * one `ground`, so the 39 single-surface mutations produce no change row
      * and Lonelily produces exactly one.
      */
-    const baseGrounds = (base.grounds as string[] | undefined) ?? [base.ground];
+    const baseGrounds = (baseRecord.grounds as string[] | undefined) ?? [String(baseRecord.ground ?? "")];
     // `?? [w.ground]` is defence, not the plan: the cache key bump retires
     // ground-only snapshots, but a hand-built snapshot (tests, tooling) that
     // states one ground still deserves a sane reading rather than a throw.
@@ -314,10 +325,13 @@ export const applyWikiMutations = <T extends Record<string, any>>(
     }
     // Jerryflower has no spawn-chance column for the regex to anchor on, so a
     // miss here means "the row does not say", not "zero".
-    if (w.growth_stages !== null) check("growth_stages", base.growth_stages, w.growth_stages);
+    if (w.growth_stages !== null) check("growth_stages", baseRecord.growth_stages, w.growth_stages);
 
-    if (reqKey(base.requirements ?? []) !== reqKey(w.requirements)) {
-      changes.push({ id, name: w.name, field: "requirements", from: reqKey(base.requirements ?? []), to: reqKey(w.requirements) });
+    const baseRequirements = Array.isArray(baseRecord.requirements)
+      ? baseRecord.requirements as { crop: string; count: number }[]
+      : [];
+    if (reqKey(baseRequirements) !== reqKey(w.requirements)) {
+      changes.push({ id, name: w.name, field: "requirements", from: reqKey(baseRequirements), to: reqKey(w.requirements) });
       (next as Record<string, unknown>).requirements = w.requirements;
     }
 

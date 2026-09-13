@@ -1,0 +1,444 @@
+.profile-pets-preview .profile-pbc-content {
+  gap: 0.78rem;
+}
+
+.profile-pet-active {
+  --profile-active-pet-rarity: rgb(192 205 216 / 0.9);
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(15rem, 0.7fr);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--profile-active-pet-rarity) 22%, rgb(255 255 255 / 0.07));
+  border-radius: 0.62rem;
+  background: color-mix(in srgb, var(--profile-active-pet-rarity) 6%, rgb(4 9 15 / 0.78));
+}
+
+.profile-pet-active[data-profile-pet-rarity="common"] { --profile-active-pet-rarity: #f0f0f0; }
+.profile-pet-active[data-profile-pet-rarity="uncommon"] { --profile-active-pet-rarity: #55ff55; }
+.profile-pet-active[data-profile-pet-rarity="rare"] { --profile-active-pet-rarity: #5555ff; }
+.profile-pet-active[data-profile-pet-rarity="epic"] { --profile-active-pet-rarity: #aa00aa; }
+.profile-pet-active[data-profile-pet-rarity="legendary"] { --profile-active-pet-rarity: #ffaa00; }
+.profile-pet-active[data-profile-pet-rarity="mythic"] { --profile-active-pet-rarity: #ff55ff; }
+.profile-pet-active[data-profile-pet-rarity="divine"] { --profile-active-pet-rarity: #55ffff; }
+
+.profile-pet-active-identity {
+  display: grid;
+  grid-template-columns: 5.4rem minmax(8rem, 1fr) auto;
+  min-width: 0;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.56rem 0.72rem;
+}
+
+.profile-pet-featured-tile,
+.profile-pet-featured-tile .profile-item-tile-wrap {
+  display: block;
+  width: 5.4rem;
+  height: 5.4rem;
+}
+
+.profile-pet-featured-tile .profile-item-tile-icon {
+  width: 3.25rem;
+  height: 3.25rem;
+}
+
+.profile-pet-featured-tile .profile-item-tile-icon > * {
+  transform: scale(1.55);
+}
+
+.profile-pet-featured-tile .profile-item-tile-corner {
+  right: 0.23rem;
+  left: auto;
+  padding: 0.08rem 0.23rem;
+  color: rgb(242 247 251 / 0.96);
+  font-size: 0.72rem;
+  font-weight: 620;
+}
+
+.profile-pet-active-copy {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 0.1rem;
+}
+
+.profile-pet-active-label,
+.profile-pet-progress-head > span,
+.profile-pet-attachments small,
+.profile-pet-active-progress dt {
+  color: var(--profile-label);
+  font-size: 0.69rem;
+  font-weight: 720;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.profile-pet-active-copy .profile-pet-active-value {
+  margin: 0.12rem 0 0;
+  overflow: hidden;
+  color: var(--profile-active-pet-rarity);
+  font-size: clamp(1.25rem, 2.2vw, 1.55rem);
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-pet-active-copy .profile-pet-active-meta,
+.profile-pet-attachment-value {
+  margin: 0.24rem 0 0;
+  color: rgb(185 199 211 / 0.82);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.profile-pet-active-copy .profile-pet-active-meta {
+  text-transform: capitalize;
+}
+
+.profile-pet-attachments {
+  display: flex;
+  align-items: center;
+  gap: 0.82rem;
+}
+
+.profile-pet-attachments > div {
+  display: grid;
+  grid-template-rows: auto 3.4rem;
+  width: 4.2rem;
+  min-width: 4.2rem;
+  align-items: center;
+  justify-items: center;
+  gap: 0.32rem;
+}
+
+.profile-pet-attachments .profile-item-tile-wrap {
+  width: 3.4rem;
+  height: 3.4rem;
+}
+
+.profile-pet-attachments .profile-item-tile-icon > * {
+  transform: scale(1.08);
+}
+
+.profile-pet-active-stats {
+  grid-column: 1 / -1;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.38rem 1.15rem;
+  margin: 0;
+  padding-top: 0.52rem;
+  border-top: 1px solid rgb(255 255 255 / 0.075);
+}
+
+.profile-pet-active-stats > div {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.42rem;
+}
+
+.profile-pet-active-stats dt,
+.profile-pet-active-stats dd {
+  margin: 0;
+  font-size: 0.69rem;
+  font-weight: 680;
+  white-space: nowrap;
+}
+
+.profile-pet-attachment-placeholder {
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  place-items: center;
+  border: 1px solid rgb(171 187 199 / 0.16);
+  border-radius: 0.46rem;
+  background: rgb(6 10 15 / 0.5);
+  color: rgb(164 180 192 / 0.58);
+}
+
+.profile-pet-attachment-placeholder > svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke-width: 1.55;
+}
+
+.profile-pet-active-progress {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 0.72rem;
+  padding: 0.7rem 0.82rem 0.7rem 1.15rem;
+  border-left: 1px solid color-mix(in srgb, var(--profile-active-pet-rarity) 17%, rgb(255 255 255 / 0.045));
+}
+
+.profile-pet-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.profile-pet-progress-head strong {
+  color: var(--profile-active-pet-rarity);
+  font-size: 0.88rem;
+  font-weight: 620;
+}
+
+.profile-pet-progress-track {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.075);
+  overflow: hidden;
+}
+
+.profile-pet-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--profile-active-pet-rarity);
+  box-shadow: none;
+}
+
+.profile-pet-active.is-maxed .profile-pet-progress-track i {
+  background: var(--profile-active-pet-rarity);
+  box-shadow: none;
+}
+
+.profile-pet-active-progress dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.78rem;
+  margin: 0;
+}
+
+.profile-pet-active-progress dl > div {
+  min-width: 0;
+}
+
+.profile-pet-active-progress dd {
+  margin: 0.2rem 0 0;
+  overflow: hidden;
+  color: rgb(225 233 240 / 0.9);
+  font-size: 0.86rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-pet-active-progress dl > div:first-child dd {
+  color: var(--profile-active-pet-rarity);
+}
+
+.profile-pet-active-missing {
+  padding: 0.72rem 0.8rem;
+  border: 1px solid rgb(240 181 66 / 0.18);
+  border-radius: 0.58rem;
+  background: rgb(240 181 66 / 0.04);
+  color: rgb(211 201 177 / 0.76);
+  font-size: 0.69rem;
+}
+
+.profile-pet-search {
+  margin: 0.62rem;
+}
+
+.profile-pet-grid.profile-item-grid {
+  grid-template-columns: repeat(auto-fill, minmax(4.6rem, 1fr));
+  gap: 0.48rem;
+  padding: 0.08rem 0.62rem 0.66rem;
+}
+
+.profile-pet-owned-tile {
+  display: block;
+  min-width: 0;
+}
+
+.profile-pet-owned-tile .profile-item-tile-icon {
+  width: 3.05rem;
+  height: 3.05rem;
+}
+
+.profile-pet-owned-tile .profile-item-tile-icon > * {
+  transform: scale(1.32);
+}
+
+.profile-pet-owned-tile .profile-item-tile-corner {
+  right: 0.2rem;
+  left: auto;
+  color: rgb(238 244 249 / 0.94);
+  font-size: 0.68rem;
+  font-weight: 620;
+}
+
+.profile-pet-pages {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0.62rem 0.68rem;
+}
+
+.profile-pet-pages button {
+  padding: 0.44rem 0.66rem;
+  border: 1px solid rgb(56 199 244 / 0.24);
+  border-radius: 0.42rem;
+  background: rgb(56 199 244 / 0.06);
+  color: rgb(167 218 235 / 0.9);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.profile-pet-pages button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.profile-pet-pages span {
+  color: var(--profile-muted);
+  font-size: 0.64rem;
+}
+
+.profile-pet-pages button:focus-visible {
+  outline: 1px solid rgb(56 199 244 / 0.72);
+  outline-offset: 2px;
+}
+
+/* The Profile portrait still occupies its own column through 1120px, so the
+   content pane is much narrower than the viewport. Stack the active pet at
+   that shell breakpoint instead of waiting for the viewport itself to become
+   mobile; otherwise attachments and XP metadata compete for the same line. */
+@media (max-width: 70rem) {
+  .profile-pet-active {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-pet-active-progress {
+    padding: 0.72rem;
+    border-top: 1px solid color-mix(in srgb, var(--profile-active-pet-rarity) 17%, rgb(255 255 255 / 0.045));
+    border-left: 0;
+  }
+}
+
+/* The portrait column can leave the Profile workspace compact even when the
+   viewport is wider than a phone. Recompose from the workspace width so the
+   pet identity and its two attachment slots never compete for one row. */
+@container profile-workspace (max-width: 46rem) {
+  .profile-pet-active {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-pet-active-identity {
+    grid-template-columns: 5.4rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.82rem;
+  }
+
+  .profile-pet-attachments {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.72rem;
+    padding-top: 0.58rem;
+    border-top: 1px solid rgb(255 255 255 / 0.075);
+  }
+
+  .profile-pet-attachments > div {
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: auto 3.4rem;
+    width: auto;
+    min-width: 0;
+    justify-content: center;
+    justify-items: start;
+    gap: 0.62rem;
+  }
+
+  .profile-pet-attachments small {
+    align-self: center;
+    white-space: nowrap;
+  }
+
+  .profile-pet-active-progress {
+    padding: 0.72rem;
+    border-top: 1px solid color-mix(in srgb, var(--profile-active-pet-rarity) 17%, rgb(255 255 255 / 0.045));
+    border-left: 0;
+  }
+}
+
+/* 420px: keep the active identity readable and make the pet grid six roomy columns at most. */
+@media (max-width: 26.25rem) {
+  .profile-pet-active {
+    padding-inline: 0.08rem;
+  }
+
+  .profile-pet-active-identity {
+    grid-template-columns: 4.9rem minmax(0, 1fr);
+    gap: 0.78rem;
+    padding: 0.5rem 0.52rem;
+  }
+
+  .profile-pet-featured-tile,
+  .profile-pet-featured-tile .profile-item-tile-wrap {
+    width: 4.9rem;
+    height: 4.9rem;
+  }
+
+  .profile-pet-featured-tile .profile-item-tile-icon > * {
+    transform: scale(1.42);
+  }
+
+  .profile-pet-active-copy .profile-pet-active-value {
+    font-size: 1.28rem;
+  }
+
+  .profile-pet-attachments {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-top: 0.15rem;
+  }
+
+  .profile-pet-active-progress dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-pet-grid.profile-item-grid {
+    grid-template-columns: repeat(auto-fill, minmax(3.65rem, 1fr));
+    gap: 0.42rem;
+    padding-inline: 0.52rem;
+  }
+
+  .profile-pet-owned-tile .profile-item-tile-icon > * {
+    transform: scale(1.25);
+  }
+}
+
+/* 390px: preserve texture scale while allowing the final column to wrap instead of overflowing. */
+@media (max-width: 24.375rem) {
+  .profile-pet-active-identity {
+    grid-template-columns: 4.65rem minmax(0, 1fr);
+    gap: 0.68rem;
+  }
+
+  .profile-pet-featured-tile,
+  .profile-pet-featured-tile .profile-item-tile-wrap {
+    width: 4.65rem;
+    height: 4.65rem;
+  }
+
+  .profile-pet-active-copy .profile-pet-active-value {
+    font-size: 1.18rem;
+  }
+
+  .profile-pet-grid.profile-item-grid {
+    grid-template-columns: repeat(auto-fill, minmax(3.45rem, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-pet-featured-tile .profile-item-tile-icon > *,
+  .profile-pet-owned-tile .profile-item-tile-icon > * {
+    transition: none;
+  }
+}

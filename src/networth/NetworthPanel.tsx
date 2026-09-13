@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import { ChevronRight, KeyRound, RefreshCw } from "lucide-react";
 import { SettingsLink } from "../components/layout/SettingsLink";
-import { BTN_QUIET, NUM, PANEL, SectionHead, Stat, Tag, TILE } from "../ui/kit";
+import { BTN_QUIET, NUM, PANEL, SectionHead, Stat, TILE } from "../ui/kit";
 import { ago } from "../island/format";
 import { useNetworth } from "./useNetworth";
-import { CATEGORY_ORDER, categoryLabel, coins, exactCoins } from "./format";
+import { coins, exactCoins } from "./format";
 import { NpcSellSection } from "./NpcSellSection";
+import { buildNetworkCategories } from "./networkModel";
+import { NetworkCategoryBoard } from "./NetworkCategoryBoard";
+import { NetworkStatusStrip } from "./NetworkStatusStrip";
 import type { NpcSellSummary } from "./npcSell";
 import type { ChestValue } from "./islandChests";
-import type { CategoryResult } from "./types";
 import type { SectionProvenance } from "../island/merge";
 import type { IslandChest } from "../island/types";
 
@@ -42,21 +44,6 @@ import type { IslandChest } from "../island/types";
  * never has.
  */
 
-/** Which feed a category came from. Only two exist and the difference matters. */
-const SOURCE_CHIP: Record<string, { label: string; title: string }> = {
-  api: {
-    label: "API",
-    title: "Read from your Hypixel profile.",
-  },
-  mod: {
-    label: "mod",
-    title: "Read by the companion mod. The Hypixel API cannot see inside a chest.",
-  },
-};
-
-const SourceChip: React.FC<{ source: "api" | "mod" }> = ({ source }) => (
-  <Tag title={SOURCE_CHIP[source].title}>{SOURCE_CHIP[source].label}</Tag>
-);
 
 /** One summary figure for a tile band. */
 export interface BandStat {
@@ -81,23 +68,6 @@ export const StatBand: React.FC<{ stats: BandStat[]; className?: string }> = ({ 
   </div>
 );
 
-/**
- * One category, one line. Name, source, value; nothing expands. The exact
- * figure sits behind the abbreviation, the same split as every number here.
- */
-const CategoryLine: React.FC<{ name: string; result: CategoryResult; source: "api" | "mod" }> = ({
-  name,
-  result,
-  source,
-}) => (
-  <div className="flex items-center gap-2 border-b border-white/8 py-1.5 break-inside-avoid">
-    <span className="min-w-0 flex-1 truncate text-[12px] text-slate-200">{categoryLabel(name)}</span>
-    <SourceChip source={source} />
-    <span className={`shrink-0 text-[12px] ${NUM} text-slate-100`} title={exactCoins(result.total)}>
-      {coins(result.total)}
-    </span>
-  </div>
-);
 
 /** The per-chest drilldown, which is ours alone: we know where each chest is. */
 const ChestBreakdown: React.FC<{ chests: ChestValue[] }> = ({ chests }) => {
@@ -177,7 +147,7 @@ export const NetworthPanel: React.FC<NetworthPanelProps> = ({ chests, chestProve
 
   const header = (
     <SectionHead
-      title="Networth"
+      title="Network"
       right={
         <span className="flex items-center gap-2">
           {view.pricesLoading ? <span className="text-[10px] text-slate-500">prices loading</span> : priceLine}
@@ -201,16 +171,11 @@ export const NetworthPanel: React.FC<NetworthPanelProps> = ({ chests, chestProve
     return (
       <div className={PANEL}>
         {header}
-        <div className="space-y-2 p-3">
-          <p className="text-[12px] leading-relaxed text-slate-300">
-            Networth needs a connected Minecraft account. Everything it values lives on your Hypixel profile.
-          </p>
-          <p className="text-[11px] leading-relaxed text-slate-500">
-            Skydex.ca reads it through the shared Hypixel connection. Prices come from a public file.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+          <p className="text-[11px] text-slate-400">Connect your Minecraft profile in Settings to load Network.</p>
           <SettingsLink section="hypixel" className={BTN_QUIET}>
             <KeyRound className="h-3 w-3" />
-            Connect your profile
+            Open Settings
           </SettingsLink>
         </div>
       </div>
@@ -250,16 +215,9 @@ export const NetworthPanel: React.FC<NetworthPanelProps> = ({ chests, chestProve
   const { result, coverage } = view;
   const bankShared = coverage?.bankShared ?? false;
 
-  // Only categories with something in them, in the order the panel lists them,
-  // then anything new the engine grew that this file has not been told about.
-  const known = new Set(CATEGORY_ORDER);
-  const extras = Object.keys(result.types).filter((key) => !known.has(key));
-  const rows = [...CATEGORY_ORDER, ...extras]
-    .map((key) => ({ key, category: result.types[key] }))
-    .filter((row): row is { key: string; category: CategoryResult } => !!row.category && row.category.total > 0);
-
+  const categories = buildNetworkCategories(result, coverage, chestProvenance);
   const chestsMissing = chestProvenance.state === "absent" || chestProvenance.state === "hidden";
-  const hasChests = rows.some((row) => row.key === "island_chests");
+  const hasChests = categories.some((category) => category.key === "island_chests" && category.state === "available");
 
   /** A dash, never a zero, for a bank Hypixel will not share: an unshared bank is not an empty bank. */
   const band: BandStat[] = [
@@ -276,22 +234,8 @@ export const NetworthPanel: React.FC<NetworthPanelProps> = ({ chests, chestProve
 
       <StatBand stats={band} className="p-2" />
 
-      {/*
-        The category list, in SkyCrypt's shape and our materials: every
-        category on one line, name to value, flowing into two columns where
-        the width allows. Multi-column flow rather than a two-column grid so
-        the order reads DOWN each column - the same order the keys are ranked
-        in - instead of snaking across rows.
-      */}
-      <div className="border-t border-white/8 px-3 py-1.5 md:columns-2 md:gap-8">
-        {rows.map(({ key, category }) => (
-          <CategoryLine key={key} name={key} result={category} source={key === "island_chests" ? "mod" : "api"} />
-        ))}
-        {rows.length === 0 && (
-          <p className="py-1.5 text-[11px] text-slate-500">
-            Nothing on this profile came back with a price. That is unusual; check the notes below.
-          </p>
-        )}
+      <div className="border-t border-white/8" data-network-tool>
+        <NetworkCategoryBoard categories={categories} />
       </div>
 
       {/* The two ledgers no other tab carries. Text drilldowns, not item grids. */}
@@ -299,57 +243,17 @@ export const NetworthPanel: React.FC<NetworthPanelProps> = ({ chests, chestProve
         <NpcSellSection summary={npcSell} />
         <ChestBreakdown chests={view.chests} />
       </div>
+      <NetworkStatusStrip
+        hasChests={hasChests}
+        chestsMissing={chestsMissing}
+        inventoryPrivate={coverage?.inventoryShared === false}
+        bankPrivate={coverage?.bankShared === false}
+        museumPrivate={coverage?.museumShared === false}
+        cataloguePartial={coverage?.catalogueLoaded === false}
+        pricesError={view.pricesError}
+        rulesVersion={view.rulesVersion}
+      />
 
-      {/* --- what is missing, and what to do about it ------------------------ */}
-
-      <div className="space-y-1.5 border-t border-white/8 px-3 py-2">
-        {/* The one honesty note that must not be behind a disclosure: this
-            category sits in the same total as categories derived from full item
-            data, and a reader has to know it is measured differently. */}
-        {hasChests && (
-          <p className="text-[10px] leading-snug text-slate-500">
-            Island Chests is valued conservatively. The mod sends compact fields rather than full item data, so
-            reforges, dungeon stars, enchantments and recombobulators are counted while gemstones, potato books,
-            scrolls, dyes, runes and drill or rod parts are not. A modified item in a chest is worth at least what is
-            shown, never less.
-          </p>
-        )}
-        {chestsMissing && (
-          <p className="text-[10px] leading-snug text-slate-500">
-            Island Chests is not in the total: nothing has captured your chests yet. The Hypixel API has never published
-            chest contents, so this one needs the companion mod.
-          </p>
-        )}
-        {coverage && !coverage.inventoryShared && (
-          <p className="text-[10px] leading-snug text-amber-400/90">
-            Hypixel is not sharing your inventory, so Inventory, Ender Chest, Storage, Accessories and the bags are all
-            missing rather than empty. Turn Inventory on in game under SkyBlock Menu, Settings, API Settings.
-          </p>
-        )}
-        {coverage && !coverage.bankShared && (
-          <p className="text-[10px] leading-snug text-amber-400/90">
-            Your co-op bank is not shared, so it is shown as a dash rather than as zero and is not in the total. Turn
-            Banking on under the same API Settings menu.
-          </p>
-        )}
-        {coverage && !coverage.museumShared && (
-          <p className="text-[10px] leading-snug text-slate-500">
-            No museum data. Either this profile has never donated, or the Museum API setting is off.
-          </p>
-        )}
-        {coverage && !coverage.catalogueLoaded && (
-          <p className="text-[10px] leading-snug text-amber-400/90">
-            Hypixel&rsquo;s item catalogue could not be loaded, so dungeon stars, gemstone slots and prestige costs are
-            not being priced. Every number here is low until it loads.
-          </p>
-        )}
-        {view.pricesError && <p className="text-[10px] leading-snug text-amber-400/90">{view.pricesError}</p>}
-        <p className="text-[10px] leading-snug text-slate-500">
-          Valuation rules ported from SkyHelper-Networth {view.rulesVersion} (MIT), the same rules other SkyBlock tools
-          use, so these numbers should line up with theirs. Prices are fetched in this browser and cached for twenty
-          minutes; profile reads use the connection and cache described in Settings.
-        </p>
-      </div>
     </div>
   );
 };

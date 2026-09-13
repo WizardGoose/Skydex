@@ -3,6 +3,7 @@ import { nbt } from "../../nbt/tags";
 import { writeNbtBlob } from "../../nbt/blob";
 import {
   bagFromItems,
+  bagFromParsedItems,
   bioanalysisRank,
   collapseOwned,
   findTalismanBag,
@@ -179,7 +180,12 @@ describe("tierFromLore", () => {
 });
 
 describe("bagFromItems", () => {
-  const item = (id: string | null, rarityUpgrades: number | null, lore: string[] | null = null) => ({
+  const item = (
+    id: string | null,
+    rarityUpgrades: number | null,
+    lore: string[] | null = null,
+    enrichment: string | null = null,
+  ) => ({
     slot: 0,
     id,
     count: 1,
@@ -188,6 +194,7 @@ describe("bagFromItems", () => {
     enchantments: null,
     reforge: null,
     rarityUpgrades,
+    enrichment,
     uuid: null,
   });
 
@@ -218,6 +225,47 @@ describe("bagFromItems", () => {
     expect(bag.tiers.get("KING_TALISMAN")).toBe("COMMON");
     // The recombed copy states RARE and outranks its plain twin.
     expect(bag.tiers.get("WOLF_RING")).toBe("RARE");
+  });
+
+  it("keeps a proven enrichment and refuses conflicting duplicate values", () => {
+    const bag = bagFromItems([
+      item("WOLF_RING", null, null, "magic_find"),
+      item("WOLF_RING", null),
+      item("SEAL_OF_THE_FAMILY", null, null, "strength"),
+      item("SEAL_OF_THE_FAMILY", null, null, "critical_damage"),
+    ]);
+
+    expect(bag.enrichments.get("WOLF_RING")).toBe("magic_find");
+    expect(bag.enrichments.has("SEAL_OF_THE_FAMILY")).toBe(false);
+    expect(bag.ambiguousEnrichments).toStrictEqual(new Set(["SEAL_OF_THE_FAMILY"]));
+  });
+});
+
+describe("bagFromParsedItems", () => {
+  it("recovers ownership, rarity, recomb and enrichment from the shared parsed profile", () => {
+    const bag = bagFromParsedItems([
+      {
+        tag: {
+          display: { Lore: ["§7A useful thing.", "§d§lMYTHIC ACCESSORY"] },
+          ExtraAttributes: {
+            id: "WOLF_RING",
+            rarity_upgrades: 1,
+            talisman_enrichment: "magic_find",
+          },
+        },
+      },
+      { tag: { ExtraAttributes: { id: "SPEED_TALISMAN" } } },
+      {},
+    ]);
+
+    expect(bag.ids).toStrictEqual(["WOLF_RING", "SPEED_TALISMAN"]);
+    expect(bag.recombobulated).toStrictEqual(new Set(["WOLF_RING"]));
+    expect(bag.tiers.get("WOLF_RING")).toBe("MYTHIC");
+    expect(bag.enrichments.get("WOLF_RING")).toBe("magic_find");
+  });
+
+  it("keeps a decoded empty bag distinct from an unavailable bag", () => {
+    expect(bagFromParsedItems([]).ids).toStrictEqual([]);
   });
 });
 

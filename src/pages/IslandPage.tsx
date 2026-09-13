@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { SettingsLink } from "../components/layout/SettingsLink";
-import { Boxes, ChevronDown, ChevronRight, HelpCircle, Info, KeyRound, Search, Sparkles, Trash2 } from "lucide-react";
+import { Boxes, ChevronDown, HelpCircle, Info, KeyRound, LockKeyhole, Search, Sparkles } from "lucide-react";
 import { ItemIcon } from "../ui/ItemIcon";
 import { itemResourceVersion, requestItemResource, resourceTierFor, subscribeItemResource } from "../items/itemResource";
 import { WikiLink } from "../ui/WikiLink";
@@ -17,7 +17,9 @@ import {
   type SlotItem,
 } from "../ui/slotGrid";
 import { SlotIcon } from "../island/SlotIcon";
-import { PlayerModel } from "../island/PlayerModel";
+
+import { StorageSelector, type StorageDestination } from "../island/StorageSelector";
+import { storageSummary } from "../island/storageSelectorModel";
 import { hasApiProfileAccess, useApiAccess } from "../island/apiKey";
 import { useIsland } from "../island/useIsland";
 import { totalItems, slotLayout } from "../island/aggregate";
@@ -43,15 +45,27 @@ import {
   type SackGroup,
 } from "../island/sacks";
 import { useRecipes, useBazaar } from "../items/useItemData";
+import { useOwned } from "../inventory";
 import { useProfile } from "../profile/useProfile";
 import type { GreenhouseBoard, GreenhouseCell, IslandChest, IslandItem, ItemExtra } from "../island/types";
 import type { SectionProvenance } from "../island/merge";
 import { NetworthPanel } from "../networth/NetworthPanel";
 import { npcSellSummary } from "../networth/npcSell";
 import { useNetworth, useParsedProfile } from "../networth/useNetworth";
-import { armorItems, petTiles, rawToGearItem, recombTier, type GearItem, type PetTile } from "../networth/gear";
+import { buildWardrobeRows, armorItems, petTiles, rawToGearItem, recombTier, type GearItem, type GearWardrobeRow, type GearWardrobeSlot, type GearWardrobeState, type PetTile } from "../networth/gear";
+import { resolveActiveLoadout } from "../island/activeLoadout";
 import type { LoadoutStatement } from "../networth/parseItems";
 import { AccessoriesView } from "./AccessoriesPage";
+import { sectionTabNavigationIndex } from "./sectionTabs";
+const MinionsSection = React.lazy(() =>
+  import("../profile/MinionsSection").then((module) => ({ default: module.MinionsSection })),
+);
+const PlayerModel = React.lazy(() =>
+  import("../island/PlayerModel").then((module) => ({ default: module.PlayerModel })),
+);
+import { useProfileTabs } from "../profile/useProfileTabs";
+import type { ProfileTab } from "../profile/profileTabs";
+import type { ProfileStatusView } from "../profile/profileStatus";
 import { ItemTooltip } from "../ui/ItemTooltip";
 import {
   PANEL,
@@ -61,6 +75,7 @@ import {
   INPUT,
   BTN_PRIMARY,
   BTN_QUIET,
+  FOCUS,
   RARITY,
   SectionHead,
   Tag,
@@ -346,7 +361,7 @@ const EmptyReason: React.FC<{ provenance: SectionProvenance; noun: string }> = (
   if (provenance.state === "absent") {
     return (
       <p className="px-3 py-2 text-[11px] text-slate-500">
-        Nothing has captured your {noun} yet. Run the companion mod and open it in game. This is not the same as it
+        Nothing has captured your {noun} yet. Run the Skydex mod and open it in game. This is not the same as it
         being empty.
       </p>
     );
@@ -1474,8 +1489,24 @@ const SectionTabs: React.FC<{ tabs: TabDef[]; active: string; onSelect: (id: str
   tabs,
   active,
   onSelect,
-}) => (
-  <div role="tablist" className="flex flex-wrap items-center gap-x-4 border-b border-white/10">
+}) => {
+  const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+  const selectableTabs = tabs.filter((tab): tab is TabDef & { id: string } => Boolean(tab.id) && !tab.to);
+  const focusableTabId = selectableTabs.find((tab) => tab.id === active)?.id ?? selectableTabs[0]?.id;
+
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, id: string): void => {
+    const currentIndex = selectableTabs.findIndex((tab) => tab.id === id);
+    const nextIndex = sectionTabNavigationIndex(event.key, currentIndex, selectableTabs.length);
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextTab = selectableTabs[nextIndex];
+    if (!nextTab) return;
+    onSelect(nextTab.id);
+    tabRefs.current.get(nextTab.id)?.focus();
+  };
+
+  return (
+    <div role="tablist" aria-label="Profile sections" className="flex flex-wrap items-center gap-x-4 border-b border-white/10">
     {tabs.map((tab) =>
       tab.to ? (
         <Link key={tab.label} to={tab.to} className={`-mb-px ${TAB_BASE} ${TAB_IDLE}`}>
@@ -1483,10 +1514,19 @@ const SectionTabs: React.FC<{ tabs: TabDef[]; active: string; onSelect: (id: str
         </Link>
       ) : (
         <button
-          key={tab.id}
+          key={tab.id ?? tab.label}
+          ref={(element) => {
+            if (!tab.id) return;
+            if (element) tabRefs.current.set(tab.id, element);
+            else tabRefs.current.delete(tab.id);
+          }}
           type="button"
           role="tab"
           aria-selected={tab.id === active}
+          tabIndex={tab.id === focusableTabId ? 0 : -1}
+          onKeyDown={(event) => {
+            if (tab.id) handleTabKeyDown(event, tab.id);
+          }}
           onClick={() => tab.id && onSelect(tab.id)}
           className={`-mb-px ${TAB_BASE} ${tab.id === active ? TAB_ACTIVE : TAB_IDLE}`}
         >
@@ -1494,41 +1534,18 @@ const SectionTabs: React.FC<{ tabs: TabDef[]; active: string; onSelect: (id: str
         </button>
       )
     )}
-  </div>
-);
+    </div>
+  );
+};
 
-/**
- * The second-level rail inside the Inventory tab: SkyCrypt's Inventory /
- * Backpack / Ender Chest sub-tabs, carrying our storage surfaces. Same
- * underline language as the top tabs and the site's own section sub-nav
- * (the Greenhouse Planner | Solver | Designer row), one size down, which is
- * how this site has always said "a smaller choice inside a bigger one".
- */
-const SubRail: React.FC<{ items: Array<{ id: string; label: string }>; active: string; onSelect: (id: string) => void }> = ({
-  items,
-  active,
-  onSelect,
-}) => (
-  <div role="tablist" className="flex flex-wrap items-center gap-x-3 border-b border-white/10">
-    {items.map((item) => {
-      const isActive = item.id === active;
-      return (
-        <button
-          key={item.id}
-          type="button"
-          role="tab"
-          aria-selected={isActive}
-          onClick={() => onSelect(item.id)}
-          className={`-mb-px flex h-8 shrink-0 cursor-pointer items-center border-b-2 text-[12px] transition-colors ${
-            isActive ? TAB_ACTIVE : TAB_IDLE
-          }`}
-        >
-          {item.label}
-        </button>
-      );
-    })}
-  </div>
-);
+const PROFILE_TAB_DEFS: TabDef[] = [
+  { id: "gear", label: "Gear" },
+  { id: "accessories", label: "Accessories" },
+  { id: "pets", label: "Pets" },
+  { id: "minions", label: "Minions" },
+  { id: "inventory", label: "Inventory" },
+  { id: "networth", label: "Network" },
+];
 
 /*
  * There is deliberately NO wearing strip beside the model any more: the sharp
@@ -1550,27 +1567,31 @@ const SubRail: React.FC<{ items: Array<{ id: string; label: string }>; active: s
  * index does not know keeps the neutral cell.
  */
 const RarityCell: React.FC<{ item: GearItem; context: SlotContext }> = ({ item, context }) => {
-  const tier = recombTier(context.tierOf(item.id), item.extra?.recomb ?? false);
+  const baseTier = context.tierOf(item.id);
+  const tier = recombTier(baseTier, item.extra?.recomb ?? false);
   return (
-    <div className={`group relative flex aspect-square items-center justify-center rounded-md border ${rarityTileClass(tier)}`}>
+    <ItemTooltip
+      id={item.id}
+      name={item.name}
+      count={item.count}
+      extra={item.extra}
+      tier={baseTier}
+      lore={item.lore}
+      provenance={context.provenance}
+      unitPrice={context.priceOf(item.id)}
+      icon={<SlotIcon name={item.name} id={item.id} size={32} />}
+      ariaLabel={`${item.name}: show item details`}
+      wrapperClassName="block aspect-square"
+    >
+    <button type="button" className={`group relative flex h-full w-full items-center justify-center rounded-md border ${FOCUS} ${rarityTileClass(tier)}`}>
       {/* 32 is an exact halving of the 64px wiki thumbs; any other size puts
           the pixel art through a non-integer nearest-neighbour resample and it
           smears. One sprite size for every gear cell is also what keeps the
           worn clusters, the wardrobes and the loadout columns reading as one
           field rather than three. */}
       <SlotIcon name={item.name} id={item.id} size={32} />
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1 hidden -translate-x-1/2 group-hover:block">
-        <ItemTooltip
-          id={item.id}
-          name={item.name}
-          count={item.count}
-          extra={item.extra}
-          tier={tier ? tier.toUpperCase().replace(/ /g, "_") : null}
-          provenance={context.provenance}
-          unitPrice={context.priceOf(item.id)}
-        />
-      </span>
-    </div>
+    </button>
+    </ItemTooltip>
   );
 };
 
@@ -1580,97 +1601,152 @@ const RarityCell: React.FC<{ item: GearItem; context: SlotContext }> = ({ item, 
  * under the occupied neutral cell so absence stays visibly dimmer than an
  * item whose tier is merely unknown.
  */
-const EmptyGearCell: React.FC = () => (
-  <div
-    aria-label="Empty slot"
-    className="flex aspect-square items-center justify-center rounded-md border border-slate-600/45 bg-slate-950/25"
-  >
-    <span className="relative block h-5 w-4 opacity-55" aria-hidden>
-      <span className="absolute left-1/2 top-0 h-2.5 w-2.5 -translate-x-1/2 rounded-[1px] border-2 border-slate-400/80" />
-      <span className="absolute inset-x-0 bottom-0 h-2 rounded-[1px] border-2 border-slate-400/80 border-t-0" />
-    </span>
-  </div>
-);
+const WARDROBE_STATE_LABEL: Record<GearWardrobeState, string> = {
+  occupied: "Occupied",
+  "unlocked-empty": "Unlocked empty",
+  locked: "Locked",
+  private: "Private / unavailable",
+};
 
 /**
- * A labelled cluster of gear slots on rarity tiles. Positional when the
- * caller has positions (worn equipment), occupied-only otherwise (worn armor,
- * whose decoder drops empties before position can be known).
+ * An empty gear slot keeps the same frosted square geometry as an item tile.
+ * State is explicit for wardrobe slots; ordinary worn-slot gaps use the quiet
+ * default label because their positional unlock state is not in the payload.
  */
-const GearCluster: React.FC<{
+const EmptyGearCell: React.FC<{
+  state?: Exclude<GearWardrobeState, "occupied">;
   label?: string;
-  items: (GearItem | null)[];
-  context: SlotContext;
-  note: string;
-}> = ({ label, items, context, note }) => (
-  <div className="w-[13rem]" role="group" aria-label={label ?? note}>
-    {label && <div className={LABEL}>{label}</div>}
-    <div className={`${label ? "mt-1.5" : ""} grid grid-cols-4 gap-1`}>
-      {Array.from({ length: 4 }, (_, i) =>
-        items[i] ? <RarityCell key={i} item={items[i]!} context={context} /> : <EmptyGearCell key={i} />
+}> = ({ state = "unlocked-empty", label }) => {
+  const stateLabel = label ?? WARDROBE_STATE_LABEL[state];
+  const unavailable = state === "locked" || state === "private";
+  return (
+    <div
+      data-gear-slot-state={state}
+      aria-label={stateLabel}
+      title={stateLabel}
+      className={
+        "flex aspect-square items-center justify-center rounded-md border " +
+        (unavailable
+          ? "border-slate-800/70 bg-black/30 text-slate-600"
+          : "border-slate-600/45 bg-slate-950/25")
+      }
+    >
+      {unavailable ? (
+        <LockKeyhole size={15} strokeWidth={1.6} aria-hidden />
+      ) : (
+        <span className="relative block h-5 w-4 opacity-55" aria-hidden>
+          <span className="absolute left-1/2 top-0 h-2.5 w-2.5 -translate-x-1/2 rounded-[1px] border-2 border-slate-400/80" />
+          <span className="absolute inset-x-0 bottom-0 h-2 rounded-[1px] border-2 border-slate-400/80 border-t-0" />
+        </span>
       )}
     </div>
-  </div>
-);
+  );
+};
 
-/**
- * One armour set: a numbered set of up to four pieces, positional, on
- * rarity tiles.
- */
-/**
- * One armour set as a bare vertical column: helmet, chest, legs, boots.
- * The visual reading is the four-piece silhouette, so no redundant row rail
- * or visible set number competes with the item tiles. The set remains named
- * for assistive technology through its group label.
- */
-const ArmourColumn: React.FC<{
-  id: number;
-  pieces: (GearItem | null)[];
+/** One in-game-style four-slot vertical group. */
+const GearColumn: React.FC<{
+  label?: string;
+  items: readonly (GearItem | null)[];
   context: SlotContext;
-}> = ({ id, pieces, context }) => (
-  <div role="group" aria-label={`Armour set ${id}`} className="grid w-11 shrink-0 grid-rows-4 gap-1">
-    {Array.from({ length: 4 }, (_, i) =>
-      pieces[i] ? <RarityCell key={i} item={pieces[i]!} context={context} /> : <EmptyGearCell key={i} />
-    )}
+  note?: string;
+}> = ({ label, items, context, note }) => (
+  <div className="min-w-11" role="group" aria-label={label ?? note ?? "Gear slots"}>
+    {label && <div className={LABEL}>{label}</div>}
+    <div className={(label ? "mt-1.5 " : "") + "grid w-11 grid-rows-4 gap-1"}>
+      {Array.from({ length: 4 }, (_, index) =>
+        items[index] ? (
+          <RarityCell key={index} item={items[index]!} context={context} />
+        ) : (
+          <EmptyGearCell key={index} label="Empty slot" />
+        )
+      )}
+    </div>
   </div>
 );
 
 /** One display-ready set: the payload's own id plus its mapped pieces. */
 interface DisplaySet {
   id: number;
-  pieces: (GearItem | null)[];
+  pieces: readonly (GearItem | null)[];
 }
 
-/**
- * Stored equipment: the payload carries numbered equipment sets alongside
- * armour sets. One
- * column per set, four positional rows. The rows carry no slot names on
- * purpose: the payload keys them EQUIPMENT_SLOT_1..4 and naming them
- * necklace/cloak/belt/bracelet would be our claim, not its.
- */
-const EquipmentColumns: React.FC<{ sets: DisplaySet[]; context: SlotContext }> = ({ sets, context }) => (
-  <div className="flex flex-wrap gap-1.5">
-    {sets.map((set) => (
-      <div key={set.id} role="group" aria-label={`Equipment set ${set.id}`} className="grid w-11 shrink-0 grid-rows-4 gap-1">
-        {set.pieces.map((piece, i) =>
-          piece ? <RarityCell key={i} item={piece} context={context} /> : <EmptyGearCell key={i} />
-        )}
+/** A wardrobe set as a coherent vertical column, including explicit gaps. */
+const WardrobeColumn: React.FC<{
+  sectionLabel: string;
+  slot: GearWardrobeSlot;
+  context: SlotContext;
+}> = ({ sectionLabel, slot, context }) => {
+  const stateLabel = WARDROBE_STATE_LABEL[slot.state];
+  const groupLabel = sectionLabel + " set " + (slot.id ?? "unknown") + ": " + stateLabel;
+  const emptyState = slot.state === "locked" ? "locked" : slot.state === "private" ? "private" : "unlocked-empty";
+  return (
+    <div
+      role="group"
+      aria-label={groupLabel}
+      data-wardrobe-state={slot.state}
+      className="w-11 shrink-0" data-wardrobe-set-id={slot.id ?? "private"} data-wardrobe-slot-size="44"
+    >
+      <div className="grid w-11 grid-rows-4 gap-1">
+        {Array.from({ length: 4 }, (_, index) => {
+          const piece = slot.pieces[index] ?? null;
+          return piece ? (
+            <RarityCell key={index} item={piece} context={context} />
+          ) : (
+            <EmptyGearCell
+              key={index}
+              state={emptyState}
+              label={groupLabel + ", slot " + (index + 1)}
+            />
+          );
+        })}
       </div>
-    ))}
+    </div>
+  );
+};
+
+/** Render numbered wardrobe columns in API order, nine per structural row. */
+const WardrobeGrid: React.FC<{
+  title: string;
+  rows: readonly GearWardrobeRow[];
+  context: SlotContext;
+  emptyMessage: string;
+}> = ({ title, rows, context, emptyMessage }) => (
+  <div>
+    <div className={LABEL}>{title}</div>
+    {rows.length === 0 ? (
+      <p className="mt-1.5 text-[11px] text-slate-500">{emptyMessage}</p>
+    ) : (
+      <div className="mt-1.5 w-max max-w-full space-y-2" data-wardrobe-grid={title} data-wardrobe-rows={rows.length}>
+        {rows.map((row, rowIndex) => (
+          <div
+            key={rowIndex}
+            className="grid w-max min-w-0 grid-cols-[repeat(3,max-content)] items-start justify-start justify-items-start gap-x-2 gap-y-1.5 sm:grid-cols-[repeat(6,max-content)] lg:grid-cols-[repeat(9,max-content)]"
+            role="group"
+            aria-label={title + " row " + (rowIndex + 1)} data-wardrobe-row={rowIndex + 1}
+          >
+            {row.slots.map((slot) => (
+              <WardrobeColumn key={slot.id ?? "private"} sectionLabel={title} slot={slot} context={context} />
+            ))}
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 );
 
-/**
- * The tuning stats, in the game's own glyphs and stat colours.
- *
- * This is the surface the no-emojis carve-out was waiting for (that rule is
- * scoped to our own custom names; the game's own skills and stats are
- * exempt): each row is a stat the GAME names with a glyph, so the glyph
- * and the stat's own colour token render beside it, exactly as SkyCrypt's
- * tuning table does. The figures are the POINTS the payload allocates, not
- * derived stat values - converting points to stats needs a table nobody in
- * this codebase has verified, and a wrong Health number beats no claim never.
- */
+const PrivateWardrobeNotice: React.FC<{ title: string }> = ({ title }) => (
+  <div
+    data-wardrobe-state="private"
+    aria-label={title + ": private / unavailable"}
+    className="rounded-md border border-slate-800/70 bg-black/20 px-2.5 py-2"
+  >
+    <div className={LABEL}>{title}</div>
+    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+      <LockKeyhole size={14} strokeWidth={1.6} aria-hidden />
+      <span>Private / unavailable</span>
+    </div>
+  </div>
+);
 const TUNING_STATS: ReadonlyArray<{ key: string; label: string; glyph: string; color: string }> = [
   { key: "health", label: "Health", glyph: "❤", color: "text-stat-red" },
   { key: "defense", label: "Defense", glyph: "❈", color: "text-stat-green" },
@@ -1721,29 +1797,45 @@ const ActiveLoadoutSummary: React.FC<{
   armor: GearItem[];
   wornEquipment: (GearItem | null)[];
   activePet: PetTile | null;
+  activeLoadout: LoadoutStatement | null;
+  allocation?: Record<string, number>;
+  selectedPower: string | null;
   context: SlotContext;
-}> = ({ armor, wornEquipment, activePet, context }) => {
+}> = ({ armor, wornEquipment, activePet, activeLoadout, allocation, selectedPower, context }) => {
+  const power = activeLoadout?.powerStone ?? selectedPower;
   return (
-    <div className="flex flex-wrap items-start gap-3 border-b border-white/8 pb-3">
-      <GearCluster items={armor} context={context} note="Current armour" />
-      <GearCluster items={wornEquipment} context={context} note="Current equipment" />
-      <div className="shrink-0 border-white/8 lg:border-l lg:pl-3">
+    <div className="border-b border-white/8 pb-3">
+      <div className="grid items-start gap-3 sm:grid-cols-[auto_auto_minmax(12rem,1fr)]">
+        <GearColumn label="Armour" items={armor} context={context} note="Current armour" />
+        <GearColumn label="Equipment" items={wornEquipment} context={context} note="Current equipment" />
+        <div className="min-w-0 space-y-2 border-white/8 sm:border-l sm:pl-3" role="group" aria-label="Active loadout details">
+          <div>
+            <div className={LABEL}>Loadout</div>
+            <div className="mt-1 truncate text-[12px] font-semibold text-slate-200">
+              {activeLoadout?.name ?? "Not uniquely identified"}
+            </div>
+          </div>
           {activePet ? (
-            <div className="flex min-w-0 items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5">
+            <div
+              className="flex min-w-0 items-center gap-2 rounded-md border border-white/10 bg-black/20 px-2 py-1.5"
+              aria-label={"Active pet: " + activePet.name + ", level " + activePet.level}
+            >
               <SlotIcon name={activePet.iconName} hypixelId={activePet.packId} size={24} />
-              <span className="min-w-0">
-                <span className={LABEL}>Pet</span>
-                <span className={`block truncate text-[11px] font-semibold ${RARITY[activePet.tier] ?? "text-slate-200"}`}>
-                  {activePet.name} <span className={`${NUM} text-slate-400`}>Lvl {activePet.level}</span>
-                </span>
+              <span className="min-w-0 truncate text-[11px] font-semibold">
+                <span className={RARITY[activePet.tier] ?? "text-slate-200"}>{activePet.name}</span>
+                <span className={`${NUM} ml-1 text-slate-400`}>Lvl {activePet.level}</span>
               </span>
             </div>
-          ) : <DetailChip label="Pet" value="None summoned" />}
+          ) : (
+            <div className="text-[11px] text-slate-500">No summoned pet</div>
+          )}
+          {power && <DetailChip label="Power" value={prettify(power)} />}
+          {allocation !== undefined && <TuningTable allocation={allocation} />}
+        </div>
       </div>
     </div>
   );
 };
-
 /**
  * One named loadout, vertical, as the payload states it: the armor set and
  * equipment set it references (columns of four), the pet it summons, the
@@ -1760,49 +1852,40 @@ const LoadoutCard: React.FC<{
   petByUuid: ReadonlyMap<string, PetTile>;
   tuning: Record<string, Record<string, number>>;
   context: SlotContext;
-}> = ({ loadout, armorSetById, equipmentSetById, petByUuid, tuning, context }) => {
+  active?: boolean;
+}> = ({ loadout, armorSetById, equipmentSetById, petByUuid, tuning, context, active = false }) => {
   const armor = loadout.armorSetId !== null ? armorSetById.get(loadout.armorSetId) : undefined;
   const equipment = loadout.equipmentSetId !== null ? equipmentSetById.get(loadout.equipmentSetId) : undefined;
   const pet = loadout.petUuid !== null ? petByUuid.get(loadout.petUuid) : undefined;
-  const allocation = loadout.tuningSlot !== null ? tuning[`slot_${loadout.tuningSlot}`] : undefined;
+  const allocation = loadout.tuningSlot !== null ? tuning["slot_" + loadout.tuningSlot] : undefined;
   const empty = !armor && !equipment && !pet && !loadout.powerStone && allocation === undefined;
 
-  const column = (label: string, set: DisplaySet) => (
-    <div>
-      <div className={LABEL}>{label}</div>
-      <div className="mt-1 grid w-11 grid-rows-4 gap-1">
-        {set.pieces.map((piece, i) =>
-          piece ? <RarityCell key={i} item={piece} context={context} /> : <EmptyGearCell key={i} />
-        )}
-      </div>
-    </div>
-  );
-
   return (
-    <div className={`${TILE} p-2.5`}>
+    <div className={TILE + " p-2.5 " + (active ? "border-cyan-300/50 bg-cyan-300/5" : "")}>
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-[12px] text-slate-200">{loadout.name}</span>
-        {loadout.powerStone && (
-          <Tag title="The accessory power this loadout switches to.">{prettify(loadout.powerStone)}</Tag>
-        )}
+        <span className="flex shrink-0 items-center gap-1.5">
+          {active && <Tag title="Resolved from the profile's active loadout signals.">active</Tag>}
+          {loadout.powerStone && (
+            <Tag title="The accessory power this loadout switches to.">{prettify(loadout.powerStone)}</Tag>
+          )}
+        </span>
       </div>
       {empty ? (
         <p className="mt-1.5 text-[11px] text-slate-500">Nothing assigned to this loadout.</p>
       ) : (
         <div className="mt-2 flex flex-wrap items-start gap-x-4 gap-y-2">
-          {armor && column("Armour", armor)}
-          {equipment && column("Equip", equipment)}
+          {armor && <GearColumn label="Armour" items={armor.pieces} context={context} />}
+          {equipment && <GearColumn label="Equipment" items={equipment.pieces} context={context} />}
           <div className="min-w-0 flex-1 space-y-2">
             {pet && (
-              <div>
-                <div className={LABEL}>Pet</div>
-                <div className="mt-1 flex items-center gap-1.5">
-                  {/* 16 is the inline-row sprite step, the same one the sack
-                      item rows use; 32 belongs to cells, not text rows. */}
-                  <SlotIcon name={pet.iconName} hypixelId={pet.packId} size={16} />
-                  <span className={`min-w-0 truncate text-[11px] ${RARITY[pet.tier] ?? "text-slate-200"}`}>{pet.name}</span>
-                  <span className={`shrink-0 text-[10px] ${NUM} text-slate-500`}>Lvl {pet.level}</span>
-                </div>
+              <div
+                className="flex items-center gap-1.5"
+                aria-label={"Pet: " + pet.name + ", level " + pet.level}
+              >
+                <SlotIcon name={pet.iconName} hypixelId={pet.packId} size={16} />
+                <span className={"min-w-0 truncate text-[11px] " + (RARITY[pet.tier] ?? "text-slate-200")}>{pet.name}</span>
+                <span className={"shrink-0 text-[10px] " + NUM + " text-slate-500"}>Lvl {pet.level}</span>
               </div>
             )}
             {allocation !== undefined && <TuningTable allocation={allocation} />}
@@ -1812,7 +1895,6 @@ const LoadoutCard: React.FC<{
     </div>
   );
 };
-
 /**
  * Armor, equipment, wardrobes and loadouts, read from the Hypixel profile.
  *
@@ -1821,11 +1903,10 @@ const LoadoutCard: React.FC<{
  * and their absence has API reasons: no key, or the Inventory toggle off. Both
  * get their own sentence; neither is rendered as empty.
  *
- * The shape: worn armor and worn equipment on rarity tiles, the armor
- * wardrobe as hoverable set cards, the EQUIPMENT wardrobe as its own set grid
- * (the payload stores equipment in loadout structure exactly like armor), and
- * the named loadouts as vertical cards tying the two to a pet, a power stone
- * and a tuning slot.
+ * The shape: worn armor and worn equipment on rarity tiles, each wardrobe as
+ * nine-set structural rows of four-slot columns (with explicit gaps), and the
+ * named loadouts as vertical cards tying the two to a pet, a power stone and a
+ * tuning slot.
  */
 const GearSection: React.FC<{
   armor: GearItem[];
@@ -1835,6 +1916,8 @@ const GearSection: React.FC<{
   loadouts: LoadoutStatement[];
   petByUuid: ReadonlyMap<string, PetTile>;
   tuning: Record<string, Record<string, number>>;
+  selectedPower: string | null;
+  equippedEquipmentSetId: number | null;
   inventoryShared: boolean;
   context: SlotContext;
 }> = ({
@@ -1845,51 +1928,65 @@ const GearSection: React.FC<{
   loadouts,
   petByUuid,
   tuning,
+  selectedPower,
+  equippedEquipmentSetId,
   inventoryShared,
   context,
 }) => {
   const armorSetById = new Map(armorSets.map((set) => [set.id, set]));
   const equipmentSetById = new Map(equipmentSets.map((set) => [set.id, set]));
   const activePet = [...petByUuid.values()].find((pet) => pet.active) ?? null;
+  const activeLoadout = resolveActiveLoadout(loadouts, {
+    activePetUuid: activePet?.uuid ?? null,
+    selectedPower,
+    equippedEquipmentSetId,
+  });
+  const activeAllocation =
+    activeLoadout && activeLoadout.tuningSlot !== null
+      ? tuning["slot_" + activeLoadout.tuningSlot]
+      : undefined;
+  const armorRows = buildWardrobeRows(armorSets, { columns: 9 });
+  const equipmentRows = buildWardrobeRows(equipmentSets, { columns: 9 });
+
   return (
     <div className={PANEL}>
       <SectionHead title="Active Loadout" />
       {!inventoryShared ? (
-        <p className="px-3 py-2 text-[11px] text-amber-400/90">
-          Hypixel is not sharing your inventory, so your armour, equipment and saved sets are missing rather than empty.
-          Turn Inventory on in game under SkyBlock Menu → Settings → API Settings.
-        </p>
+        <div className="space-y-3 p-3">
+          <p className="text-[11px] text-amber-400/90">
+            Hypixel is not sharing your inventory, so your armour, equipment and saved sets are missing rather than empty.
+            Turn Inventory on in game under SkyBlock Menu → Settings → API Settings.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <PrivateWardrobeNotice title="Armour Wardrobe" />
+            <PrivateWardrobeNotice title="Equipment Wardrobe" />
+          </div>
+        </div>
       ) : (
-        <div className="p-3 space-y-3">
+        <div className="space-y-3 p-3">
           <ActiveLoadoutSummary
             armor={armor}
             wornEquipment={wornEquipment}
             activePet={activePet}
+            activeLoadout={activeLoadout}
+            allocation={activeAllocation}
+            selectedPower={selectedPower}
             context={context}
           />
 
-          <div>
-            <div className={LABEL}>Armour</div>
-            {armorSets.length === 0 ? (
-              <p className="mt-1.5 text-[11px] text-slate-500">No saved armour sets on this profile.</p>
-            ) : (
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {armorSets.map((set) => (
-                  <ArmourColumn key={set.id} id={set.id} pieces={set.pieces} context={context} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <div className={LABEL}>Equipment</div>
-            {equipmentSets.length === 0 ? (
-              <p className="mt-1.5 text-[11px] text-slate-500">No stored equipment sets on this profile.</p>
-            ) : (
-              <div className="mt-1.5">
-                <EquipmentColumns sets={equipmentSets} context={context} />
-              </div>
-            )}
+          <div className="grid min-w-0 items-start gap-4 xl:grid-cols-2" data-wardrobe-composition>
+            <WardrobeGrid
+              title="Armour Wardrobe"
+              rows={armorRows}
+              context={context}
+              emptyMessage="No saved armour sets on this profile."
+            />
+            <WardrobeGrid
+              title="Equipment Wardrobe"
+              rows={equipmentRows}
+              context={context}
+              emptyMessage="No stored equipment sets on this profile."
+            />
           </div>
 
           <div>
@@ -1907,6 +2004,7 @@ const GearSection: React.FC<{
                     petByUuid={petByUuid}
                     tuning={tuning}
                     context={context}
+                    active={activeLoadout?.id === loadout.id}
                   />
                 ))}
               </div>
@@ -1914,14 +2012,13 @@ const GearSection: React.FC<{
           </div>
 
           <p className="text-[10px] leading-snug text-slate-500">
-            A recombed piece wears its upgraded rarity. Hover an armour set to see it on the character panel.
+            A recombed piece wears its upgraded rarity. Empty set keys stay visible so locked, unlocked-empty and private states are not conflated.
           </p>
         </div>
       )}
     </div>
   );
 };
-
 /**
  * Pets, as a compact grid of rarity-glass tiles: each pet wears its rarity as
  * its tile, the same map the gear cells draw from, with the icon at the slot
@@ -1956,7 +2053,48 @@ const PetsSection: React.FC<{
   </div>
 );
 
-/** A short route to the shared connection controls while no profile is linked. */
+/**
+ * A short route to the shared connection controls while no profile is linked.
+ */
+const ProfileDataState: React.FC<{ status: ProfileStatusView }> = ({ status }) => {
+  if (status.showSkeleton) {
+    return (
+      <div className={PANEL} aria-label="Loading profile data" aria-busy="true">
+        <div className="space-y-2 p-3 animate-pulse">
+          <div className="h-3 w-32 rounded-sm bg-slate-700/60" />
+          <div className="h-10 w-full rounded-sm bg-slate-800/60" />
+          <div className="grid grid-cols-3 gap-2">
+            <div className="h-16 rounded-sm bg-slate-800/60" />
+            <div className="h-16 rounded-sm bg-slate-800/60" />
+            <div className="h-16 rounded-sm bg-slate-800/60" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status.showNoKey) {
+    return (
+      <div className={PANEL} role="status">
+        <SectionHead title="Profile data unavailable" />
+        <div className="space-y-2 p-3">
+          <p className="text-[12px] text-slate-300">Connect your Minecraft profile in Settings to load this profile section. Unavailable data is not an empty profile.</p>
+          <Link to="/settings#hypixel" className={BTN_QUIET}>Open Settings</Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={PANEL} role={status.showError ? "alert" : "status"}>
+      <SectionHead title="Profile data unavailable" />
+      <div className="space-y-2 p-3">
+        <p className="text-[12px] text-slate-300">{status.label ?? "This profile section could not be loaded."} Unavailable is different from zero.</p>
+        <Link to="/profile?tab=gear" className={BTN_QUIET}>Try Profile again</Link>
+      </div>
+    </div>
+  );
+};
 const HypixelConnectionLink: React.FC = () => {
   const { access } = useApiAccess();
   if (hasApiProfileAccess(access)) return null;
@@ -1980,7 +2118,7 @@ const HypixelConnectionLink: React.FC = () => {
 };
 
 export const IslandPage: React.FC = () => {
-  const { snapshot, stored, sections, sources, status, modVersion, lastError, applyCode, refreshApi, clear } =
+  const { snapshot, stored, sections, sources, status, modVersion, lastError, applyCode, refreshApi } =
     useIsland();
 
   const [code, setCode] = useState("");
@@ -2002,23 +2140,15 @@ export const IslandPage: React.FC = () => {
     return () => document.documentElement.classList.remove("sd-channel");
   }, [snapshot]);
 
-  /**
-   * Which tab is on screen, kept in the URL so a reload or a shared link lands
-   * on the same tab. Validated against the tabs that actually exist right now;
-   * a `?tab=` naming a section whose data has not arrived yet falls back to
-   * the first tab and takes over on its own the moment the data lands, because
-   * the parameter stays in the URL.
-   */
+  const { activeTab: rememberedProfileTab, urlTab, fromSession, selectTab: selectProfileTab } = useProfileTabs();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectTab = useCallback(
     (id: string) => {
-      const next = new URLSearchParams(searchParams);
-      next.set("tab", id);
-      setSearchParams(next);
+      const canonical: ProfileTab = id === "networth" ? "network" : id as ProfileTab;
+      selectProfileTab(canonical);
     },
-    [searchParams, setSearchParams]
+    [selectProfileTab]
   );
-
   /**
    * The Inventory tab's sub-section, also in the URL (`?tab=inventory&box=`)
    * so a link to a specific storage surface survives a reload. Selecting a
@@ -2043,6 +2173,7 @@ export const IslandPage: React.FC = () => {
    * prices from the bazaar, both already cached by their own hooks.
    */
   const { items: itemIndex } = useRecipes();
+  const owned = useOwned({ items: itemIndex });
   const { prices } = useBazaar();
   const { ironman } = useProfile();
 
@@ -2152,15 +2283,7 @@ export const IslandPage: React.FC = () => {
   const needle = query.trim().toLowerCase();
   const live = status === "live";
 
-  /**
-   * The sack entries worth showing, before any search.
-   *
-   * `liveSackEntries` is where the zero counts go, and it is a read: the stored
-   * snapshot still holds every entry the mod sent, including the hundreds at
-   * zero that an older export carries. Filtering here rather than on the way in
-   * means a snapshot taken before the mod learned to strip them displays
-   * correctly today, with nothing re-exported and nothing rewritten.
-   */
+  /** Every valid sack counter, including the API's known-empty zero rows. */
   const sackEntries = useMemo(() => liveSackEntries(snapshot?.sacks), [snapshot]);
 
   /**
@@ -2366,6 +2489,13 @@ export const IslandPage: React.FC = () => {
     </span>
   );
 
+  const profileFreshness = (
+    <span className="flex min-w-[9rem] flex-col items-end gap-0.5 text-right text-[10px] text-slate-500" data-profile-freshness aria-label="Profile data freshness">
+      <span>{profile.fetchedAt !== null ? `API ${ago(profile.fetchedAt)}` : sources.api !== null ? `API ${ago(sources.api)}` : "API unavailable"}</span>
+      <span>{live ? (modVersion ? `Mod live ${modVersion}` : "Mod live") : sources.mod !== null ? `Mod ${ago(sources.mod)}` : "Mod unavailable"}</span>
+    </span>
+  );
+
   /* --- the paste box, which is present in every state -------------------- */
 
   const pasteBox = (
@@ -2384,9 +2514,7 @@ export const IslandPage: React.FC = () => {
           <button className={BTN_PRIMARY} onClick={onLoad} disabled={busy || code.trim() === ""}>
             {busy ? "Loading…" : "Load"}
           </button>
-          <span className="text-[10px] text-slate-500">
-            Nothing is uploaded. The code is decoded in this browser and kept in this browser.
-          </span>
+
         </div>
 
         {pasteError && (
@@ -2402,6 +2530,10 @@ export const IslandPage: React.FC = () => {
   /* --- empty state ------------------------------------------------------- */
 
   if (!snapshot) {
+    // A bare /island route still belongs to island-code onboarding. A URL tab
+    // or an unexpired session tab is an explicit request for Profile instead.
+    const requestedProfileTab = urlTab !== null || fromSession ? rememberedProfileTab : null;
+
     /*
      * The accessories catalogue needs no snapshot and no key, and the old
      * `/accessories` address redirects to `?tab=accessories`, so that deep
@@ -2409,7 +2541,36 @@ export const IslandPage: React.FC = () => {
      * exists. Without this branch a redirected bookmark would land on the
      * onboarding pitch instead of the page it named.
      */
-    if (searchParams.get("tab") === "accessories") {
+    if (requestedProfileTab === "minions") {
+      return (
+        <div className="mx-auto w-full max-w-[120rem] p-4 space-y-3">
+          <PageHeader
+            title="Minions"
+            sub="Every current minion family, selected profile tiers, and one honest upgrade plan."
+            icon={Sparkles}
+            actions={connection}
+          />
+          <React.Suspense
+            fallback={
+              <p className="rounded border border-white/10 bg-slate-950/30 p-3 text-[11px] text-slate-400" role="status">
+                Loading minion catalogue...
+              </p>
+            }
+          >
+            <MinionsSection
+              profile={profile.minions}
+              profileStatus={profile.status}
+              items={itemIndex}
+              owned={owned}
+              parsed={profile.parsed}
+              inventoryShared={profile.coverage?.inventoryShared ?? false}
+              ironman={ironman}
+            />
+          </React.Suspense>
+        </div>
+      );
+    }
+    if (requestedProfileTab === "accessories") {
       return (
         <div className="mx-auto w-full max-w-[120rem] p-4 space-y-3">
           <PageHeader
@@ -2422,11 +2583,26 @@ export const IslandPage: React.FC = () => {
       );
     }
 
+    if (requestedProfileTab !== null) {
+      const activeProfileTab = requestedProfileTab === "network" ? "networth" : requestedProfileTab;
+      return (
+        <div className="mx-auto w-full max-w-[120rem] p-4 space-y-3">
+          <PageHeader
+            title="Profile"
+            sub="Gear, pets, inventory and networth from your Hypixel profile."
+            actions={connection}
+          />
+          <SectionTabs tabs={PROFILE_TAB_DEFS} active={activeProfileTab} onSelect={selectTab} />
+          <ProfileDataState status={profile.profileStatus} />
+          <HypixelConnectionLink />
+        </div>
+      );
+    }
     return (
       <div className="mx-auto w-full max-w-[120rem] p-4 space-y-3">
         <PageHeader
           title="Island Storage"
-          sub="Your whole profile in one place: storage, networth, gear and pets."
+          sub="Storage, networth, gear and pets."
           icon={Boxes}
           actions={connection}
         />
@@ -2438,7 +2614,7 @@ export const IslandPage: React.FC = () => {
             website can show you this on its own.
           </p>
           <p className="text-[12px] text-slate-400 leading-relaxed">
-            The {SITE_NAME} companion mod reads what your own client already draws when you open a container, and
+            The {SITE_NAME} mod reads what your own client already draws when you open a container, and
             hands it here. It is passive: it reads screens you opened yourself and sends nothing on your behalf, the same
             category of mod as SkyOcean or NEU.
           </p>
@@ -2485,6 +2661,8 @@ export const IslandPage: React.FC = () => {
               loadouts={gearLoadouts.loadouts}
               petByUuid={petByUuid}
               tuning={profile.facts?.tuning ?? {}}
+              selectedPower={profile.facts?.selectedPower ?? null}
+              equippedEquipmentSetId={gearLoadouts.equippedEquipmentSetId}
               inventoryShared={profile.coverage?.inventoryShared ?? false}
               context={contexts.gear}
             />
@@ -2584,20 +2762,44 @@ export const IslandPage: React.FC = () => {
    * Skills has no tab on purpose: the band above the tabs IS the skills
    * surface, and a tab showing the same thing twice would be noise.
    */
-  const tabs: TabDef[] = [
-    ...(profile.parsed ? [{ id: "gear", label: "Gear" }] : []),
-    { id: "accessories", label: "Accessories" },
-    ...(profile.parsed ? [{ id: "pets", label: "Pets" }] : []),
-    { id: "inventory", label: "Inventory" },
-    { id: "networth", label: "Networth" },
-  ];
+  const tabs = PROFILE_TAB_DEFS;
 
-  const BOXES = [
-    { id: "inventory", label: "Inventory" },
-    { id: "chests", label: "Chests" },
-    { id: "ender-chest", label: "Ender Chest" },
-    { id: "storage", label: "Storage" },
-    { id: "sacks", label: "Sacks" },
+  const BOXES: StorageDestination[] = [
+    {
+      id: "inventory",
+      label: "Inventory",
+      summary: storageSummary(sections.inventory.state, withoutChrome(snapshot.inventory ?? []).length, "stack"),
+      state: sections.inventory.state,
+      icon: { name: "SkyBlock Menu", id: "NETHER_STAR" },
+    },
+    {
+      id: "chests",
+      label: "Chests",
+      summary: storageSummary(sections.chests.state, snapshot.chests.length, "chest"),
+      state: sections.chests.state,
+      icon: { name: "Chest", id: "CHEST" },
+    },
+    {
+      id: "ender-chest",
+      label: "Ender Chest",
+      summary: storageSummary(sections.enderChest.state, withoutChrome(snapshot.enderChest ?? []).length, "stack"),
+      state: sections.enderChest.state,
+      icon: { name: "Ender Chest", id: "ENDER_CHEST" },
+    },
+    {
+      id: "storage",
+      label: "Storage",
+      summary: storageSummary(sections.storage.state, withoutChrome(snapshot.storage ?? []).length, "stack"),
+      state: sections.storage.state,
+      icon: { name: "Jumbo Backpack", id: "JUMBO_BACKPACK" },
+    },
+    {
+      id: "sacks",
+      label: "Sacks",
+      summary: storageSummary(sections.sacks.state, sackEntries.length, "type", "types"),
+      state: sections.sacks.state,
+      icon: { name: "Large Mining Sack", id: "LARGE_MINING_SACK" },
+    },
   ];
 
   /**
@@ -2608,9 +2810,13 @@ export const IslandPage: React.FC = () => {
    */
   const requested = searchParams.get("tab");
   const legacyBox = requested !== null && requested !== "inventory" && BOXES.some((b) => b.id === requested) ? requested : null;
-  const normalizedTab = legacyBox ? "inventory" : requested;
+  const normalizedProfileTab = rememberedProfileTab === "network" ? "networth" : rememberedProfileTab;
   const activeTab =
-    normalizedTab !== null && tabs.some((t) => t.id === normalizedTab) ? normalizedTab : tabs.find((t) => t.id)!.id!;
+    legacyBox === null && tabs.some((t) => t.id === normalizedProfileTab)
+      ? normalizedProfileTab
+      : legacyBox !== null
+      ? "inventory"
+      : tabs.find((t) => t.id)!.id!;
   const requestedBox = searchParams.get("box") ?? legacyBox;
   const activeBox = requestedBox !== null && BOXES.some((b) => b.id === requestedBox) ? requestedBox : "inventory";
 
@@ -2660,7 +2866,9 @@ export const IslandPage: React.FC = () => {
         className="sticky top-[var(--sd-bar-h)] hidden h-[calc(100vh-var(--sd-bar-h))] shrink-0 flex-col items-center justify-center self-start min-[900px]:flex"
         style={{ width: "var(--sd-split)" }}
       >
-        <PlayerModel uuid={snapshot.player.uuid} className="aspect-[360/612] h-[68vh]" />
+        <React.Suspense fallback={<div aria-hidden className="aspect-[360/612] h-[68vh]" />}>
+          <PlayerModel uuid={snapshot.player.uuid} className="aspect-[360/612] h-[68vh]" />
+        </React.Suspense>
       </aside>
 
       {/* Everything else sits on the curtain. */}
@@ -2671,8 +2879,8 @@ export const IslandPage: React.FC = () => {
             stays on the right: both are honesty lines and neither moved. */}
         <PageHeader
           title={`${snapshot.player.name || "Unknown"} on ${snapshot.profile.name || "profile"}`}
-          sub={`${snapshot.profile.gameMode ? `${snapshot.profile.gameMode} · ` : ""}island profile`}
-          actions={liveBadge}
+          sub="island profile"
+          actions={profileFreshness}
         />
 
         {/* Suppressed when it is the paste error, which the paste box already
@@ -2686,7 +2894,9 @@ export const IslandPage: React.FC = () => {
         {/* The narrow-viewport stand-in for the channel: the model alone, in
             the flow above the tabs. */}
         <div className="min-[900px]:hidden">
-          <PlayerModel uuid={snapshot.player.uuid} className="mx-auto aspect-[360/612] h-[300px] pt-2" />
+          <React.Suspense fallback={<div aria-hidden className="mx-auto aspect-[360/612] h-[300px]" />}>
+            <PlayerModel uuid={snapshot.player.uuid} className="mx-auto aspect-[360/612] h-[300px] pt-2" />
+          </React.Suspense>
         </div>
 
         <div className="min-w-0 space-y-3">
@@ -2708,14 +2918,39 @@ export const IslandPage: React.FC = () => {
 
           {activeTab === "accessories" && <AccessoriesView />}
 
-          {activeTab === "inventory" && (
-            <>
-              <SubRail items={BOXES} active={activeBox} onSelect={selectBox} />
-              {searchBox}
-            </>
+          {activeTab === "minions" && (
+            <React.Suspense
+              fallback={
+                <p className="rounded border border-white/10 bg-slate-950/30 p-3 text-[11px] text-slate-400" role="status">
+                  Loading minion catalogue...
+                </p>
+              }
+            >
+              <MinionsSection
+                profile={profile.minions}
+                profileStatus={profile.status}
+                items={itemIndex}
+                owned={owned}
+                parsed={profile.parsed}
+                inventoryShared={profile.coverage?.inventoryShared ?? false}
+                ironman={ironman}
+              />
+            </React.Suspense>
           )}
 
-          {activeTab === "inventory" && activeBox === "sacks" && (
+          {activeTab === "inventory" && (
+            <div className="grid min-w-0 items-start gap-3 md:grid-cols-[11rem_minmax(0,1fr)]">
+              <StorageSelector items={BOXES} active={activeBox} onSelect={selectBox} panelId="inventory-storage-panel" />
+              <div
+                id="inventory-storage-panel"
+                role="tabpanel"
+                aria-labelledby={`storage-tab-${activeBox}`}
+                tabIndex={0}
+                className="min-w-0 space-y-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/90"
+              >
+                {searchBox}
+
+          {activeBox === "sacks" && (
             <>
               <div className={PANEL}>
         <SectionHead
@@ -2741,9 +2976,7 @@ export const IslandPage: React.FC = () => {
           }
         />
         {/* Four different nothings, and only one of them is "empty". A section
-            the mod never reached and a section whose every count is zero are
-            not the same fact, and the second one is only reachable at all
-            because the zero entries are filtered on the way to the screen. */}
+            no source reached is not the same fact as an explicitly empty map. */}
         {!sacksReal ? (
           <EmptyReason provenance={sections.sacks} noun="sacks" />
         ) : sackEntries.length === 0 ? (
@@ -2767,7 +3000,7 @@ export const IslandPage: React.FC = () => {
             </>
           )}
 
-          {activeTab === "inventory" && activeBox === "chests" && (
+          {activeBox === "chests" && (
             <>
               <div className={PANEL}>
         <SectionHead
@@ -2825,7 +3058,7 @@ export const IslandPage: React.FC = () => {
             </>
           )}
 
-          {activeTab === "inventory" && activeBox === "inventory" && (
+          {activeBox === "inventory" && (
             <OptionalSection
               title="Inventory"
               noun="inventory"
@@ -2838,7 +3071,7 @@ export const IslandPage: React.FC = () => {
             />
           )}
 
-          {activeTab === "inventory" && activeBox === "ender-chest" && (
+          {activeBox === "ender-chest" && (
             <OptionalSection
               title="Ender Chest"
               noun="ender chest"
@@ -2851,7 +3084,7 @@ export const IslandPage: React.FC = () => {
             />
           )}
 
-          {activeTab === "inventory" && activeBox === "storage" && (
+          {activeBox === "storage" && (
             <OptionalSection
               title="Storage / Backpacks"
               noun="backpacks"
@@ -2864,53 +3097,56 @@ export const IslandPage: React.FC = () => {
             />
           )}
 
+              </div>
+            </div>
+          )}
+
           {/* The API half of the profile: what you wear, what follows you
               around. These tabs only exist once a keyed pull has filled them
               in (see the tab list above), so no keyless explanation is needed
               here; the Networth tab and the Hypixel API panel carry it. */}
-          {activeTab === "gear" && profile.parsed && (
-            <GearSection
-              armor={armor}
-              wornEquipment={wornEquipment}
-              armorSets={armorSets}
-              equipmentSets={equipmentSets}
-              loadouts={gearLoadouts.loadouts}
-              petByUuid={petByUuid}
-              tuning={facts?.tuning ?? {}}
-              inventoryShared={profile.coverage?.inventoryShared ?? false}
-              context={contexts.gear}
-            />
+          {activeTab === "gear" && (
+            profile.parsed ? (
+              <>
+                {profile.profileStatus.isStale && profile.profileStatus.label && (
+                  <p className="border-l-2 border-amber-400/60 bg-amber-400/5 px-2.5 py-2 text-[11px] text-amber-200" role="status">{profile.profileStatus.label}</p>
+                )}
+                <GearSection
+                  armor={armor}
+                  wornEquipment={wornEquipment}
+                  armorSets={armorSets}
+                  equipmentSets={equipmentSets}
+                  loadouts={gearLoadouts.loadouts}
+                  petByUuid={petByUuid}
+                  tuning={facts?.tuning ?? {}}
+                  selectedPower={facts?.selectedPower ?? null}
+                  equippedEquipmentSetId={gearLoadouts.equippedEquipmentSetId}
+                  inventoryShared={profile.coverage?.inventoryShared ?? false}
+                  context={contexts.gear}
+                />
+              </>
+            ) : (
+              <ProfileDataState status={profile.profileStatus} />
+            )
           )}
 
-          {activeTab === "pets" && profile.parsed && <PetsSection pets={pets} />}
+          {activeTab === "pets" && (
+            profile.parsed ? (
+              <>
+                {profile.profileStatus.isStale && profile.profileStatus.label && (
+                  <p className="border-l-2 border-amber-400/60 bg-amber-400/5 px-2.5 py-2 text-[11px] text-amber-200" role="status">{profile.profileStatus.label}</p>
+                )}
+                <PetsSection pets={pets} />
+              </>
+            ) : (
+              <ProfileDataState status={profile.profileStatus} />
+            )
+          )}
         </div>
 
         <HypixelConnectionLink />
 
-      <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
-        <p className="text-[10px] text-slate-500 leading-relaxed max-w-xl">
-          {sources.mod !== null &&
-            (live ? `Live from the ${SOURCE_LABEL.mod}. ` : `${SOURCE_LABEL.mod}: ${ago(sources.mod)}. `)}
-          {sources.api !== null && `${SOURCE_LABEL.api}: ${ago(sources.api)}. `}
-          Saved in this browser; authenticated profile requests pass through Skydex&rsquo;s short-lived Cloudflare cache.
-        </p>
-        <button
-          className={BTN_QUIET}
-          onClick={clear}
-          title="Removes only the stored island snapshot. Your Hypixel connection and everything else in this browser are untouched."
-        >
-          <Trash2 className="w-3 h-3" />
-          Clear snapshot
-        </button>
-      </div>
 
-      <details className="group">
-        <summary className="text-[11px] text-slate-500 cursor-pointer hover:text-slate-300 list-none inline-flex items-center gap-1.5">
-          <ChevronRight className="w-3 h-3 group-open:rotate-90 transition-transform" />
-          Paste a different code
-        </summary>
-        <div className="mt-2">{pasteBox}</div>
-      </details>
       </div>
     </div>
   );

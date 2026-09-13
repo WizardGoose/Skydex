@@ -122,6 +122,12 @@ export interface Stat {
   source: StatSource;
 }
 
+export interface GreenhouseCellLayout {
+  /** Usable greenhouse cells as [row, column] pairs in the site's 10x10 grid. */
+  value: [number, number][];
+  source: "api";
+}
+
 export interface GreenhouseStats {
   /** Crop Growth stat, 0 to 200. Never `api`: see the note above. */
   cropGrowth: Stat | null;
@@ -131,10 +137,8 @@ export interface GreenhouseStats {
    * Garden Desk Plant Yield upgrade tier, from `garden_upgrades.YIELD`.
    *
    * Pulled because the standing rule is that anything the API exposes is read
-   * rather than asked, and this is exposed: the live dump in
-   * `docs/hypixel-api-cheatsheet.md` records `garden_upgrades` as exactly
-   * `{"GROWTH_SPEED": 6, "YIELD": 4}`, so it sits in the same object as the
-   * tier already used, with the same reliability.
+   * rather than asked. The supported payload places `YIELD` beside
+   * `GROWTH_SPEED` in `garden_upgrades`, with the same reliability.
    *
    * NO CONSUMER TODAY, and that is recorded here rather than left to be
    * rediscovered. The planner's "yield" is a different quantity entirely: it is
@@ -178,6 +182,15 @@ export interface GreenhouseStats {
    */
   bioanalysis: Stat | null;
   /**
+   * The player's actual unlocked 10x10 greenhouse slots.
+   *
+   * Hypixel sends these separately from anything planted in the greenhouse.
+   * Keeping the slot shape here prevents the live planted snapshot from ever
+   * becoming the planner's capacity model. `null` means the endpoint did not
+   * provide a usable slot list, so the planner may use its browser fallback.
+   */
+  unlockedCells: GreenhouseCellLayout | null;
+  /**
    * `garden_upgrades.PLOT_LIMIT` exactly as the API sent it, or null when the
    * field was absent.
    *
@@ -204,6 +217,7 @@ export const EMPTY_STATS: GreenhouseStats = {
   yieldTier: null,
   plots: null,
   bioanalysis: null,
+  unlockedCells: null,
   rawPlotLimit: null,
   fetchedAt: null,
 };
@@ -337,6 +351,36 @@ const readRawCount = (raw: unknown): number | null => {
 };
 
 /**
+ * Read Hypixel's authoritative greenhouse slot shape.
+ *
+ * The wire format names the horizontal axes `x` and `z`; the site renders
+ * `[row, column]`, hence `[z, x]`. Reject the complete field if any entry is
+ * malformed. A partial board would look legitimate while quietly granting or
+ * removing capacity, which is worse than falling back visibly.
+ */
+const readUnlockedCells = (garden: Record<string, unknown> | null): GreenhouseCellLayout | null => {
+  if (!garden || !("greenhouse_slots" in garden) || !Array.isArray(garden.greenhouse_slots)) return null;
+
+  const seen = new Set<string>();
+  const cells: [number, number][] = [];
+  for (const raw of garden.greenhouse_slots) {
+    if (!isObject(raw)) return null;
+    const { x, z } = raw;
+    if (
+      typeof x !== "number" || !Number.isInteger(x) || x < 0 || x >= 10 ||
+      typeof z !== "number" || !Number.isInteger(z) || z < 0 || z >= 10
+    ) return null;
+
+    const key = `${z},${x}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cells.push([z, x]);
+  }
+
+  return { value: cells, source: "api" };
+};
+
+/**
  * The plots the greenhouse runs, derived from PLOT_LIMIT.
  *
  * The whole derivation in one place, because it carries an interpretation and
@@ -345,8 +389,7 @@ const readRawCount = (raw: unknown): number | null => {
  *   no garden read          null. We know nothing and say nothing.
  *   key absent              1. Hypixel only materialises the key once a tier
  *                           has been bought, so absence IS the unpurchased
- *                           default: base greenhouse, no upgrades. Verified
- *                           against the one live dump (1 plot, no key).
+ *                           default: base greenhouse, no upgrades.
  *   key present, 0 to 2     that many tiers purchased, plus the base: N + 1.
  *   key present, outside    null. The field is not what we believe it is, and
  *                           declining beats a confident wrong plot count. The
@@ -401,6 +444,7 @@ export function parseGreenhouseStats(profile: unknown, uuid: string, at: number 
     yieldTier: yieldT === null ? null : { value: yieldT, source: "api" },
     plots: derivePlots(garden, upgrades),
     bioanalysis: null,
+    unlockedCells: readUnlockedCells(garden),
     // The evidence behind `plots`, kept raw for the panel's tooltip.
     rawPlotLimit: upgrades ? readRawCount(upgrades.PLOT_LIMIT) : null,
     fetchedAt: at,
@@ -468,6 +512,9 @@ export function applyManualOverrides(stats: GreenhouseStats, manual: ManualGreen
     yieldTier: override(manual.yieldTier, stats.yieldTier),
     plots: override(manual.plots, stats.plots),
     bioanalysis: override(manual.bioanalysis, stats.bioanalysis),
+    // Slot capacity is not a typed stat. Hypixel's list remains authoritative
+    // whenever it is present, regardless of the manual number overrides above.
+    unlockedCells: stats.unlockedCells,
     // Carried through untouched. There is no manual layer for a diagnostic:
     // it reports what the API said, and a player cannot override what they
     // were told.

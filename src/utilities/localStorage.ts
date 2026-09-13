@@ -99,6 +99,15 @@ export const loadInventory = (): Map<string, number> => {
   return new Map();
 };
 
+/** Remove only manually entered generic item holdings. */
+export const clearInventory = (): void => {
+  try {
+    localStorage.removeItem(INVENTORY_STORAGE_KEY);
+  } catch (error) {
+    console.warn("Failed to clear inventory from localStorage:", error);
+  }
+};
+
 // Owned attributes storage
 const OWNED_ATTRIBUTES_STORAGE_KEY = "owned_attributes";
 

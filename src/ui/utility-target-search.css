@@ -1,0 +1,11 @@
+.utility-target-search { position: relative; display: flex; flex: none; align-items: center; min-height: 2.35rem; border-bottom: 1px solid var(--profile-border); color: var(--profile-muted); }
+.utility-target-search:focus-within { border-bottom-color: var(--profile-accent); }
+.utility-target-search > svg { width: .9rem; height: .9rem; flex: none; }
+.utility-target-search > input { width: 100%; min-width: 0; padding: .52rem .5rem; border: 0; outline: 0; background: transparent; color: var(--profile-text); font-size: .75rem; font-weight: 400; }
+.utility-target-search > input::placeholder { color: var(--profile-muted); }
+.utility-target-search > input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.utility-target-search > button,.utility-target-search > .profile-progression-filter-menu > summary { display: grid; place-items: center; flex: none; width: 1.7rem; height: 1.7rem; min-width: 0; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--profile-muted); }
+.utility-target-search > button svg,.utility-target-search > .profile-progression-filter-menu > summary svg { width: .8rem; height: .8rem; }
+.utility-target-search > button.is-open svg { transform: rotate(180deg); }
+.utility-target-search > button:focus-visible { outline: 1px solid var(--profile-accent); }
+.utility-target-search > .profile-progression-filter-menu > summary { display: flex; justify-content: center; width: auto; padding: 0 .35rem; gap: .2rem; }

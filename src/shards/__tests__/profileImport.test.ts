@@ -9,11 +9,10 @@ import {
 } from "../profileImport";
 
 /**
- * Reading shards and fused counts off a real Hypixel member.
+ * Reading shards and fused counts from a Hypixel member payload.
  *
- * Every field asserted here was traced against the authenticated dump in
- * `docs/hypixel-api-cheatsheet.md`, and the two things worth pinning down are
- * the two that are easy to get quietly wrong:
+ * These assertions pin down the two wire-format details that are easy to get
+ * quietly wrong:
  *
  *   - the wire spells a shard `SPHINX` and our dataset spells it
  *     `SHARD_SPHINX`. A matcher that compares them raw finds nothing and
@@ -47,7 +46,7 @@ describe("normaliseShardId", () => {
       shards: Record<string, { internal_id: string }>;
     };
     const ids = Object.values(data.shards).map((s) => normaliseShardId(s.internal_id));
-    expect(ids.length).toBe(189);
+    expect(ids.length).toBe(322);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
@@ -64,8 +63,9 @@ describe("readShardsOwned", () => {
       },
     };
 
-    const { shards, unmapped } = readShardsOwned(member, CATALOGUE);
+    const { shards, unmapped, available } = readShardsOwned(member, CATALOGUE);
     expect(unmapped).toBe(0);
+    expect(available).toBe(true);
     expect(shards).toStrictEqual([
       { id: "E39", name: "Sphinx", amount: 7, rarity: "epic" },
       { id: "C1", name: "Grove", amount: 96, rarity: "common" },
@@ -107,9 +107,10 @@ describe("readShardsOwned", () => {
   });
 
   it("says nothing at all when the section is absent", () => {
-    expect(readShardsOwned({}, CATALOGUE)).toStrictEqual({ shards: [], unmapped: 0 });
-    expect(readShardsOwned(null, CATALOGUE)).toStrictEqual({ shards: [], unmapped: 0 });
-    expect(readShardsOwned({ shards: {} }, CATALOGUE)).toStrictEqual({ shards: [], unmapped: 0 });
+    expect(readShardsOwned({}, CATALOGUE)).toStrictEqual({ shards: [], unmapped: 0, available: false });
+    expect(readShardsOwned(null, CATALOGUE)).toStrictEqual({ shards: [], unmapped: 0, available: false });
+    expect(readShardsOwned({ shards: {} }, CATALOGUE)).toStrictEqual({ shards: [], unmapped: 0, available: false });
+    expect(readShardsOwned({ shards: { owned: [] } }, CATALOGUE)).toStrictEqual({ shards: [], unmapped: 0, available: true });
   });
 });
 
@@ -163,6 +164,7 @@ describe("toProfileData", () => {
     expect(data.profile.cute_name).toBe("Pomegranate");
     expect(data.profile.game_mode).toBe("ironman");
     expect(data.profile.selected).toBe(true);
+    expect(data.shardsRead).toBe(true);
     expect(data.attributesRead).toBe(true);
   });
 

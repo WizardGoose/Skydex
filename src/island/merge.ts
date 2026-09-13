@@ -1,4 +1,8 @@
 import type { IslandItem, IslandSnapshot } from "./types";
+import {
+  checkStorageIdentity,
+  type StorageIdentityExpectation,
+} from "./storageIdentity";
 
 /**
  * Two feeds, one island.
@@ -110,6 +114,12 @@ export interface MergeOptions {
    * simply fall to the API without needing a rule.
    */
   modLive?: boolean;
+  /**
+   * Connected identity used to keep a cached feed from another account or
+   * unresolved account out of the merged view. The raw feed remains intact in
+   * the caller's FeedSet for a later identity change or an explicit clear.
+   */
+  identity?: StorageIdentityExpectation;
 }
 
 export interface MergedIsland {
@@ -162,6 +172,12 @@ const allAbsent = (): Record<SectionKey, SectionProvenance> => ({
 
 export type FeedSet = Partial<Record<IslandSource, IslandFeed>>;
 
+const feedMatchesIdentity = (feed: IslandFeed, expected: StorageIdentityExpectation): boolean => {
+  const check = checkStorageIdentity(feed.snapshot, expected);
+  return check.state === "match"
+    || (!check.hasExpectedIdentity && check.state === "unknown");
+};
+
 /**
  * Merge the feeds into one island view plus its provenance.
  *
@@ -170,7 +186,8 @@ export type FeedSet = Partial<Record<IslandSource, IslandFeed>>;
  * `absent`. Identity (player, profile, game mode) is taken as a block from the
  * freshest feed that knows a name, rather than field by field, because a
  * profile stitched together from two sources is a profile that belongs to
- * nobody.
+ * nobody. When `identity` is supplied, ineligible feeds are filtered before
+ * this policy runs; their raw records remain in the caller's FeedSet.
  */
 /**
  * Choose which feed supplies one section.
@@ -284,11 +301,44 @@ const mergeSacks = (list: readonly IslandFeed[], fallback: SectionProvenance): S
 
 export function mergeFeeds(feeds: FeedSet, options: MergeOptions = {}): MergedIsland {
   const modLive = options.modLive === true;
-  const list = ORDER.map((s) => feeds[s]).filter((f): f is IslandFeed => f !== undefined);
+  const rawList = ORDER.map((s) => feeds[s]).filter((f): f is IslandFeed => f !== undefined);
+  const expectedIdentity = options.identity;
+  let list = rawList;
+
+  if (expectedIdentity) {
+    /*
+     * `profileId === null` means "follow Hypixel's selected profile", so the
+     * access record may not carry a profile name yet. An API feed that already
+     * passed the account gate is the one local proof of which selected profile
+     * the page currently describes. Use that name only for this merge; never
+     * let a foreign or unresolved API feed choose the anchor.
+     */
+    const accountIdentity: StorageIdentityExpectation = { ...expectedIdentity, profileName: null };
+    const eligibleApi = rawList.find((feed) =>
+      feed.source === "api" && checkStorageIdentity(feed.snapshot, accountIdentity).state === "match"
+    );
+    const explicitProfile = expectedIdentity.profileName?.trim();
+    let filteringIdentity = expectedIdentity;
+    let withholdModWithoutProfileProof = false;
+
+    if (!explicitProfile && eligibleApi) {
+      const apiProfile = eligibleApi.snapshot.profile.name.trim();
+      if (apiProfile) {
+        filteringIdentity = { ...expectedIdentity, profileName: apiProfile };
+      } else {
+        // The account is known, but a nameless API profile cannot establish
+        // that cached mod containers belong to the same selected profile.
+        withholdModWithoutProfileProof = true;
+      }
+    }
+
+    list = rawList.filter((feed) => feedMatchesIdentity(feed, filteringIdentity));
+    if (withholdModWithoutProfileProof) list = list.filter((feed) => feed.source !== "mod");
+  }
 
   const sources: Record<IslandSource, number | null> = {
-    mod: feeds.mod?.receivedAt ?? null,
-    api: feeds.api?.receivedAt ?? null,
+    mod: list.find((feed) => feed.source === "mod")?.receivedAt ?? null,
+    api: list.find((feed) => feed.source === "api")?.receivedAt ?? null,
   };
 
   if (list.length === 0) return { snapshot: null, sections: allAbsent(), sources };
@@ -347,7 +397,8 @@ export function mergeFeeds(feeds: FeedSet, options: MergeOptions = {}): MergedIs
   // lives and dies with that feed: a newer mod snapshot without a board simply
   // has none, which is the wholesale-replacement rule the spec asks for and
   // the reason there is deliberately no keep-last here.
-  if (feeds.mod?.snapshot.greenhouse) snapshot.greenhouse = feeds.mod.snapshot.greenhouse;
+  const mod = list.find((feed) => feed.source === "mod");
+  if (mod?.snapshot.greenhouse) snapshot.greenhouse = mod.snapshot.greenhouse;
 
   return { snapshot, sections, sources };
 }

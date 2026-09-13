@@ -97,9 +97,7 @@ export const NpcSellSection: React.FC<{ summary: NpcSellSummary | null }> = ({ s
           )}
 
           <p className="border-t border-slate-800/70 px-3 py-1.5 text-[10px] leading-snug text-slate-500">
-            What the merchants would pay for the stacks in your sacks, chests, inventory, ender chest and backpacks -
-            hover a row for the split. Works on Ironman, since NPC selling is the one market it keeps. Not part of the
-            networth total above, which already prices these at market rates.
+            What merchants would pay for held stacks. Not part of the networth total; its valuation is separate.
             {summary.unpricedIds > 0 && (
               <>
                 {" "}

@@ -11,9 +11,9 @@ import { formatDuration, stageSeconds } from "../time";
  * A base crop is sown as a seed, so it has to grow before anything can roll.
  *
  * THE REPORT THIS FILE COMES FROM, AND WHAT IT ACTUALLY FOUND. A reader saw
- * "2d 14h" for one Soggybud planting and thought the Melon's own maturation had
+ * "2d 4h" for one Soggybud planting and thought the Melon's own maturation had
  * been left out of it. It had not. The model charges the slowest input's full
- * growth before the roll window opens, and the 2d 14h is 21 growth stages of
+ * growth before the roll window opens, and the 2d 4h is 21 growth stages of
  * which ELEVEN are the Melon getting to maturity. The claim did not reproduce.
  *
  * These tests exist because that is far too easy to lose. The lead-in is one
@@ -74,7 +74,7 @@ const ECONOMIES: Record<string, PlotEconomy | null> = {
  * The reported greenhouse. Crop Growth 100 and Growth Speed I, which is the
  * setting that puts "One stage 2h 30m" on the panel at 12 unique crops.
  */
-const SETTINGS: EstimateSettings = { cropGrowth: 100, speedTier: 1, uniqueCrops: 0, plots: 1 };
+const SETTINGS: EstimateSettings = { cropGrowth: 100, speedTier: 1, uniqueCrops: 12, plots: 1 };
 
 const node = (need: number, plots: number): SolverPlanNode => ({
   id: "soggybud",
@@ -96,14 +96,14 @@ const SOGGYBUD_STAGES = 10;
 
 describe("the panel readout the report was made from", () => {
   it("is 2h 30m a stage at twelve unique crops, the figure in the report", () => {
-    // The panel quotes the twelve-crop figure. The real plot has two, so it runs
-    // slower than the headline, which is where the rest of the gap went.
-    expect(formatDuration(stageSeconds({ ...SETTINGS, uniqueCrops: 12 }))).toBe("2h 30m");
-    expect(formatDuration(stageSecondsFor(ECONOMIES.soggybud, SETTINGS))).toBe("2h 57m");
+    // The bonus is greenhouse-wide. The Soggybud field has two crop types, but
+    // it runs on the same twelve-crop clock as every other field.
+    expect(formatDuration(stageSeconds(SETTINGS))).toBe("2h 30m");
+    expect(formatDuration(stageSecondsFor(ECONOMIES.soggybud, SETTINGS))).toBe("2h 30m");
   });
 
-  it("prices one Soggybud planting at the reported 2d 14h", () => {
-    expect(formatDuration(est().plantingSeconds)).toBe("2d 14h");
+  it("prices one Soggybud planting at 21 greenhouse-wide growth stages", () => {
+    expect(formatDuration(est().plantingSeconds)).toBe("2d 4h");
   });
 });
 
@@ -165,7 +165,7 @@ describe("the breakdown that makes the number checkable", () => {
   it("reads out the Soggybud planting in full", () => {
     const e = est();
     expect(plantingBreakdownLabel(e.breakdown, "Soggybud")).toBe("21 stages: 11 Melon maturation + 10 Soggybud growth");
-    expect(formatDuration(e.plantingSeconds)).toBe("2d 14h");
+    expect(formatDuration(e.plantingSeconds)).toBe("2d 4h");
   });
 
   it("names the input the model actually waited on", () => {

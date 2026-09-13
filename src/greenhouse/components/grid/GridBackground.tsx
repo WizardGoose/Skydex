@@ -7,6 +7,7 @@ export interface GridBackgroundProps {
   gap: number;
   unlockedCells: Set<string>;
   variant?: "green" | "gray";
+  showLockedCells?: boolean;
 }
 
 export const GridBackground: React.FC<GridBackgroundProps> = ({
@@ -14,6 +15,7 @@ export const GridBackground: React.FC<GridBackgroundProps> = ({
   gap,
   unlockedCells,
   variant = "green",
+  showLockedCells = true,
 }) => {
   const unlockedColor = variant === "gray"
     ? "bg-slate-600/40 border border-slate-500/30"
@@ -25,6 +27,7 @@ export const GridBackground: React.FC<GridBackgroundProps> = ({
         Array.from({ length: GRID_SIZE }).map((_, colIndex) => {
           const key = `${rowIndex},${colIndex}`;
           const isUnlocked = unlockedCells.has(key);
+          if (!isUnlocked && !showLockedCells) return null;
           const { top, left } = getCellPixelPosition(rowIndex, colIndex, cellSize, gap);
           
           return (

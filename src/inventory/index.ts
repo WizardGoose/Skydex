@@ -13,3 +13,16 @@ export { shardBridge, getShards, subscribeShards } from "./shardsStore";
 export type { ShardCounts } from "./shardsStore";
 export { getShardIds, subscribeShardIds } from "./shardIds";
 export type { OwnedEntry, OwnedIndex, OwnedSource, SourceCount } from "./types";
+export {
+  clearManagedInventory,
+  getInventoryManagement,
+  setManagedAttributes,
+  setManagedDisabledShards,
+  setManagedInventory,
+  setManagedSourceEnabled,
+  subscribeInventoryManagement,
+  useInventoryManagement,
+  MANAGED_HOLDING_SOURCES,
+} from "./managementStore";
+export type { InventoryManagementState } from "./managementStore";
+export { greenhouseHoldingsItems } from "./greenhouseItems";

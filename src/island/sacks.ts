@@ -51,6 +51,8 @@ export interface SackDefinition {
   icon: string | null;
   /** Item article names, verbatim, in the order the row lists them. */
   items: string[];
+  /** The tier whose `Sack Items` row supplies this summary row's contents. */
+  itemsSource?: string;
 }
 
 /* ---------------------------------------------------------------- parsing */
@@ -139,13 +141,21 @@ const slotIcon = (cell: string): string | null => {
   return raw.startsWith("*") ? `Large ${raw.slice(1).trim()}` : raw;
 };
 
+/** The tier named by the wiki's current `{{Sack Items|...}}` table cell. */
+const sackItemsSource = (cell: string): string | null => {
+  const m = cell.match(/\{\{\s*Sack Items\s*\|\s*([^}|]+?)(?:\||\}\})/i);
+  return m?.[1]?.trim() || null;
+};
+
 /**
  * Parse the article's `== Types ==` table.
  *
- * A row needs a name and at least one item to mean anything, so the header row
- * and the section stub fall out by having neither. Deliberately forgiving:
- * this reads a page other people edit, and a malformed row should cost that row
- * rather than the whole feature.
+ * Older revisions listed item links directly in the third column. Current
+ * revisions put a `{{Sack Items|<tier>}}` transclusion there instead, with the
+ * actual list in that sack family's article. A row needs a name and either of
+ * those two content sources. Deliberately forgiving: this reads a page other
+ * people edit, and a malformed row should cost that row rather than the whole
+ * feature.
  */
 export const parseSackTable = (wikitext: string): SackDefinition[] => {
   const types = wikiSection(wikitext, "Types");
@@ -158,10 +168,90 @@ export const parseSackTable = (wikitext: string): SackDefinition[] => {
 
     const sack = linkTargets(cells[1])[0];
     const items = linkTargets(cells[2]);
-    if (!sack || items.length === 0) continue;
+    const itemsSource = sackItemsSource(cells[2]);
+    if (!sack || (items.length === 0 && !itemsSource)) continue;
 
-    out.push({ sack, icon: slotIcon(cells[0]), items });
+    out.push({ sack, icon: slotIcon(cells[0]), items, ...(itemsSource ? { itemsSource } : {}) });
   }
+  return out;
+};
+
+const cleanSackItems = (values: readonly string[]): string[] => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    const item = value
+      // `[[Target|Label]]` and `[[Target]]` both reduce to the target.
+      .replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, "$1")
+      .replace(/\{\{[^}]*\}\}/g, "")
+      .trim()
+      // The wiki uses this abbreviation in several sack lists.
+      .replace(/^Ench\s+/i, "Enchanted ");
+    if (!item || item.startsWith("<")) continue;
+
+    const key = item.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
+};
+
+/**
+ * Item lists keyed by the exact tier named in each current `Sack Items Row`.
+ *
+ * One article can contain Beginner, Small, Medium and Large rows. Keeping the
+ * tier names attached prevents a beginner-only item from being assigned to a
+ * different summary row merely because both tiers redirect to one article.
+ */
+export const parseSackArticleRows = (wikitext: string): Record<string, string[]> => {
+  const out: Record<string, string[]> = {};
+  const lines = wikitext.split("\n");
+
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!/^\s*\{\{\s*Sack Items Row\b/i.test(lines[i])) continue;
+
+    const sacks: string[] = [];
+    const items: string[] = [];
+    let readingItems = false;
+
+    for (i += 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      if (trimmed === "}}") break;
+
+      const sack = line.match(/^\s*\|\s*sack\d*\s*=\s*(.+?)\s*$/i);
+      if (sack) {
+        readingItems = false;
+        const name = cleanSackItems([sack[1]])[0];
+        if (name) sacks.push(name);
+        continue;
+      }
+
+      const itemStart = line.match(/^\s*\|\s*items\s*=\s*(.*)$/i);
+      if (itemStart) {
+        readingItems = true;
+        for (const piece of itemStart[1].split("*")) {
+          const item = piece.trim();
+          if (item) items.push(item);
+        }
+        continue;
+      }
+
+      if (trimmed.startsWith("|")) {
+        readingItems = false;
+        continue;
+      }
+      if (readingItems && trimmed.startsWith("*")) items.push(trimmed.replace(/^\*+/, "").trim());
+    }
+
+    const cleaned = cleanSackItems(items);
+    if (cleaned.length === 0) continue;
+    for (const sack of sacks) out[sack] = cleaned;
+  }
+
   return out;
 };
 
@@ -212,21 +302,7 @@ export const parseSackArticle = (wikitext: string): string[] => {
     if (t.startsWith("*")) out.push(t.replace(/^\*+/, "").trim());
   }
 
-  return out
-    .map((s) =>
-      s
-        // `[[Target|Label]]` and `[[Target]]` both reduce to the target.
-        .replace(/\[\[([^\]|]+)(\|[^\]]*)?\]\]/g, "$1")
-        .replace(/\{\{[^}]*\}\}/g, "")
-        .trim()
-    )
-    // Seven of the articles write the enchanted items as "Ench Cooked Salmon"
-    // rather than "Enchanted Cooked Salmon". That is the wiki's own shorthand
-    // for one word, expanded here rather than matched around, because no item
-    // in the game is actually named "Ench something" and leaving it unexpanded
-    // silently dropped every enchanted fish and several enchanted ores.
-    .map((s) => s.replace(/^Ench\s+/i, "Enchanted "))
-    .filter((s) => s !== "" && !s.startsWith("<"));
+  return cleanSackItems([...out, ...Object.values(parseSackArticleRows(wikitext)).flat()]);
 };
 
 /**
@@ -241,7 +317,7 @@ export const mergeArticleItems = (
   articles: Readonly<Record<string, string[]>>
 ): SackDefinition[] =>
   defs.map((def) => {
-    const extra = articles[def.sack];
+    const extra = articles[def.itemsSource ?? def.sack] ?? articles[def.sack];
     if (!extra || extra.length === 0) return def;
 
     const seen = new Set(def.items.map((i) => i.toLowerCase()));
@@ -271,6 +347,17 @@ export const mergeArticleItems = (
  * should merge beyond them looking alike.
  */
 export const sackFamily = (sack: string): string => sack.replace(/^(Large )?Enchanted /, "");
+
+/**
+ * A content-family label for Profile. Sack counts do not prove which physical
+ * size upgrade the player owns, so a Beginner/Small/Medium/Large article tier
+ * must never be presented as owned equipment. Trophy sacks keep their named
+ * metal tiers because those are separate content groups rather than capacity
+ * upgrades.
+ */
+export const sackDisplayFamily = (sack: string): string => (
+  sackFamily(sack).replace(/^(?:Beginner|Small|Medium|Large)\s+/i, "")
+);
 
 export interface SackFamily {
   /** The base sack name, e.g. `Agronomy Sack`. */
@@ -362,6 +449,25 @@ const isRune = (id: string, display: string): boolean =>
   /(^|_)RUNE(_|$)/i.test(id) || /\brune\b/i.test(display);
 
 /**
+ * Exact source-backed memberships that the current wiki tables cannot express.
+ *
+ * These are deliberately item ids, not spelling heuristics. They cover article
+ * lag (Revenant Viscera), renamed items (Mutant Nether Wart and Enchanted Coal
+ * Block), and trophy-fish rows whose tier is part of the id. A destination is
+ * used only when that sack family was actually parsed into the live index.
+ */
+const SACK_ID_FAMILY_OVERRIDES: Readonly<Record<string, string>> = {
+  ENCHANTED_NETHERRACK: "Mining Sack",
+  ENCHANTED_FLINT: "Mining Sack",
+  ENCHANTED_COAL_BLOCK: "Mining Sack",
+  MUTANT_NETHER_STALK: "Agronomy Sack",
+  RUBY_VEILSHROOM: "Mutations Sack",
+  REVENANT_VISCERA: "Slayer Sack",
+  OBFUSCATED_FISH_1_BRONZE: "Bronze Trophy Fishing Sack",
+  OBFUSCATED_FISH_1_SILVER: "Silver Trophy Fishing Sack",
+};
+
+/**
  * The sack that holds this id, or null when nothing we can read says.
  *
  * THE RUNGS, AND WHY THEY ARE IN THIS ORDER
@@ -371,16 +477,18 @@ const isRune = (id: string, display: string): boolean =>
  * than leaving it unfiled because the player would go and look in it.
  *
  *   1. the id map, built from names the wiki itself used
- *   2. Hypixel's own display name for the id, from the item resource. This is
+ *   2. an exact, source-backed id correction, provided its destination family
+ *      still exists in the parsed article
+ *   3. Hypixel's own display name for the id, from the item resource. This is
  *      the rung that fixes the mismatches, and there are a lot of them:
  *      `GARDEN_CHEESE_FUEL` is "Tasty Cheese", `LOTUS_SILVER` is "Silver
  *      Lotus", `DIVER_FRAGMENT` is "Emperor's Skull". No amount of
  *      title-casing reaches any of those, and guessing at them is exactly how
  *      an item ends up in the wrong sack.
- *   3. the name the id spells, via `prettify`, which routes the 1.8 pairs
+ *   4. the name the id spells, via `prettify`, which routes the 1.8 pairs
  *      through the legacy table first so `INK_SACK:3` asks about Cocoa Beans
  *      rather than about "Ink Sack 3"
- *   4. the rune rule, for the one sack that has no list
+ *   5. the rune rule, for the one sack that has no list
  *
  * Every rung is an exact match on a normalised name. None of them strips a
  * suffix or takes a nearest neighbour, so a rung that fails leaves the item
@@ -391,6 +499,11 @@ const isRune = (id: string, display: string): boolean =>
 export const sackOf = (id: string, index: SackIndex): string | null => {
   const direct = index.byId.get(id);
   if (direct) return direct;
+
+  const sourcedOverride = SACK_ID_FAMILY_OVERRIDES[id];
+  if (sourcedOverride && index.families.some((family) => family.sack === sourcedOverride)) {
+    return sourcedOverride;
+  }
 
   const resource = resourceNameFor(id);
   if (resource) {
@@ -416,30 +529,15 @@ export interface SackEntry {
 }
 
 /**
- * The sack entries worth showing, which is the ones the player actually has.
+ * Every sack counter a source supplied, including known-empty entries.
  *
- * WHY THIS IS A DISPLAY FILTER
- * ----------------------------
- * A sack the player has never put anything in still arrives as an entry with a
- * count of zero, and there are hundreds of them: the section became pages of
- * items nobody owns, which buried the ones they do. The mod now strips them
- * before export, but that fixes only snapshots taken from here on, and the one
- * already sitting in this browser still has them.
- *
- * So the filter lives here, on the way to the screen, exactly like
- * `chrome.withoutChrome`. The stored snapshot keeps every entry it arrived
- * with, because the mod owns history and the site owns display, and because a
- * display rule that turns out to be wrong has to be fixable in a release rather
- * than by asking the player to export their island again.
+ * Hypixel's zero is useful information: the API checked that item and found
+ * none. Removing it turns a known zero into "unknown" for both the inventory
+ * board and connected agent tools. Invalid and negative counts are still
+ * rejected because neither can describe a possession.
  *
  * Nothing here writes: the input is read through `Object.entries` and a new
- * array comes out. Freezing the input and running this changes nothing, which
- * is the property the tests assert.
- *
- * A count that is not a positive finite number is not shown, and that includes
- * a negative. There is no such thing as owing a sack items, so a negative is
- * corruption rather than a possession, and showing it would state something
- * about the player's storage that cannot be true.
+ * array comes out. Freezing the input and running this changes nothing.
  *
  * THE NAME, AND WHY IT IS NOT JUST `prettify`
  * --------------------------------------------
@@ -461,7 +559,7 @@ export const liveSackEntries = (sacks: Readonly<Record<string, number>> | null |
 
   const out: SackEntry[] = [];
   for (const [id, count] of Object.entries(sacks)) {
-    if (typeof count !== "number" || !Number.isFinite(count) || count <= 0) continue;
+    if (typeof count !== "number" || !Number.isFinite(count) || count < 0) continue;
     out.push({ id, name: resourceNameFor(id) ?? prettify(id), count });
   }
   return out;
@@ -483,8 +581,8 @@ export interface SackGroup {
  * Group entries under the sack that owns them.
  *
  * Families come out in the article's order so the board reads the same way
- * twice running, and a family nobody owns anything from is not rendered at all:
- * an empty Dragon Sack heading is a row of furniture, not information.
+ * twice running. Explicit zero rows remain visible because they say the source
+ * checked those items and found none.
  *
  * The catch-all is always last and is only present when something landed in it.
  * It exists because dropping an unplaceable item would be the one unforgivable
@@ -553,7 +651,7 @@ export interface SackDefsState {
  * a refetch replaces it. Nothing is ever removed: an unreadable or outdated
  * value is left exactly where it is and overwritten only on a successful fetch.
  */
-const CACHE_SHAPE = 2;
+const CACHE_SHAPE = 3;
 
 interface SackCache {
   v?: number;
@@ -618,12 +716,13 @@ const fresh = () => state.fetchedAt !== null && Date.now() - state.fetchedAt < S
  */
 const fetchArticles = async (titles: readonly string[]): Promise<Record<string, string[]>> => {
   const out: Record<string, string[]> = {};
+  const uniqueTitles = [...new Set(titles)];
 
-  for (let i = 0; i < titles.length; i += 50) {
-    const batch = titles.slice(i, i + 50);
+  for (let i = 0; i < uniqueTitles.length; i += 50) {
+    const batch = uniqueTitles.slice(i, i + 50);
     const url =
       `${WIKI}/api.php?action=query&format=json&prop=revisions&rvprop=content&rvslots=main` +
-      `&titles=${encodeURIComponent(batch.join("|"))}`;
+      `&redirects=1&titles=${encodeURIComponent(batch.join("|"))}`;
 
     const res = await fetch(url);
     if (!res.ok) throw new Error(`sack articles responded ${res.status}`);
@@ -633,7 +732,15 @@ const fetchArticles = async (titles: readonly string[]): Promise<Record<string, 
 
     for (const page of Object.values(body.query?.pages ?? {})) {
       const text = page.revisions?.[0]?.slots?.main?.["*"];
-      if (page.title && text) out[page.title] = parseSackArticle(text);
+      if (!page.title || !text) continue;
+
+      const rows = parseSackArticleRows(text);
+      for (const [sack, items] of Object.entries(rows)) out[sack] = items;
+
+      // Older sack articles still use one infobox-level list. Preserve that
+      // route under the resolved article title while the wiki migrates them.
+      const allItems = parseSackArticle(text);
+      if (allItems.length > 0 && !out[page.title]) out[page.title] = allItems;
     }
   }
 
@@ -660,7 +767,7 @@ const ensure = () => {
     // table's answer is kept rather than the whole feature failing.
     let defs = table;
     try {
-      defs = mergeArticleItems(table, await fetchArticles(table.map((d) => d.sack)));
+      defs = mergeArticleItems(table, await fetchArticles(table.map((d) => d.itemsSource ?? d.sack)));
     } catch {
       defs = table;
     }

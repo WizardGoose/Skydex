@@ -175,18 +175,18 @@ describe("the dataset the pages actually read", () => {
 
 describe("the clock reaches the model", () => {
   /**
-   * The window cap is the only thing decay does, so the proof it arrived is
-   * that `maxWindow` stops being infinite and lands on the wiki's arithmetic:
-   * days to cycles at this mutation's own stage clock.
+   * Choconut and the Cocoa Beans feeding it both have the current 72-hour
+   * lifetime. Removing the mutation field must therefore leave the same cap:
+   * the base crop's real clock still constrains the reusable layout.
    */
-  it("turns a decay timer into a finite harvest window cap", () => {
+  it("keeps the base crop's finite cap when the mutation clock is absent", () => {
     const withIt = nodeEstimate(node("choconut", 2624, 37), WITH_DECAY, ECONOMIES, BARE)!;
     const without = nodeEstimate(node("choconut", 2624, 37), WITHOUT_DECAY, ECONOMIES, BARE)!;
 
-    const stage = stageSeconds({ ...BARE, uniqueCrops: 1 });
+    const stage = stageSeconds(BARE);
     expect(withIt.maxWindow).toBe(Math.floor(decayDaysToCycles(3, stage)));
     expect(Number.isFinite(withIt.maxWindow)).toBe(true);
-    expect(without.maxWindow).toBe(Number.POSITIVE_INFINITY);
+    expect(without.maxWindow).toBe(withIt.maxWindow);
   });
 
   /**
@@ -241,7 +241,7 @@ describe("the clock reaches the model", () => {
     expect(WITH_DECAY.mutations.plantboy_advance.decay).toBe(5);
 
     const est = nodeEstimate(node("all_in_aloe", 16, 1), WITH_DECAY, ECONOMIES, BARE)!;
-    const stage = stageSeconds({ ...BARE, uniqueCrops: 3 });
+    const stage = stageSeconds(BARE);
 
     expect(Number.isFinite(est.maxWindow)).toBe(true);
     expect(est.maxWindow).toBe(Math.floor(decayDaysToCycles(5, stage)));

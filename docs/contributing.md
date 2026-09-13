@@ -1,202 +1,126 @@
 # Contributing to Skydex
 
-Thanks for wanting to help. This page covers how the repository is laid out,
-how to run everything, the rules the codebase holds itself to, and how to file
-a suggestion that can actually be acted on. Read it top to bottom once and you
-will know your way around.
+Suggestions, bug reports, documentation fixes and code contributions are all
+welcome. If there's something you'd like Skydex to do, [open an
+issue](https://github.com/WizardGoose/Skydex/issues) and describe it.
 
-## What you need
+For a larger change, an issue is a good place to work through the idea before
+spending time building it. Small fixes can go straight into a pull request.
 
-- Node (a current LTS is fine)
-- pnpm (the repo pins the exact version in `package.json`)
+## Getting started
 
-Then:
+Use Node 20.19+ within Node 20, or 22.12+, and pnpm 10.18.1.
+The [setup guide](SETUP.md) covers installation and cloning the repository.
 
 ```sh
 pnpm install
 pnpm dev
 ```
 
-No environment file, no variables, no accounts. Everything runs in the
-browser, including the solver.
+Open the address printed in your terminal. No environment file or personal
+Hypixel API key is needed to run the website. Profile requests use Skydex's
+hosted API; calculations, including the greenhouse solver, run in the browser.
 
-## Repository tour
+The Fabric mod is in [`mod/`](../mod/) in this repository. It uses Java 25 JDK
+and its included Gradle wrapper. See the [README's build
+commands](../README.md#build-commands) to build the website, mod or both.
 
-The short version: pages live in `src/pages/` and `src/greenhouse/pages/`,
-and each domain has its own directory with its logic and its tests together.
+## Finding your way around
 
-```
-src/
-  greenhouse/     the greenhouse suite
-    solver/         the local layout solver (pure, runs in a Web Worker)
-    solverClient/   caching, the shipped precompute, and its fingerprint guard
-    planner/        plan building, time estimates, progress arithmetic
-    timeModel/      the probabilistic spawn/growth model
-    expansion/      the plot expansion optimizer
-    pages/          Solver, Designer, Planner pages
-    data/           dataset store, wiki sync overlay, shipped precompute
-  items/          crafting trees, bazaar prices, wiki images and recipes
-  island/         the Island page's data layer: paste codes, live feed,
-                  Hypixel API client, feed merging, profile access state
-  nbt/            a small NBT reader/writer for decoding game item data
-  accessories/    the accessories catalogue and its wiki parsers
-  shards/         profile import for the fusion calculator
-  inventory/      the "what do I own" aggregation the planner reads
-  profile/        game mode (ironman vs normal) store
-  pages/          top-level pages (Dashboard, Items, Island, Fusion, Settings...)
-  ui/             shared kit: panels, icons, brand
-tools/            build and verification scripts (data pipeline, parity, bench)
-public/greenhouse/data.json   the greenhouse dataset the solver reads
-docs/             design notes and specs (see docs/README.md)
-```
+| Location | Contains |
+| --- | --- |
+| `src/App.tsx` | Routes and page entry points |
+| `src/pages/` | Main site pages and settings |
+| `src/profile-view/` | Profile sections and their shared layout |
+| `src/items/`, `src/accessories/`, `src/networth/` | Item data, acquisition and valuation |
+| `src/greenhouse/` | Plot editing, solver, planning and growth estimates |
+| `src/shards/`, `src/inventory/` | Shard data and saved holdings |
+| `src/island/` | Profile requests, mod snapshots, imports and data merging |
+| `src/nbt/` | Reading encoded Minecraft item data |
+| `src/ui/` | Shared controls, item artwork and styling |
+| `mod/` | Fabric mod source, tests and build files |
+| `tools/` | Build scripts, benchmarks and data checks |
 
-The companion Fabric mod is its own project with its own repository and
-licence (MIT). The contract between the mod and this site, wire format and
-all, is written down in [island-data-spec.md](island-data-spec.md). Both sides
-implement that document exactly; anything not in it is not part of the
-contract.
+The [mod data reference](architecture/island-data-contract.md) covers the
+formats shared by the website and mod.
 
-Routing starts in `src/App.tsx`, which is also a decent map of the site.
+## Checking a change
 
-## Running things
-
-| Command | What it does |
-|---|---|
-| `pnpm dev` | dev server |
-| `pnpm test` | the test suite (vitest, roughly 1,700 tests) |
-| `pnpm lint` | eslint |
-| `pnpm bench` | solver benchmark |
-| `pnpm check` | solves the full planner burst in the terminal and prints the numbers |
-| `pnpm parity` | compares the local solver and expansion optimizer against recorded remote baselines |
-
-The test suite is fast and there is no reason not to run it before and after a
-change. If you touch a parser or the solver, run the relevant parity or
-robustness tool in `tools/` too.
-
-## The data pipeline
-
-The greenhouse dataset (mutation requirements, crop data) originates on the
-Hypixel SkyBlock Wiki and flows through `tools/`:
+Run the tests that cover the behaviour you changed. For example:
 
 ```sh
-pnpm data:sync        # dump wiki -> rebuild dataset -> crosscheck -> rebuild precompute
-pnpm data:check       # verify the dataset against the wiki without writing
-pnpm data:precompute  # rebuild only the solver precompute
+pnpm exec vitest run src/island/__tests__
 ```
 
-`pnpm data:sync` is the whole chain in order. It fetches the wiki pages,
-rebuilds `public/greenhouse/data.json`, cross-checks the result, and then
-rebuilds the solver precompute.
+These commands are also available:
 
-### When to regenerate the precompute
+| Command | What it does |
+| --- | --- |
+| `pnpm test` | Runs the website test suite |
+| `pnpm lint` | Checks code style and common mistakes |
+| `pnpm run build:site` | Type-checks and builds the website |
+| `pnpm run build:mod` | Tests and builds the Fabric mod |
+| `pnpm bench` | Benchmarks the greenhouse solver |
+| `pnpm check` | Runs the greenhouse planner calculations in the terminal |
+| `pnpm parity:solver` | Compares solver results with recorded baselines |
+| `pnpm parity:expansion` | Compares expansion results with recorded baselines |
+| `pnpm parity:networth` | Compares valuation with SkyHelper-Networth |
 
-The planner's opening burst (about forty single-mutation solves) is solved at
-build time and shipped in `src/greenhouse/data/solverPrecompute.json`, because
-a cold burst costs the visitor seventeen seconds of spinner for answers that
-are the same for everyone.
+For a UI change, check the page in a browser at desktop and phone widths,
+including the controls and states you changed. For a parser or calculation
+fix, include a regression test that reproduces the problem.
 
-Regenerate it (`pnpm data:precompute`) whenever the dataset changes, whether
-from `data:sync` or a manual edit. Every entry is stamped with a fingerprint
-of the dataset it was solved against, and at runtime the site refuses any
-entry whose fingerprint does not match, falling back to a live solve. So a
-stale precompute degrades to slow, never to wrong, but there is no reason to
-ship it stale: `pnpm data:precompute:check` compares a fresh build against the
-committed file and exits non-zero when they differ, so CI can catch it.
+A few things to preserve when working on the tools:
 
-The precompute builder validates every layout for legality, asserts its
-encoding assumptions, and round-trips each entry through the runtime decoder
-before writing anything. An illegal layout is a build failure, not a shipped
-bug.
+- Missing or private data is different from an empty inventory. Keep those
+  states separate, and retain the source and age of saved data.
+- Reuse existing calculations and shared UI where they already do the same
+  job. Equivalent values on different pages should agree.
+- Keep saved plans and older export codes readable when changing a format.
+- Use representative game or API input when testing parsers. Remove personal
+  identifiers from fixtures before committing them.
+- Keep the source of game rules beside the calculation. For a solver change,
+  check both the validity of its layouts and its performance. An optimality
+  label requires a proven bound.
 
-## The honesty rules
+## Greenhouse data
 
-These are the rules the codebase runs on. They are enforced in code and in
-review, and a change that breaks one will be asked to fix it, however good the
-rest of the change is.
+The solver reads `public/greenhouse/data.json`. Common layouts are precomputed
+in `src/greenhouse/data/solverPrecompute.json`; custom plots are solved in the
+browser.
 
-**A label is a claim, and claims need proof.** The solver returns OPTIMAL only
-when the result meets a bound it proved; otherwise it returns FEASIBLE and
-states the bound it was working against. The same discipline runs through the
-time model: every number is either cited to the wiki page it came from or
-marked as an assumption, with the in-game test that would settle it. See
-[greenhouse-time-research.md](greenhouse-time-research.md) for what that looks
-like in practice.
+When changing the dataset, record the source for the new values and regenerate
+the precomputed layouts:
 
-**Never render an unknown as a zero.** "We could not read your accessory bag"
-and "you own nothing" are different facts, and the Island page keeps four
-different kinds of nothing apart. If a change would put a number on screen
-that nobody computed, it is wrong.
+```sh
+pnpm data:precompute
+pnpm data:precompute:check
+```
 
-**Wiki content is runtime-loaded, never bundled.** Wiki text, data, and images
-are CC BY-NC-SA, and this project stays clear of those terms by not
-redistributing them: the visitor's own browser fetches from the wiki at
-runtime, exactly as if they visited it directly. Do not commit wiki images,
-recipe dumps, or wiki text into the repo or the build. This has been done and
-deliberately undone before (13MB of icons were deleted, not shipped).
-`NOTICE.md` has the full reasoning.
+The precompute records a dataset fingerprint. A mismatch makes the website
+solve the layout locally instead of using results from a different dataset.
+The check command validates the generated file against the committed version.
 
-**Parsers of game output get verbatim fixtures.** Anything that parses text
-the game, the wiki, or the Hypixel API produced is tested against real
-captured output, copied verbatim, not against handwritten approximations of
-it. The accessories tests, the island code tests, and the NBT round-trip tests
-all work this way. A parser tested against a guessed format is a parser that
-works until it meets reality, and the companion mod applies the same rule (its
-crop countdown parser is written but switched off until someone records the
-real screen).
+## Pull requests
 
-**One derivation per number.** When two pages show the same figure, they call
-the same function. The Planner and the Dashboard both read
-`planner/planEstimates.ts` because they once each derived progress themselves
-and disagreed on screen. If your change needs a number that already exists
-somewhere, import it; do not re-derive it.
+Explain what changed, why it helps, and how you checked it. Include screenshots
+for a visual change and a short reproduction for a bug fix. Keep unrelated
+changes in separate pull requests so they are easier to review.
 
-**Measure, don't assume.** Solver tuning values in this codebase carry the
-measurements that chose them, in comments, including the wrong guesses along
-the way. If you change a constant, bring the measurement that justified it.
+Skydex's code is [MIT licensed](../LICENSE). Keep existing attribution, and
+record the source and licence of any outside code or assets you add in
+[NOTICE.md](../NOTICE.md). Game data and artwork can have different terms;
+check the relevant notice before bundling them.
 
-## Licensing
+## Bug reports and requests
 
-The picture has three layers, and `NOTICE.md` is the authoritative record:
+For a bug, include the page, what you tried, what you expected and what
+happened. Your device, browser and a screenshot help. For a wrong calculation,
+include the item or mutation, quantity and relevant settings. Exact game text
+is useful when something has been read incorrectly.
 
-- **This repository** is MIT, and the grant in `LICENSE` covers the whole
-  history of the codebase, from the very first commit.
-- **SkyShards heritage.** The fusion calculator, greenhouse solver and
-  designer are derived from SkyShards by Campion and xKapy. The main SkyShards
-  repo is MIT. The greenhouse branch's licence is pending: the owner has given
-  explicit permission in writing and said an MIT licence will follow, and
-  `NOTICE.md` tracks that until the formal licence lands.
-- **Community inspiration and implementation reference.** SkyCrypt is an
-  important product and interface reference. SkyOcean's chest-tracking and
-  sack-handling features informed the standalone mod design. The Skydex
-  implementation was rewritten for its own Java/Fabric transport and data
-  model; no SkyOcean source files or non-code assets are copied into Skydex.
-  `NOTICE.md` records the distinction.
-- **Wiki data** is CC BY-NC-SA and is never redistributed by this project
-  (see the honesty rules above).
+For a mod problem, include the Minecraft version and Skydex mod version too.
+Check screenshots and diagnostic output for anything personal before posting.
 
-The companion mod is MIT, in its own repository.
-
-If your contribution pulls in outside code or assets, say where it came from
-and under what licence, and add an entry to `NOTICE.md` if it needs one. "I
-found it somewhere" is not a provenance.
-
-## Filing a good suggestion
-
-Screenshots are ground truth here. The best bug reports in this project's
-history were a screenshot of the site next to a screenshot of the game
-disagreeing with it, and several of those screenshots became test fixtures.
-
-A report that can be acted on has:
-
-1. **What page**, and what you did to get there.
-2. **What you expected**, and why (a wiki link or an in-game screenshot is
-   ideal).
-3. **What you saw instead**, as a screenshot. Exact text copied verbatim
-   beats a paraphrase, especially for anything a parser touched.
-4. If it involves the mod or the Island page: the output of
-   `/skydex status` in game, copied as-is.
-
-For suggestions rather than bugs, say what problem you are trying to solve,
-not just the feature you have in mind. The planner's plot sizing, the harvest
-window display, and the progress arithmetic all started as "this number
-confused me" reports, and those turned out to be the most valuable kind.
+For a feature request, tell me what you'd like to do with Skydex. A description
+or example is enough to start the conversation.

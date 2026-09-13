@@ -1,7 +1,7 @@
 /**
  * The island data contract, v1.
  *
- * These types mirror `docs/island-data-spec.md` exactly, because the other end
+ * These types mirror `docs/architecture/island-data-contract.md` exactly, because the other end
  * of this contract is a Fabric mod being written in parallel. Anything not in
  * the spec is not in here, and anything the mod adds later arrives as an
  * unknown field that the validator drops on the floor rather than trusting.

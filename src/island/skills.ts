@@ -26,7 +26,7 @@ const SKILLS_URL = "https://api.hypixel.net/v2/resources/skyblock/skills";
  * A NEW key. Nothing else in this browser is touched; the version suffix is in
  * the name so a changed shape can be discarded without collateral.
  */
-export const SKILLS_KEY = "skydex.skills.resource.v1";
+export const SKILLS_KEY = "skydex.skills.resource.v2";
 
 /** Level curves move on game updates, so a day is fresh enough. */
 export const SKILLS_TTL_MS = 24 * 60 * 60 * 1000;
@@ -97,9 +97,11 @@ export const parseSkillsPayload = (payload: unknown): SkillDefs | null => {
   return Object.keys(out).length > 0 ? out : null;
 };
 
-/** `SKILL_FARMING` -> `FARMING`, which is the resource's key. Anything else passes through. */
-export const memberSkillKey = (experienceKey: string): string =>
-  experienceKey.startsWith("SKILL_") ? experienceKey.slice("SKILL_".length) : experienceKey;
+/** `SKILL_FARMING` -> `FARMING`, which is the resource's canonical key. */
+export const memberSkillKey = (experienceKey: string): string => {
+  const canonical = experienceKey.trim().toUpperCase();
+  return canonical.startsWith("SKILL_") ? canonical.slice("SKILL_".length) : canonical;
+};
 
 export interface SkillProgress {
   level: number;
@@ -267,6 +269,9 @@ const subscribe = (fn: () => void): (() => void) => {
   hydrate();
   return () => listeners.delete(fn);
 };
+
+/** Read-only store face for non-React projections such as WebMCP tools. */
+export const skillDefsStore = { subscribe, getSnapshot: getState };
 
 /** The React face of the store. Callers still fire `requestSkillDefs` from an effect. */
 export const useSkillDefs = (): SkillsState => useSyncExternalStore(subscribe, getState, getState);

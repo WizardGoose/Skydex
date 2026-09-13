@@ -98,17 +98,17 @@ const CHROME_CANDIDATES = [
  */
 const ROUTES = [
   { id: "dashboard", path: "/", label: "Dashboard", nav: true },
-  { id: "profile", path: "/island", label: "Profile (island)", nav: true, baseline: true },
-  { id: "crafting", path: "/items", label: "Crafting (no selection)", nav: true },
+  { id: "profile", path: "/profile", label: "Profile", nav: true, baseline: true },
+  { id: "recipes", path: "/recipes", label: "Recipes (no selection)", nav: true },
   /* `q` is consumed once on load and selects the single matching item, so the
    * filled state of the detail column is reachable from a cold navigation. */
-  { id: "crafting-selected", path: "/items?q=Hyperion", label: "Crafting (item selected)", always: true },
+  { id: "recipes-selected", path: "/recipes?q=Hyperion", label: "Recipes (item selected)", always: true },
   { id: "forge", path: "/forge", label: "Forge", nav: true },
   { id: "greenhouse-planner", path: "/greenhouse/planner", label: "Greenhouse / Planner", nav: true },
   { id: "shards-fusion", path: "/fusion", label: "Shards / Fusion", nav: true },
   { id: "greenhouse-solver", path: "/greenhouse", label: "Greenhouse / Solver" },
   { id: "greenhouse-designer", path: "/greenhouse/designer", label: "Greenhouse / Designer" },
-  { id: "shards-recipes", path: "/recipes", label: "Shards / Recipes" },
+  { id: "shards-recipes", path: "/shard-recipes", label: "Shards / Recipes" },
   { id: "shards-overview", path: "/shards", label: "Shards / Overview" },
   { id: "shards-lines", path: "/fusion-lines", label: "Shards / Lines" },
 ];

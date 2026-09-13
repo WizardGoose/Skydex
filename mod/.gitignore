@@ -6,6 +6,8 @@ build/
 # Minecraft dev run dirs
 run/
 runs/
+logs/
+*.log
 
 # IDE
 .idea/
