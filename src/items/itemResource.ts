@@ -79,7 +79,7 @@ export interface ResourceEntry {
 
 export type ResourceIndex = Record<string, ResourceEntry>;
 
-/** New key, so it is `skyindex.*` rather than the frozen `wizardsky.*`. */
+/** New key, so it is `skydex.*` rather than the frozen `wizardsky.*`. */
 // v2: v1 was written before `t` (tier) existed, so a v1 snapshot would serve
 // colourless forge items for up to a day. A payload that gains fields gains a
 // key with it - the same lesson the crafting cache learned at its v4.
@@ -99,12 +99,12 @@ export type ResourceIndex = Record<string, ResourceEntry>;
 // at its v5, v7 and v9), verified on the built page: a v4 snapshot with
 // `t: "unobtainable"` entries still in it. This bump is one edit with the
 // rule already in place, which closes the window.
-export const RESOURCE_CACHE_KEY = "skyindex.items.resource.v5";
+export const RESOURCE_CACHE_KEY = "skydex.items.resource.v5";
 const STALE_RESOURCE_KEYS = [
-  "skyindex.items.resource.v1",
-  "skyindex.items.resource.v2",
-  "skyindex.items.resource.v3",
-  "skyindex.items.resource.v4",
+  "skydex.items.resource.v1",
+  "skydex.items.resource.v2",
+  "skydex.items.resource.v3",
+  "skydex.items.resource.v4",
 ];
 
 /** Same freshness as the item index. Names and textures change when the game does. */

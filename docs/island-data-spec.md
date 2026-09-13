@@ -128,7 +128,7 @@ Rules:
 ## Optional section: `greenhouse` (pinned 2026-08-02)
 
 Captured by the mod while the player is on the Garden near the greenhouse
-(detection research: skyindex-mod/docs/greenhouse-detection-research.md).
+(detection research: skydex-mod/docs/greenhouse-detection-research.md).
 Carried in BOTH the live feed and export codes (it is small). Optional like
 every section: omitted until first observed, never sent empty.
 

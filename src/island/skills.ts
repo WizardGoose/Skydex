@@ -26,7 +26,7 @@ const SKILLS_URL = "https://api.hypixel.net/v2/resources/skyblock/skills";
  * A NEW key. Nothing else in this browser is touched; the version suffix is in
  * the name so a changed shape can be discarded without collateral.
  */
-export const SKILLS_KEY = "skyindex.skills.resource.v1";
+export const SKILLS_KEY = "skydex.skills.resource.v1";
 
 /** Level curves move on game updates, so a day is fresh enough. */
 export const SKILLS_TTL_MS = 24 * 60 * 60 * 1000;

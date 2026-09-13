@@ -38,7 +38,7 @@ export const NEU_UPGRADES_URL =
   "https://raw.githubusercontent.com/NotEnoughUpdates/NotEnoughUpdates-REPO/master/constants/misc.json";
 
 /** New surface, so a new key. Nothing else in this browser is touched. */
-export const NEU_CACHE_KEY = "skyindex.accessories.neu.v1";
+export const NEU_CACHE_KEY = "skydex.accessories.neu.v1";
 
 /** The constant changes with game updates, not with page views. Same as the wiki cache. */
 export const NEU_TTL = 24 * 60 * 60 * 1000;

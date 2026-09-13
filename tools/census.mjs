@@ -962,7 +962,7 @@ function buildSeed() {
   const entries = [
     /* Any non null value suppresses the welcome tour, which would otherwise
      * cover the first route measured and nothing after it. */
-    { key: "skyindex.welcome.v1", value: "1", note: "welcome tour suppressed" },
+    { key: "skydex.welcome.v1", value: "1", note: "welcome tour suppressed" },
   ];
 
   if (existsSync(fixture)) {

@@ -58,12 +58,12 @@ const API = "https://hypixelskyblock.minecraft.wiki/api.php";
 // wrote a v4 snapshot after the key bump but before the events field landed,
 // which is exactly the poisoned-cache shape this list exists for, so it is
 // retired the same way.
-export const SOURCE_CACHE_KEY = "skyindex.accessories.wiki.v5";
+export const SOURCE_CACHE_KEY = "skydex.accessories.wiki.v5";
 const STALE_SOURCE_KEYS = [
-  "skyindex.accessories.sources.v1",
-  "skyindex.accessories.wiki.v2",
-  "skyindex.accessories.wiki.v3",
-  "skyindex.accessories.wiki.v4",
+  "skydex.accessories.sources.v1",
+  "skydex.accessories.wiki.v2",
+  "skydex.accessories.wiki.v3",
+  "skydex.accessories.wiki.v4",
 ];
 
 /** Same day-long freshness the crafting index uses. Sources change rarely. */

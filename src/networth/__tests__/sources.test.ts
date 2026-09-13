@@ -116,7 +116,7 @@ describe("the price cache", () => {
   });
 
   it("uses its own key and no other", () => {
-    expect(PRICES_KEY).toBe("skyindex.networth.prices.v1");
+    expect(PRICES_KEY).toBe("skydex.networth.prices.v1");
   });
 
   it("drops a negative or non-finite price rather than letting it into a sum", () => {

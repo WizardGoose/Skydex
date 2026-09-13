@@ -37,7 +37,7 @@ import { useSyncExternalStore } from "react";
 const LEGACY_KEY = "skyshards-unique-crops";
 
 /** This store's own home. New key, new namespace. */
-const KEY = "skyindex.greenhouse.uniqueCrops";
+const KEY = "skydex.greenhouse.uniqueCrops";
 
 /** The in-game slider runs 0 to 12. Zero means the bonus is off, not absent. */
 const MIN = 0;

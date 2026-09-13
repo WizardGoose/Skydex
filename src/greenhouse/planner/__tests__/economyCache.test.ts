@@ -105,7 +105,7 @@ describe("solvedEconomies persistence", () => {
     solvedEconomies.set("choconut", eco(72, { melon: 20 }));
     expect(storage.getItem("wizardsky.apikey.v1")).toBe("not ours to touch");
     const keys = [...storage.dump().keys()];
-    expect(keys.sort()).toEqual(["skyindex.greenhouse.economies.v1", "wizardsky.apikey.v1"]);
+    expect(keys.sort()).toEqual(["skydex.greenhouse.economies.v1", "wizardsky.apikey.v1"]);
   });
 });
 

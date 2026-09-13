@@ -37,7 +37,7 @@ import type { PlotEconomy } from "./solverPlan";
  * rarely change, and a resync that changed nothing must not cost the cache.
  */
 
-const STORE_KEY = "skyindex.greenhouse.economies.v1";
+const STORE_KEY = "skydex.greenhouse.economies.v1";
 
 /** FNV-1a over a string, hex. Cheap, stable, and plenty for a cache tag. */
 export const fnv1a = (s: string): string => {

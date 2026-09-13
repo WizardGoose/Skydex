@@ -84,7 +84,7 @@ const FINGERPRINT = "abc123";
 /** A cache wired to a given storage, with small ceilings so eviction is testable. */
 const cacheOn = (storage: GuardedStorage, over: Partial<Parameters<typeof createSolverCache>[0]> = {}) =>
   createSolverCache({
-    cacheKey: "skyindex.greenhouse.solver.vTest",
+    cacheKey: "skydex.greenhouse.solver.vTest",
     staleKeys: [],
     maxEntries: 3,
     storage: () => storage as NarrowStorage,
@@ -187,7 +187,7 @@ describe("persistence", () => {
 
   it("degrades to empty on a corrupt payload instead of throwing", () => {
     const storage = new GuardedStorage();
-    storage.seed("skyindex.greenhouse.solver.vTest", "{not json at all");
+    storage.seed("skydex.greenhouse.solver.vTest", "{not json at all");
 
     const cache = cacheOn(storage);
     expect(() => cache.get("k1", "canonical-1", FINGERPRINT)).not.toThrow();
@@ -200,7 +200,7 @@ describe("persistence", () => {
   it("skips entries whose shape it does not recognise", () => {
     const storage = new GuardedStorage();
     storage.seed(
-      "skyindex.greenhouse.solver.vTest",
+      "skydex.greenhouse.solver.vTest",
       JSON.stringify({
         entries: [
           ["good", { request: "canonical-1", fingerprint: FINGERPRINT, response: response("a"), at: 1 }],
@@ -255,11 +255,11 @@ describe("quota", () => {
 
     const cache = cacheOn(storage);
     cache.set("k1", "canonical-1", FINGERPRINT, response("a"));
-    expect(storage.peek("skyindex.greenhouse.solver.vTest")).toBeNull();
+    expect(storage.peek("skydex.greenhouse.solver.vTest")).toBeNull();
 
     storage.onWrite = null;
     cache.set("k2", "canonical-2", FINGERPRINT, response("b"));
-    expect(storage.peek("skyindex.greenhouse.solver.vTest")).not.toBeNull();
+    expect(storage.peek("skydex.greenhouse.solver.vTest")).not.toBeNull();
   });
 
   it("keeps the payload under the byte ceiling by dropping the oldest", () => {
@@ -270,7 +270,7 @@ describe("quota", () => {
       cache.set(id, `canonical-${id}`, FINGERPRINT, response(id));
     }
 
-    const stored = storage.peek("skyindex.greenhouse.solver.vTest");
+    const stored = storage.peek("skydex.greenhouse.solver.vTest");
     expect(stored).not.toBeNull();
     expect(stored!.length).toBeLessThanOrEqual(400);
     // The newest survived the trim, the oldest did not.
@@ -284,7 +284,7 @@ describe("the storage rules this project has already paid for", () => {
     // GuardedStorage throws on clear(), key() and length. Getting to the end of
     // this test without an exception is the assertion.
     const storage = new GuardedStorage();
-    const cache = cacheOn(storage, { staleKeys: ["skyindex.greenhouse.solver.v0"] });
+    const cache = cacheOn(storage, { staleKeys: ["skydex.greenhouse.solver.v0"] });
 
     expect(() => {
       for (const id of ["a", "b", "c", "d"]) cache.set(id, `canonical-${id}`, FINGERPRINT, response(id));
@@ -300,17 +300,17 @@ describe("the storage rules this project has already paid for", () => {
     const storage = new GuardedStorage();
     // A believable browser: the player's saved work, plus one dead version of ours.
     storage.seed("skyshards-designer-designs", "the player's saved layouts");
-    storage.seed("skyindex.greenhouse.uniqueCrops", "7");
+    storage.seed("skydex.greenhouse.uniqueCrops", "7");
     storage.seed("wizardsky.planner.state", "the player's grind progress");
     storage.seed("customRates", "a legacy unprefixed key");
-    storage.seed("skyindex.greenhouse.solver.v0", "our own dead cache");
+    storage.seed("skydex.greenhouse.solver.v0", "our own dead cache");
 
-    const cache = cacheOn(storage, { staleKeys: ["skyindex.greenhouse.solver.v0"] });
+    const cache = cacheOn(storage, { staleKeys: ["skydex.greenhouse.solver.v0"] });
     cache.get("k1", "canonical-1", FINGERPRINT);
 
-    expect(storage.removals).toEqual(["skyindex.greenhouse.solver.v0"]);
+    expect(storage.removals).toEqual(["skydex.greenhouse.solver.v0"]);
     expect(storage.peek("skyshards-designer-designs")).toBe("the player's saved layouts");
-    expect(storage.peek("skyindex.greenhouse.uniqueCrops")).toBe("7");
+    expect(storage.peek("skydex.greenhouse.uniqueCrops")).toBe("7");
     expect(storage.peek("wizardsky.planner.state")).toBe("the player's grind progress");
     expect(storage.peek("customRates")).toBe("a legacy unprefixed key");
   });
@@ -318,8 +318,8 @@ describe("the storage rules this project has already paid for", () => {
   it("removes exactly the superseded keys and nothing else, in production config", () => {
     const storage = new GuardedStorage();
     storage.seed("skyshards-grid-config", "the player's grid");
-    storage.seed("skyindex.greenhouse.solver.v1", "answers the solver no longer gives");
-    storage.seed("skyindex.greenhouse.solver.v2", "cached the capped-lonelily bug for half an hour");
+    storage.seed("skydex.greenhouse.solver.v1", "answers the solver no longer gives");
+    storage.seed("skydex.greenhouse.solver.v2", "cached the capped-lonelily bug for half an hour");
 
     // Exactly the production configuration: v1 and v2 are retired because the
     // solver's answers changed for identical requests (multi-cell targets
@@ -330,7 +330,7 @@ describe("the storage rules this project has already paid for", () => {
     cache.get("k1", "canonical-1", FINGERPRINT);
     cache.set("k1", "canonical-1", FINGERPRINT, response("a"));
 
-    expect(storage.removals).toEqual(["skyindex.greenhouse.solver.v1", "skyindex.greenhouse.solver.v2"]);
+    expect(storage.removals).toEqual(["skydex.greenhouse.solver.v1", "skydex.greenhouse.solver.v2"]);
     expect(storage.peek("skyshards-grid-config")).toBe("the player's grid");
   });
 
@@ -340,7 +340,7 @@ describe("the storage rules this project has already paid for", () => {
     cache.set("k1", "canonical-1", FINGERPRINT, response("a"));
     cache.set("k2", "canonical-2", FINGERPRINT, response("b"));
 
-    expect(new Set(storage.writes)).toEqual(new Set(["skyindex.greenhouse.solver.vTest"]));
+    expect(new Set(storage.writes)).toEqual(new Set(["skydex.greenhouse.solver.vTest"]));
   });
 
   it("reset() removes its own key by name and nothing else", () => {
@@ -351,7 +351,7 @@ describe("the storage rules this project has already paid for", () => {
     cache.set("k1", "canonical-1", FINGERPRINT, response("a"));
     cache.reset();
 
-    expect(storage.removals).toEqual(["skyindex.greenhouse.solver.vTest"]);
+    expect(storage.removals).toEqual(["skydex.greenhouse.solver.vTest"]);
     expect(storage.peek("skyshards-priorities")).toBe("the player's priorities");
     expect(cache.get("k1", "canonical-1", FINGERPRINT)).toBeNull();
   });
@@ -359,9 +359,9 @@ describe("the storage rules this project has already paid for", () => {
   it("owns a key inside its own namespace and carries a version suffix", () => {
     // A bump is only safe while the key stays derived-data-only. Pinning the
     // name here means renaming it into somebody else's namespace is a test failure.
-    expect(CACHE_KEY).toBe("skyindex.greenhouse.solver.v3");
+    expect(CACHE_KEY).toBe("skydex.greenhouse.solver.v3");
     expect(CACHE_KEY).toMatch(/\.v\d+$/);
-    expect(STALE_KEYS.every((k) => k.startsWith("skyindex.greenhouse.solver."))).toBe(true);
+    expect(STALE_KEYS.every((k) => k.startsWith("skydex.greenhouse.solver."))).toBe(true);
   });
 });
 

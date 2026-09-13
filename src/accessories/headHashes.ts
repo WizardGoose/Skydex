@@ -58,9 +58,9 @@ const RESOURCE = "https://api.hypixel.net/v2/resources/skyblock/items";
 
 /**
  * The one key this module owns. Holds derived texture hashes, nothing the user
- * entered. New key, so it is `skyindex.*` rather than the frozen `wizardsky.*`.
+ * entered. New key, so it is `skydex.*` rather than the frozen `wizardsky.*`.
  */
-export const HEADS_CACHE_KEY = "skyindex.accessories.heads.v1";
+export const HEADS_CACHE_KEY = "skydex.accessories.heads.v1";
 
 /** Same freshness as the item index. Textures change when the game does. */
 export const HEADS_TTL = 24 * 60 * 60 * 1000;

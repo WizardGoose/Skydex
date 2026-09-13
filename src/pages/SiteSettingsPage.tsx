@@ -56,7 +56,7 @@ import { useCompanionLink } from "../island/companionLink";
  *   Island snapshot         `island/useIsland.ts`         its own key
  *   Display preferences     `greenhouse/planner`          wizardsky.planner.v2
  *
- * There is no `skyindex.settings.*` key and there should never be one. A
+ * There is no `skydex.settings.*` key and there should never be one. A
  * settings page that keeps its own copy of a setting is a settings page that
  * will one day disagree with the tool the setting belongs to.
  *

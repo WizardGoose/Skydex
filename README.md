@@ -248,16 +248,21 @@ wrong, tell me, because then the gate is the bug)
 
 This bit is boring and it matters, sorry. localStorage keys are hardcoded
 literals and the legacy `wizardsky.*` prefix is permanent for the keys that
-already shipped under it (new keys use `skyindex.*`). It is a storage namespace,
+already shipped under it (new keys use `skydex.*`). It is a storage namespace,
 not the site name, and it survives renames on purpose: renaming it would orphan
 every saved planner, target list, profile and island snapshot. Nobody is losing
 their planner over a tidy string.
 
+Keys using the site's previous name migrate to `skydex.*` before startup.
+Values are verified before old keys are retired. Current values win conflicts,
+with older values retained as migration backups. Saved texture packs migrate
+to the `skydex-texturepack` database with their textures and settings intact.
+
 The repo's directory name is the same kind of namespace. The companion mod now
-uses the Skydex id, filename, chat tag and primary `/skydex` command; `/skyindex`
+uses the Skydex id, filename, chat tag and primary `/skydex` command; `/skydex`
 remains only as a compatibility alias. New installs store data under
 `config/skydex`, while upgrades can keep reading their existing
-`config/skyindex` data.
+`config/skydex` data.
 
 Clipboard exports choose the shorter of two lossless formats for each island:
 `SKYDEX2-` binary or `SKYDEX-` compressed JSON. The site reads both, plus the

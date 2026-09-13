@@ -17,7 +17,7 @@ const STORE = "files";
 const KEY = "backdrop";
 
 /** Flag only. The bytes are in IndexedDB. */
-export const BACKDROP_FLAG_KEY = "skyindex.backdrop.v1";
+export const BACKDROP_FLAG_KEY = "skydex.backdrop.v1";
 
 /** Fired after every save or clear, so the shell re-applies without a reload. */
 export const BACKDROP_UPDATED_EVENT = "skydex:backdrop-updated";

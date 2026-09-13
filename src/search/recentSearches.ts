@@ -29,15 +29,15 @@ import type { Destination, GlyphKey, SearchEntry } from "./types";
  *
  * STORAGE
  * -------
- * One key, `skyindex.searches.v1`, under the new prefix. Nothing else in this
+ * One key, `skydex.searches.v1`, under the new prefix. Nothing else in this
  * file names a storage key, nothing here enumerates keys, and the only removal
  * is `removeItem` of that one literal, from the Clear affordance the person
  * pressed themselves. The `wizardsky.*` keys are not read, not written and not
  * migrated by this module.
  */
 
-/** The one key this module owns. New keys take the `skyindex.` prefix. */
-export const RECENT_KEY = "skyindex.searches.v1";
+/** The one key this module owns. New keys take the `skydex.` prefix. */
+export const RECENT_KEY = "skydex.searches.v1";
 
 /** Six rows. Enough to be a memory, short enough to stay a glance. */
 export const RECENT_LIMIT = 6;

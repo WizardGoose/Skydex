@@ -62,7 +62,7 @@ import { attainabilityOf, groupOf, type AccessoryGroup, type Attainability } fro
  * There is no timer here and nothing polls. The bag is read on demand behind a
  * TTL, and the wiki classifications are cached for a day, exactly like the
  * crafting index. Nothing in this module writes to a storage key it did not
- * create: the only key it touches is `skyindex.accessories.wiki.v3`, and the
+ * create: the only key it touches is `skydex.accessories.wiki.v3`, and the
  * only place anything is stored is the visitor's own browser.
  */
 

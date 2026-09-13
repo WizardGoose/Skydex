@@ -162,7 +162,7 @@ const Md: React.FC<{ text: string; onNavigate?: () => void }> = ({ text, onNavig
  * Deliberately NOT exported, and that is the enforcement rather than a promise:
  * a value no other module can import is a value no calculation can branch on.
  */
-const FLAVOUR_KEY = "skyindex.mode-flavour.v1";
+const FLAVOUR_KEY = "skydex.mode-flavour.v1";
 const CONVERTER = "converter";
 
 const readFlavour = (): string | null => {

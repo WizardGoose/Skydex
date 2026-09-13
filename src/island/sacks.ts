@@ -35,7 +35,7 @@ const WIKI = "https://hypixelskyblock.minecraft.wiki";
 export const SACK_PAGE = "Sacks";
 
 /** New surface, so a new key. Nothing else in this browser is touched. */
-export const SACKS_CACHE_KEY = "skyindex.sacks.v1";
+export const SACKS_CACHE_KEY = "skydex.sacks.v1";
 
 /** The article changes with game updates, not with page views. */
 export const SACKS_TTL = 24 * 60 * 60 * 1000;

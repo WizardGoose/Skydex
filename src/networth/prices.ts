@@ -32,7 +32,7 @@ const PRICES_URL = "https://raw.githubusercontent.com/SkyHelperBot/Prices/main/p
  * concerned. The version suffix is inside the name because the shape may change
  * and a stale shape must be discardable without taking anything else with it.
  */
-export const PRICES_KEY = "skyindex.networth.prices.v1";
+export const PRICES_KEY = "skydex.networth.prices.v1";
 
 /** Upstream regenerates every fifteen minutes. See the note above. */
 export const PRICES_TTL_MS = 20 * 60 * 1000;

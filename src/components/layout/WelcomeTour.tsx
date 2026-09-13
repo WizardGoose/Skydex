@@ -21,7 +21,7 @@ const TourBody = lazy(() => import("./TourBody"));
  * Written once the tour has been seen, finished or skipped alike: a skipped
  * tour re-appearing is nagging, not onboarding. Settings offers a replay.
  */
-export const WELCOME_KEY = "skyindex.welcome.v1";
+export const WELCOME_KEY = "skydex.welcome.v1";
 
 /**
  * Re-opens the tour from anywhere (Settings offers it). An event rather than

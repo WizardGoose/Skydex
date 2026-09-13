@@ -7,7 +7,7 @@ import type { SearchEntry } from "../types";
  * Three things are being pinned, and all three are things that would be quietly
  * wrong rather than loudly broken.
  *
- * One: the key. `skyindex.searches.v1`, spelled out below, so a rename fails
+ * One: the key. `skydex.searches.v1`, spelled out below, so a rename fails
  * here rather than in somebody's browser six months from now with their history
  * orphaned under the old name.
  *
@@ -22,7 +22,7 @@ import type { SearchEntry } from "../types";
  */
 
 /** The literal key. Not built, not derived from the site name, not migrated. */
-const KEY = "skyindex.searches.v1";
+const KEY = "skydex.searches.v1";
 
 const store = new Map<string, string>();
 const removed: string[] = [];
@@ -70,7 +70,7 @@ beforeEach(() => {
 });
 
 describe("the key", () => {
-  it("is the literal skyindex key and nothing else", async () => {
+  it("is the literal skydex key and nothing else", async () => {
     const { RECENT_KEY, RECENT_LIMIT, pushRecent } = await fresh();
 
     expect(RECENT_KEY).toBe(KEY);

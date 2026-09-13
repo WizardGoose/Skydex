@@ -2370,7 +2370,7 @@ export const IslandPage: React.FC = () => {
 
   const pasteBox = (
     <div className={PANEL}>
-      <SectionHead title="Paste an island code" right={<span className={LABEL}>/skyindex copy</span>} />
+      <SectionHead title="Paste an island code" right={<span className={LABEL}>/skydex copy</span>} />
       <div className="p-3 space-y-2">
         <textarea
           value={code}
@@ -2443,7 +2443,7 @@ export const IslandPage: React.FC = () => {
             category of mod as SkyOcean or NEU.
           </p>
           <p className="text-[12px] text-slate-300 leading-relaxed pt-1">
-            Run <span className={`${NUM} text-slate-100`}>/skyindex</span> in game to open the mod&rsquo;s settings,
+            Run <span className={`${NUM} text-slate-100`}>/skydex</span> in game to open the mod&rsquo;s settings,
             then pick a mode:
           </p>
           <div className="grid sm:grid-cols-2 gap-3">
@@ -2457,7 +2457,7 @@ export const IslandPage: React.FC = () => {
             <div className="border-l-2 border-slate-700 pl-2.5">
               <div className={LABEL}>GitHub Pages</div>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                No server. Run <span className={`${NUM} text-slate-300`}>/skyindex copy</span> to put a code on your
+                No server. Run <span className={`${NUM} text-slate-300`}>/skydex copy</span> to put a code on your
                 clipboard, then paste it below. Works anywhere.
               </p>
             </div>

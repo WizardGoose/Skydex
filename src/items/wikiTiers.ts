@@ -29,7 +29,7 @@ import { norm } from "./wikiCrafting";
 const API = "https://hypixelskyblock.minecraft.wiki/api.php";
 
 /** New surface, so a new key. Nothing else in this browser is touched. */
-export const TIERS_CACHE_KEY = "skyindex.wikiTiers.v1";
+export const TIERS_CACHE_KEY = "skydex.wikiTiers.v1";
 
 /** Rarities change when the game does, not per page view. */
 export const TIERS_TTL = 24 * 60 * 60 * 1000;

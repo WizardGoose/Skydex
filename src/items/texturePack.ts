@@ -1,3 +1,4 @@
+import { ensureTextureDatabaseMigration } from "../storage/migrateTextureDatabase";
 import { packKeyCandidates, type PackCounts, type ParsedPack } from "./texturePackParse";
 
 /**
@@ -18,9 +19,9 @@ import { packKeyCandidates, type PackCounts, type ParsedPack } from "./texturePa
  * A pack's textures run to tens of megabytes, which localStorage cannot
  * hold and this codebase's storage rules would not allow it to anyway.
  * IndexedDB is the browser's store for exactly this: binary blobs, its own
- * database under this site's namespace ("skyindex-texturepack"), touching
+ * database under this site's namespace ("skydex-texturepack"), touching
  * nothing else. localStorage carries exactly ONE tiny key,
- * `skyindex.texturepack.v1`, a manifest pointer whose real job is the
+ * `skydex.texturepack.v1`, a manifest pointer whose real job is the
  * no-pack fast path: when it is absent, this module never opens IndexedDB
  * at all, so a visitor who never loaded a pack pays nothing - not even a
  * database creation - and the site behaves byte-identically to before this
@@ -29,7 +30,7 @@ import { packKeyCandidates, type PackCounts, type ParsedPack } from "./texturePa
  *
  * SCHEMA
  * ------
- * Database "skyindex-texturepack", version 1, two object stores:
+ * Database "skydex-texturepack", version 1, two object stores:
  *
  *   textures   keyPath "key"; { key, data: Uint8Array, path, source }
  *              one record per recognised item texture
@@ -51,7 +52,7 @@ import { packKeyCandidates, type PackCounts, type ParsedPack } from "./texturePa
  * ask, and revoked when the pack is removed or replaced.
  */
 
-const DB_NAME = "skyindex-texturepack";
+const DB_NAME = "skydex-texturepack";
 const DB_VERSION = 1;
 const STORE_TEXTURES = "textures";
 const STORE_META = "meta";
@@ -60,7 +61,7 @@ const STORE_META = "meta";
  * The one localStorage key this module owns. A tiny manifest pointer, never
  * texture data; absent means "no pack, never open the database".
  */
-export const PACK_FLAG_KEY = "skyindex.texturepack.v1";
+export const PACK_FLAG_KEY = "skydex.texturepack.v1";
 
 export interface PackManifest {
   /** The zip's file name, which is the only name the user actually chose. */
@@ -119,7 +120,7 @@ const writeFlag = (m: PackManifest | null) => {
 /* -------------------------------------------------------------------------- */
 
 const openDb = (): Promise<IDBDatabase> =>
-  new Promise((resolve, reject) => {
+  ensureTextureDatabaseMigration().then(() => new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -129,7 +130,7 @@ const openDb = (): Promise<IDBDatabase> =>
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error("indexedDB open failed"));
-  });
+  }));
 
 const txDone = (tx: IDBTransaction): Promise<void> =>
   new Promise((resolve, reject) => {

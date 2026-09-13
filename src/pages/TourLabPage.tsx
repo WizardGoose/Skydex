@@ -22,7 +22,7 @@ import { FOCUS, LABEL, PANEL, PageHeader, SectionHead } from "../ui/kit";
  * character all sit in it as equals. See that function for why.
  */
 
-const DRAFT_KEY = "skyindex.tourlab.v1";
+const DRAFT_KEY = "skydex.tourlab.v1";
 
 const loadDraft = (): string | null => {
   try {

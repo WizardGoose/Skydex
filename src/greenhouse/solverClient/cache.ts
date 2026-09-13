@@ -14,7 +14,7 @@ import type { SolveResponse } from "../types/greenhouse";
  * ---------------------------------------------------------------------------
  *
  * `localStorage` is shared, and almost everything in it belongs to somebody
- * else. `skyshards-*` is the calculator and the designer, `skyindex.greenhouse.*`
+ * else. `skyshards-*` is the calculator and the designer, `skydex.greenhouse.*`
  * is the greenhouse's own settings, `wizardsky.planner.*` is the planner's saved
  * progress, and there are unprefixed legacy keys older than any of it. A
  * "Reset Everything" button in this project once reached for `localStorage.clear()`
@@ -83,10 +83,10 @@ interface Persisted {
  * only by the request would keep serving the old answers, so the version is
  * part of the key and dead keys are removed on init.
  */
-export const CACHE_KEY = "skyindex.greenhouse.solver.v3";
+export const CACHE_KEY = "skydex.greenhouse.solver.v3";
 export const STALE_KEYS: string[] = [
-  "skyindex.greenhouse.solver.v1",
-  "skyindex.greenhouse.solver.v2",
+  "skydex.greenhouse.solver.v1",
+  "skydex.greenhouse.solver.v2",
 ];
 
 /** Entry count ceiling. Twenty four distinct grids is far more than a session explores. */

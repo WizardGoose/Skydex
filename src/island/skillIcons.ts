@@ -24,7 +24,7 @@ const WIKI = "https://hypixelskyblock.minecraft.wiki";
 const MODULE_TITLE = "Module:Skill/Data";
 
 /** New surface, new key. Nothing else in this browser is touched. */
-export const SKILL_ICONS_KEY = "skyindex.skillicons.v1";
+export const SKILL_ICONS_KEY = "skydex.skillicons.v1";
 
 /** The template data moves with game updates, not page views. */
 export const SKILL_ICONS_TTL = 24 * 60 * 60 * 1000;

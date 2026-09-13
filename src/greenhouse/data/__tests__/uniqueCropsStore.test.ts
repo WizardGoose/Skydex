@@ -16,7 +16,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
  */
 
 const LEGACY_KEY = "skyshards-unique-crops";
-const KEY = "skyindex.greenhouse.uniqueCrops";
+const KEY = "skydex.greenhouse.uniqueCrops";
 
 class MemoryStorage {
   private map = new Map<string, string>();

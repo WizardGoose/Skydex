@@ -23,7 +23,7 @@ import type { Catalogue, CatalogueEntry } from "./types";
 const ITEMS_URL = "https://api.hypixel.net/v2/resources/skyblock/items";
 
 /** A NEW key. See the note on `PRICES_KEY`; nothing existing is touched. */
-export const CATALOGUE_KEY = "skyindex.networth.items.v1";
+export const CATALOGUE_KEY = "skydex.networth.items.v1";
 
 export const CATALOGUE_TTL_MS = 12 * 60 * 60 * 1000;
 
