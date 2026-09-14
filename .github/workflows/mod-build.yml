@@ -23,6 +23,8 @@ jobs:
     name: Test and build (Minecraft ${{ matrix.minecraft }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      release_matches: ${{ steps.version.outputs.release_matches }}
     strategy:
       fail-fast: false
       matrix:
@@ -52,26 +54,31 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Read and verify release version
+      - name: Read mod version
         id: version
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           version=$(sed -n 's/^mod_version=//p' gradle.properties | tr -d '\r')
           test -n "$version"
-          if [ -n "$RELEASE_TAG" ] && [ "$RELEASE_TAG" != "v$version" ]; then
-            echo "Release tag $RELEASE_TAG does not match mod version $version" >&2
-            exit 1
+          # Website and mod versions are independent. Website-only releases
+          # retain the existing mod assets rather than rebuilding them.
+          if [ "$RELEASE_TAG" = "v$version" ]; then
+            echo "release_matches=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_matches=false" >> "$GITHUB_OUTPUT"
           fi
           echo "mod=$version" >> "$GITHUB_OUTPUT"
 
       - name: Test and build mod
+        if: github.event_name != 'release' || steps.version.outputs.release_matches == 'true'
         run: >-
           ./gradlew build --no-daemon
           -Pminecraft_version=${{ matrix.minecraft }}
           -Pfabric_api_version=${{ matrix.fabric_api }}
 
       - name: Upload Minecraft ${{ matrix.minecraft }} JAR
+        if: github.event_name != 'release' || steps.version.outputs.release_matches == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: skydex-mod-minecraft-${{ matrix.minecraft }}-${{ github.sha }}
@@ -81,7 +88,7 @@ jobs:
 
   publish-release:
     name: Attach verified JARs to Release
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' && needs.build.outputs.release_matches == 'true'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
