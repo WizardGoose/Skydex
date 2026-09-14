@@ -204,9 +204,9 @@ export interface AccessoryCatalogue {
  * This list is intentionally tiny and evidence-led. `OLD_BOOT` is a leather
  * boot carrying the ACCESSORY category by mistake,
  * `TEST_BUCKET_PLEASE_IGNORE` is an explicitly named test object, and the
- * remaining three are the exact ADMIN entries identified by the official wiki
- * catalogue. Ambiguous retired items stay visible until an authoritative
- * source proves what should happen to them.
+ * admin entries have no player acquisition route. Compass Talisman and Eternal
+ * Crystal are historical items; Luck Talisman was removed before release.
+ * Keep real seasonal accessories: a closed event window is not removed content.
  */
 export const ACCESSORY_EXCLUSIONS: ReadonlySet<string> = new Set([
   "OLD_BOOT",
@@ -214,13 +214,22 @@ export const ACCESSORY_EXCLUSIONS: ReadonlySet<string> = new Set([
   "ARTIFACT_OF_SPACE",
   "GRIZZLY_PAW",
   "TALISMAN_OF_SPACE",
+  "RING_OF_SPACE",
   "BINGO_HEIRLOOM",
+  "COMPASS_TALISMAN",
+  "ETERNAL_CRYSTAL",
+  "LUCK_TALISMAN",
+  "MASTER_SKULL_TIER_8",
+  "MASTER_SKULL_TIER_9",
+  "MASTER_SKULL_TIER_10",
 ]);
 
 /** Whether an item belongs on the normal Accessories page. */
 export const isNormalAccessory = (
-  entry: Pick<AccessoryEntry, "rift" | "riftTransferable">
-): boolean => !entry.rift || entry.riftTransferable;
+  entry: Pick<AccessoryEntry, "rift" | "riftTransferable"> & {
+    acquisition?: { category: string };
+  }
+): boolean => (!entry.rift || entry.riftTransferable) && entry.acquisition?.category !== "legacy";
 
 /**
  * One entry of Hypixel's item resource, as far as this module cares.
@@ -232,6 +241,7 @@ export const isNormalAccessory = (
  */
 export interface HypixelAccessoryItem {
   id: string;
+  unavailable?: boolean;
   name?: string;
   tier?: string;
   category?: string;
@@ -288,6 +298,7 @@ export const accessoriesFromIndex = (items: ItemIndex): HypixelAccessoryItem[] =
         id: item.hypixelId,
         name: item.name,
         tier: item.tier ?? undefined,
+        unavailable: item.unavailable === true,
         category: item.category,
         requirements: item.requirements ?? null,
         stats: item.stats ?? null,
@@ -398,6 +409,8 @@ export const buildAccessoryCatalogue = (
 ): AccessoryCatalogue => {
   const accessories = hypixelItems.filter(
     (i) => i.category === "ACCESSORY" && i.id && !ACCESSORY_EXCLUSIONS.has(i.id)
+      && i.tier !== "ADMIN" && i.tier !== "UNOBTAINABLE"
+      && !i.unavailable
       && isPlayerItem(i.name ?? "", i.id, adminNames)
   );
 

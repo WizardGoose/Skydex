@@ -82,6 +82,8 @@ export interface Item {
    * lists transferable accessories in both areas on it.
    */
   riftTransferable?: boolean;
+  /** Explicit Hypixel availability flag, separate from the display rarity. */
+  unavailable?: boolean;
   tier: string | null;
   category: string | null;
   /** What an NPC pays for it. Non-null also proves it is NPC-sellable. */

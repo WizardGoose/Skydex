@@ -330,7 +330,7 @@
   background: rgb(56 199 244 / 0.035);
 }
 
-.profile-pet-icon {
+.profile-pet-row .profile-pet-icon {
   width: 2.65rem;
   height: 2.65rem;
 }

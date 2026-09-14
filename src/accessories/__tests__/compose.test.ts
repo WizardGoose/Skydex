@@ -86,6 +86,18 @@ const find = (snap: ReturnType<typeof composeSnapshot>, id: string) =>
   snap.entries.find((e) => e.id === id)!;
 
 describe("composeSnapshot", () => {
+  it("hides retired variants from progression counts without changing owned Magical Power", () => {
+    const legacyItems: ItemIndex = {
+      crab: { ...items.wolf_talisman, name: "Crab Hat of Celebration", hypixelId: "PARTY_HAT_CRAB", tier: "SPECIAL", requirements: null },
+      wolf: { ...items.wolf_talisman, requirements: null },
+    };
+    const legacyCatalogue = buildAccessoryCatalogue(accessoriesFromIndex(legacyItems), legacyItems);
+    const snap = composeSnapshot(legacyCatalogue, ["PARTY_HAT_CRAB"], {}, NO_COLLECTIONS, new Map(), false, null);
+    expect(snap.normalCounts).toEqual({ total: 1, owned: 0, missing: 1, locked: 0 });
+    expect(Object.values(snap.normalSourceCounts).reduce((sum, count) => sum + count, 0)).toBe(1);
+    expect(snap.magicalPower).toMatchObject({ total: 3, counted: 1 });
+    expect(find(snap, "PARTY_HAT_CRAB").status).toBe("owned");
+  });
   it("does not claim anything about ownership when the bag was not read", () => {
     const snap = composeSnapshot(catalogue, null, {}, NO_COLLECTIONS, keys, false, null);
 

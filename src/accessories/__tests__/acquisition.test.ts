@@ -53,6 +53,10 @@ describe("accessory acquisition routes", () => {
     expect(classify("SOUL_CAMPFIRE_TALISMAN_25")).toMatchObject({ category: "quests" });
     expect(classify("MASTER_SKULL_TIER_1")).toMatchObject({ category: "dungeons" });
     expect(classify("PARTY_HAT_CRAB_RED_ANIMATED")).toMatchObject({ category: "legacy" });
+    expect(classify("PARTY_HAT_CRAB")).toMatchObject({ category: "legacy" });
+    expect(classify("PARTY_HAT_SLOTH")).toMatchObject({ category: "legacy" });
+    expect(classify("BALLOON_HAT_2024")).toMatchObject({ category: "legacy" });
+    expect(classify("BALLOON_HAT_2025")).toMatchObject({ category: "legacy" });
     expect(classify("ETERNAL_CRYSTAL")).toMatchObject({ category: "legacy" });
     expect(classify("COMPASS_TALISMAN")).toMatchObject({ category: "legacy" });
     expect(classify("LUCK_TALISMAN")).toMatchObject({ category: "legacy" });

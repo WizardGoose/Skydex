@@ -113,6 +113,10 @@
   width: min(16rem, 100%);
 }
 
+.profile-progression-filter-popover.is-compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .profile-progression-filter-popover fieldset {
   min-width: 0;
   margin: 0;

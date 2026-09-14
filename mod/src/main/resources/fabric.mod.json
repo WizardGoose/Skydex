@@ -3,6 +3,7 @@
   "id": "skydex",
   "version": "${version}",
   "name": "Skydex",
+  "icon": "assets/skydex/icon.png",
   "description": "Connects the Skydex website to the SkyBlock information and in-game Greenhouse tools that only the Minecraft client can provide.",
   "authors": [
     "WizardGoose"

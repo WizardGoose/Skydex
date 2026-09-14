@@ -134,6 +134,36 @@ describe("buildAccessoryCatalogue", () => {
     expect(isNormalAccessory({ rift: true, riftTransferable: false })).toBe(false);
     expect(isNormalAccessory({ rift: true, riftTransferable: true })).toBe(true);
     expect(isNormalAccessory({ rift: false, riftTransferable: false })).toBe(true);
+    expect(isNormalAccessory({ rift: false, riftTransferable: false, acquisition: { category: "legacy" } })).toBe(false);
+    expect(isNormalAccessory({ rift: false, riftTransferable: false, acquisition: { category: "events" } })).toBe(true);
+  });
+
+  it("excludes removed and unreleased accessories even when a legacy recipe remains", () => {
+    const ids = ["COMPASS_TALISMAN", "ETERNAL_CRYSTAL", "LUCK_TALISMAN", "BINGO_HEIRLOOM", "RING_OF_SPACE", "MASTER_SKULL_TIER_8", "MASTER_SKULL_TIER_9", "MASTER_SKULL_TIER_10"];
+    const index: ItemIndex = Object.fromEntries(ids.map((id) => [id, {
+      ...item(id, id, "EPIC"),
+      recipe: [{ id: "quartz", name: "Quartz", qty: 1 }],
+    }]));
+    index.event = item("Crab Hat of Celebration", "PARTY_HAT_CRAB", "SPECIAL");
+    index.unknown = item("New Accessory", "NEW_ACCESSORY", null);
+    index.skull = item("Master Skull - Tier 7", "MASTER_SKULL_TIER_7", "EPIC");
+    const catalogue = buildAccessoryCatalogue(accessoriesFromIndex(index), index);
+    expect(catalogue.entries.map((entry) => entry.id)).toEqual(["PARTY_HAT_CRAB", "MASTER_SKULL_TIER_7", "NEW_ACCESSORY"]);
+    for (const id of ids) expect(catalogue.byId[id]).toBeUndefined();
+  });
+
+  it("rejects explicit unavailable and admin flags without guessing from a missing rarity", () => {
+    const catalogue = buildAccessoryCatalogue([
+      { id: "FUTURE_ACCESSORY", category: "ACCESSORY", tier: "UNOBTAINABLE" },
+      { id: "STAFF_ACCESSORY", category: "ACCESSORY", tier: "ADMIN" },
+      { id: "ORDINARY_ACCESSORY", category: "ACCESSORY" },
+    ], {});
+    expect(catalogue.entries.map((entry) => entry.id)).toEqual(["ORDINARY_ACCESSORY"]);
+    const index: ItemIndex = {
+      future: { ...item("Future Charm", "FUTURE_CHARM", null), unavailable: true },
+      real: item("Real Charm", "REAL_CHARM", null),
+    };
+    expect(buildAccessoryCatalogue(accessoriesFromIndex(index), index).entries.map((entry) => entry.id)).toEqual(["REAL_CHARM"]);
   });
 
   it("marks an accessory craftable only when a recipe really exists", () => {

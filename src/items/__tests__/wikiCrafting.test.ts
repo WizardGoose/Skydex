@@ -32,6 +32,18 @@ const hypixel: HypixelItem[] = [
 ];
 
 describe("buildItemIndex", () => {
+  it("preserves explicit unavailable flags independently of rarity on accessories", () => {
+    const index = buildItemIndex(new Map([
+      ["Future Ring", { yields: 1, ingredients: [] }],
+    ]), noUnlocks, [
+      { id: "FUTURE_RING", name: "Future Ring", category: "ACCESSORY", tier: "UNOBTAINABLE" },
+      { id: "FUTURE_CHARM", name: "Future Charm", category: "ACCESSORY", tier: "UNOBTAINABLE" },
+      { id: "REAL_CHARM", name: "Real Charm", category: "ACCESSORY" },
+    ]);
+    expect(index.future_ring).toMatchObject({ tier: null, unavailable: true });
+    expect(index.future_charm).toMatchObject({ tier: null, unavailable: true });
+    expect(index.real_charm.unavailable).toBeUndefined();
+  });
   it("keeps a mutation that no recipe mentions, with its Hypixel id", () => {
     const index = buildItemIndex(recipes(), noUnlocks, hypixel);
 

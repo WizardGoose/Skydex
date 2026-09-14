@@ -138,7 +138,8 @@ const WIKI = "https://hypixelskyblock.minecraft.wiki";
 // the incomplete fallback for another day.
 // v22: the wiki replaced its crafting Lua module with the crafting_recipes
 // table. Rebuild the derived index with its current recipes and exact variants.
-export const CACHE_KEY = "wizardsky.crafting.v22";
+// v23: retain explicit unavailable flags separately from display rarity.
+export const CACHE_KEY = "wizardsky.crafting.v23";
 const STALE_KEYS = [
   "wizardsky.crafting.v1",
   "wizardsky.crafting.v2",
@@ -161,6 +162,7 @@ const STALE_KEYS = [
   "wizardsky.crafting.v19",
   "wizardsky.crafting.v20",
   "wizardsky.crafting.v21",
+  "wizardsky.crafting.v22",
 ];
 
 /** Refresh the parsed database at most once a day. */
@@ -737,6 +739,7 @@ export const buildItemIndex = (
       stats: Record<string, unknown> | null;
       origin: string | null;
       riftTransferable: boolean;
+      unavailable: boolean;
     }
   >();
   for (const it of hypixelItems) {
@@ -764,6 +767,7 @@ export const buildItemIndex = (
         stats: it.stats && typeof it.stats === "object" ? it.stats : null,
         origin: typeof it.origin === "string" && it.origin ? it.origin : null,
         riftTransferable: it.rift_transferrable === true,
+        unavailable: it.tier === "UNOBTAINABLE" || it.tier === "ADMIN",
       });
     }
   }
@@ -824,6 +828,7 @@ export const buildItemIndex = (
       hypixelId: m?.id ?? null,
       ...(vanilla ? { vanilla: true } : {}),
       tier: m?.tier ?? null,
+      ...(m?.unavailable ? { unavailable: true } : {}),
       category: m?.category ?? null,
       npcSell: m?.npcSell ?? null,
       requirements: m?.requirements ?? null,
@@ -868,6 +873,7 @@ export const buildItemIndex = (
       name: itemName,
       hypixelId: raw.id,
       tier: raw.tier && raw.tier !== "UNOBTAINABLE" ? raw.tier : null,
+      ...(raw.tier === "UNOBTAINABLE" || raw.tier === "ADMIN" ? { unavailable: true } : {}),
       category: raw.category,
       npcSell: typeof raw.npc_sell_price === "number" ? raw.npc_sell_price : null,
       requirements: Array.isArray(raw.requirements) && raw.requirements.length > 0 ? raw.requirements : null,

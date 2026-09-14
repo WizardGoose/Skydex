@@ -242,8 +242,11 @@ const acquisitionForStableIdFamily = (id: string): AccessoryAcquisition | null =
   if (id.startsWith("MASTER_SKULL_TIER_")) {
     return curated("dungeons", "Master Mode Dungeon reward and upgrade line.");
   }
-  if (id.startsWith("PARTY_HAT_CRAB_")) {
+  if (id === "PARTY_HAT_CRAB" || id.startsWith("PARTY_HAT_CRAB_")) {
     return curated("legacy", "Anniversary reward; no current Ironman acquisition route remains.");
+  }
+  if (id === "PARTY_HAT_SLOTH" || id === "BALLOON_HAT_2024" || id === "BALLOON_HAT_2025") {
+    return curated("legacy", "Retired anniversary variant; other Hatcessories provide the same accessory bonus.");
   }
   return null;
 };

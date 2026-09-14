@@ -412,7 +412,6 @@ export function composeSnapshot(
     const learnedSource = sources[entry.name];
     const source = resolveSource(entry.craftable, learnedSource);
     sourceCounts[source] += 1;
-    if (isNormalAccessory(entry)) normalSourceCounts[source] += 1;
 
     // Measured for every accessory, owned or not, because the tile shows them
     // regardless and a keyless visitor should still learn what a thing asks.
@@ -484,6 +483,9 @@ export function composeSnapshot(
       ownedPrerequisite,
     });
 
+    const normal = isNormalAccessory({ ...entry, acquisition });
+    if (normal) normalSourceCounts[source] += 1;
+
     /*
      * Attainability is a statement about work remaining, so it is only computed
      * for something the player does not already have. An owned accessory has no
@@ -505,7 +507,7 @@ export function composeSnapshot(
       else riftCounts.missing += 1;
     }
 
-    if (isNormalAccessory(entry)) {
+    if (normal) {
       normalCounts.total += 1;
       if (status === "owned") normalCounts.owned += 1;
       else if (status === "locked") normalCounts.locked += 1;
