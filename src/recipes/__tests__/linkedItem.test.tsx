@@ -68,16 +68,17 @@ describe("item details to Recipes", () => {
     expect(html).toContain("Cobblestone Minion XI");
   });
 
-  it("filters confirmed and refreshed admin entries without hiding ordinary legacy items", () => {
+  it("filters admin and removed accessories while preserving normal player items", () => {
     const items: ItemIndex = {
       bingo: item("Bingo Heirloom", "BINGO_HEIRLOOM"),
       space: item("Artifact of Space", "ARTIFACT_OF_SPACE"),
       remote: item("Admin Example", "ADMIN_EXAMPLE"),
       legacy: item("Eternal Crystal", "ETERNAL_CRYSTAL"),
+      ordinary: item("Wolf Talisman", "WOLF_TALISMAN"),
     };
     const adminNames = new Set(["adminexample"]);
     const catalogue = buildAccessoryCatalogue(Object.values(items).map(it => ({ id: it.hypixelId!, name: it.name, category: "ACCESSORY", tier: it.tier! })), items, adminNames);
-    expect(Object.keys(catalogue.byId)).toEqual(["ETERNAL_CRYSTAL"]);
+    expect(Object.keys(catalogue.byId)).toEqual(["WOLF_TALISMAN"]);
     expect(resolveLinkedItem(items, params("BINGO_HEIRLOOM", "Bingo Heirloom"), adminNames)).toBeNull();
     expect(includeLinkedItem({}, params("BINGO_HEIRLOOM", "Bingo Heirloom"))).toEqual({});
     const crafting = Object.fromEntries(Object.entries(items).map(([id, it]) => [id, { ...it, recipe: [{ id: "stone", name: "Stone", qty: 1 }] }]));
@@ -85,6 +86,6 @@ describe("item details to Recipes", () => {
       owned: { has: false, get: () => undefined, count: () => undefined, auto: () => undefined, entries: () => [], keys: () => [], sources: [] },
       playerProgress: { slayerLevels: null, trophyFish: null, skillLevels: null },
     });
-    expect(book.map(entry => entry.id)).toEqual(["legacy"]);
+    expect(book.map(entry => entry.id)).toEqual(["legacy", "ordinary"]);
   });
 });
