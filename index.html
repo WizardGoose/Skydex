@@ -28,7 +28,9 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="color-scheme" content="dark" />
 
-    <!-- Preload the shipped backdrop without prioritizing it over the app. -->
+    <!-- First paint reads the same semantic theme tokens as the mounted app.
+         The backdrop is preloaded at default priority so it never queues
+         ahead of the JavaScript that paints the page. -->
     <link rel="stylesheet" href="/theme.css?v=__SKYDEX_DEPLOY_REVISION__" />
     <link rel="preload" as="image" href="/bg/hub.jpg" />
 

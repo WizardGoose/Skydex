@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useDeferredStart } from "../hooks/useDeferredStart";
 import { loadGreenhouseData } from "../greenhouse/services/greenhouseDataService";
 import { useTargetCatalogue } from "../greenhouse/planner/useTargetCatalogue";
+import { CACHE_KEY as CRAFTING_CACHE_KEY } from "../items/wikiCrafting";
 import { buildSearchIndex } from "./searchIndex";
 import type { SearchEntry } from "./types";
 
@@ -14,8 +15,12 @@ import type { SearchEntry } from "./types";
  * lookups under a key it owns and has owned since before this page existed;
  * this hook adds no keys of its own.
  *
- * The index starts during idle time after first paint. Until then, the landing
- * page does not fetch or parse greenhouse, fusion, wiki, or item-resource data.
+ * The index starts once the page has loaded and gone quiet, or the moment the
+ * visitor reaches for the search, whichever is first. A returning visitor with
+ * the crafting snapshot already in localStorage starts straight away, since
+ * that costs a parse rather than a two-megabyte download. Until then, the
+ * landing page fetches and parses none of the greenhouse, fusion, wiki, or
+ * item-resource data.
  *
  * Failure is not an error state here. If a source does not arrive, its rows are
  * simply absent from the index and everything else still searches. A universal
@@ -47,8 +52,22 @@ export interface SiteIndex {
   loading: boolean;
 }
 
-export const useSiteIndex = (): SiteIndex => {
-  const ready = useDeferredStart();
+const hasCraftingSnapshot = (): boolean => {
+  try {
+    return localStorage.getItem(CRAFTING_CACHE_KEY) !== null;
+  } catch {
+    return false;
+  }
+};
+
+export interface SiteIndexOptions {
+  /** Start building now, e.g. because the search field has focus. */
+  wanted?: boolean;
+}
+
+export const useSiteIndex = ({ wanted = false }: SiteIndexOptions = {}): SiteIndex => {
+  const [warm] = useState(hasCraftingSnapshot);
+  const ready = useDeferredStart({ immediate: wanted || warm });
   const [mutations, setMutations] = useState<MutationRow[] | null>(null);
   const [shards, setShards] = useState<ShardRow[] | null>(null);
 

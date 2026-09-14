@@ -15,8 +15,6 @@ import { sharedDesignerLocation } from "./greenhouse/designerRoute";
 import { WebMcpBridge } from "./webmcp/WebMcpBridge";
 import { restoreStaticRoute } from "./staticRouteRestore";
 
-// LoadingSpinner keeps the route fallback on the Skydex cyan accent:
-// border-sky-500/20 border-t-sky-500.
 const LandingPage = lazy(() => import("./pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const ItemsPage = lazy(() => import("./pages/ItemsPage").then((module) => ({ default: module.ItemsPage })));
 const StoragePage = lazy(() => import("./pages/StoragePage").then((module) => ({ default: module.StoragePage })));
