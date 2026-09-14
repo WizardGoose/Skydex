@@ -5,6 +5,7 @@ import { CalculatorStateProvider } from "./context/CalculatorStateContext";
 import { RecipeStateProvider } from "./context/RecipeStateContext";
 import { usePageTitle } from "./hooks/usePageTitle";
 import { ToastProvider } from "./components/ui/Toast";
+import { LoadingSpinner } from "./components/ui/LoadingSpinner";
 import { NotFoundRoute, RouteErrorBoundary } from "./components/errors/RouteErrorBoundary";
 import { GreenhouseHashRoute } from "./greenhouse/GreenhouseHashRoute";
 import { legacyGreenhouseHref } from "./greenhouse/route";
@@ -14,6 +15,8 @@ import { sharedDesignerLocation } from "./greenhouse/designerRoute";
 import { WebMcpBridge } from "./webmcp/WebMcpBridge";
 import { restoreStaticRoute } from "./staticRouteRestore";
 
+// LoadingSpinner keeps the route fallback on the Skydex cyan accent:
+// border-sky-500/20 border-t-sky-500.
 const LandingPage = lazy(() => import("./pages/LandingPage").then((module) => ({ default: module.LandingPage })));
 const ItemsPage = lazy(() => import("./pages/ItemsPage").then((module) => ({ default: module.ItemsPage })));
 const StoragePage = lazy(() => import("./pages/StoragePage").then((module) => ({ default: module.StoragePage })));
@@ -35,24 +38,6 @@ const AboutPage = lazy(() => import("./pages/AboutPage").then((module) => ({ def
 
 const ContactPage = lazy(() => import("./pages/ContactPage").then((module) => ({ default: module.ContactPage })));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-
-/**
- * Route-level fallback. Uses the site accent rather than the violet it was
- * forked with, so a page in flight looks like part of this app instead of a
- * stray spinner from somewhere else.
- */
-const LoadingSpinner = () => (
-  <div
-    className="flex min-h-[calc(100dvh-var(--sd-chrome-h))] items-center justify-center"
-    role="status"
-    aria-label="Loading page"
-  >
-    <div
-      aria-hidden="true"
-      className="h-6 w-6 animate-spin rounded-full border-2 border-sky-500/20 border-t-sky-500"
-    />
-  </div>
-);
 
 const LegacyRedirect: React.FC<{ pathname: string }> = ({ pathname }) => {
   const location = useLocation();

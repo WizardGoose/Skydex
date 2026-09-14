@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useDeferredStart } from "../hooks/useDeferredStart";
 import { loadGreenhouseData } from "../greenhouse/services/greenhouseDataService";
 import { useTargetCatalogue } from "../greenhouse/planner/useTargetCatalogue";
 import { buildSearchIndex } from "./searchIndex";
@@ -13,14 +14,8 @@ import type { SearchEntry } from "./types";
  * lookups under a key it owns and has owned since before this page existed;
  * this hook adds no keys of its own.
  *
- * Cost, since this runs on the site's front door:
- *   greenhouse data.json   33 KB, static, cached by the service after one load
- *   fusion-properties.json 47 KB, static
- *   crafting index         fetched by useTargetCatalogue, served from its own
- *                          localStorage cache on every visit after the first
- * The two static files are fetched once per page load and never again. The
- * crafting index is the same fetch the Items page and the Planner already make,
- * so on a warm cache the landing page costs nothing extra at all.
+ * The index starts during idle time after first paint. Until then, the landing
+ * page does not fetch or parse greenhouse, fusion, wiki, or item-resource data.
  *
  * Failure is not an error state here. If a source does not arrive, its rows are
  * simply absent from the index and everything else still searches. A universal
@@ -53,6 +48,7 @@ export interface SiteIndex {
 }
 
 export const useSiteIndex = (): SiteIndex => {
+  const ready = useDeferredStart();
   const [mutations, setMutations] = useState<MutationRow[] | null>(null);
   const [shards, setShards] = useState<ShardRow[] | null>(null);
 
@@ -60,6 +56,7 @@ export const useSiteIndex = (): SiteIndex => {
 
   // ---- greenhouse mutations ---------------------------------------------
   useEffect(() => {
+    if (!ready) return;
     let live = true;
     loadGreenhouseData()
       .then((data) => {
@@ -72,10 +69,11 @@ export const useSiteIndex = (): SiteIndex => {
     return () => {
       live = false;
     };
-  }, []);
+  }, [ready]);
 
   // ---- fusion shards -----------------------------------------------------
   useEffect(() => {
+    if (!ready) return;
     const controller = new AbortController();
     fetch(`${base}fusion-properties.json`, { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
@@ -90,7 +88,7 @@ export const useSiteIndex = (): SiteIndex => {
         if (!controller.signal.aborted) setShards([]);
       });
     return () => controller.abort();
-  }, [base]);
+  }, [base, ready]);
 
   /*
    * Targets need the mutation ids to exist first, which is why this is not
@@ -98,7 +96,7 @@ export const useSiteIndex = (): SiteIndex => {
    * list is non-empty and recomputes the moment it is not.
    */
   const mutationIds = useMemo(() => (mutations ?? []).map((m) => m.id), [mutations]);
-  const { targets, items } = useTargetCatalogue(mutationIds);
+  const { targets, items } = useTargetCatalogue(mutationIds, { enabled: ready });
 
   const index = useMemo(
     () =>

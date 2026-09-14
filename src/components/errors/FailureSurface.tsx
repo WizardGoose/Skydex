@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Clipboard, Home, RotateCw, Settings, UserRound } from "lucide-react";
 import { Link } from "react-router-dom";
-import { VectorMark } from "../../mark";
 import { FOCUS, LABEL } from "../../ui/kit";
 import { copyFailureDetails, formatFailureDetails, logUnexpectedFailure, type FailureModel } from "./failureModel";
 import "./failure-surface.css";
+
+const VectorMark = lazy(() => import("../../mark").then((module) => ({ default: module.VectorMark })));
 
 export const FailureSurface: React.FC<{
   failure: FailureModel;
@@ -38,12 +39,9 @@ export const FailureSurface: React.FC<{
     >
       <div className="failure-surface-main">
         <div className="failure-surface-companion" aria-label="Wonder, the Skydex companion">
-          <VectorMark
-            alert
-            thinking={false}
-            force="alert"
-            className="failure-surface-wonder"
-          />
+          <Suspense fallback={null}>
+            <VectorMark alert thinking={false} force="alert" className="failure-surface-wonder" />
+          </Suspense>
           <span className="failure-surface-icon" aria-hidden>
             <AlertTriangle />
           </span>

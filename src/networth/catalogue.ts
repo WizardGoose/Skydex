@@ -1,4 +1,5 @@
 import { makeGate } from "../island/gate";
+import { fetchItemResourceItems } from "../items/itemResourceFetch";
 import type { Catalogue, CatalogueEntry } from "./types";
 
 /**
@@ -20,15 +21,12 @@ import type { Catalogue, CatalogueEntry } from "./types";
  * for twelve hours where prices run for twenty minutes.
  */
 
-const ITEMS_URL = "https://api.hypixel.net/v2/resources/skyblock/items";
-
 /** A NEW key. See the note on `PRICES_KEY`; nothing existing is touched. */
 export const CATALOGUE_KEY = "skydex.networth.items.v3";
 
 export const CATALOGUE_TTL_MS = 12 * 60 * 60 * 1000;
 
 const CATALOGUE_MIN_GAP_MS = 15_000;
-
 const TIMEOUT_MS = 30_000;
 
 export interface CatalogueSnapshot {
@@ -129,12 +127,13 @@ const writeCachedCatalogue = (value: CatalogueSnapshot): void => {
 };
 
 const fetchCatalogue = async (): Promise<CatalogueSnapshot | null> => {
-  const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let deadline: ReturnType<typeof setTimeout> | undefined;
   try {
-    const response = await fetch(ITEMS_URL, { signal: controller.signal });
-    if (!response.ok) return null;
-    const catalogue = trimCatalogue(await response.json());
+    const timeout = new Promise<never>((_, reject) => {
+      deadline = setTimeout(() => reject(new Error("items resource request timed out")), TIMEOUT_MS);
+    });
+    const items = await Promise.race([fetchItemResourceItems(), timeout]);
+    const catalogue = trimCatalogue({ items });
     if (!catalogue) return null;
     const fresh: CatalogueSnapshot = { catalogue, fetchedAt: Date.now() };
     writeCachedCatalogue(fresh);
@@ -143,7 +142,7 @@ const fetchCatalogue = async (): Promise<CatalogueSnapshot | null> => {
   } catch {
     return null;
   } finally {
-    clearTimeout(deadline);
+    if (deadline) clearTimeout(deadline);
   }
 };
 
