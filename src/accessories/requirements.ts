@@ -201,9 +201,9 @@ export const NO_PROGRESS: PlayerProgress = { slayerLevels: null, trophyFish: nul
  *
  * From `claimed_levels`, NOT from `xp`, and that choice is the same one the
  * collection gate makes for the same reason. `slayer.slayer_bosses.<boss>` has
- * both: an `xp` total, and a `claimed_levels` object of `level_1 ... level_9`
- * booleans. The booleans are the game's own record of which levels the player
- * has actually reached, so reading them needs no XP curve at all, and needing
+ * both: an `xp` total, and a `claimed_levels` object with keys such as `level_6`
+ * and `level_7_special`. These booleans record rewards the player has actually
+ * claimed. Reading them needs no XP curve at all, and needing
  * no curve means there is no table to source, no rebalance to track, and
  * nothing to get quietly wrong.
  *
@@ -225,7 +225,9 @@ export function readSlayerLevels(member: unknown): Record<string, number> | null
     if (claimed) {
       for (const [key, value] of Object.entries(claimed)) {
         if (value !== true) continue;
-        const n = Number(key.replace(/^level_/, ""));
+        const match = /^level_(\d+)(?:_special)?$/.exec(key);
+        if (!match) continue;
+        const n = Number(match[1]);
         if (Number.isInteger(n) && n > best) best = n;
       }
     }

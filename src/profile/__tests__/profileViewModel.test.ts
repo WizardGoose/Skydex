@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SkillDefs } from "../../island/skills";
 import type { MemberLoadouts } from "../../networth/parseItems";
 import type { RawItem } from "../../networth/types";
+import { readProfileApiDetails } from "../profileApiDetails";
 import {
   buildProfileViewModel,
   FAIRY_SOUL_TOTAL,
@@ -299,6 +300,41 @@ describe("buildProfileViewModel", () => {
     expect(model?.slayers[0]).toMatchObject({
       figure: "143.8K / 400K XP",
       figureDetail: "143,800 / 400,000 XP",
+    });
+  });
+
+  it("shows the reported Revenant case as level 9 with total XP at the cap", () => {
+    const model = buildProfileViewModel(input({
+      apiDetails: readProfileApiDetails({ slayer: { slayer_bosses: {
+        zombie: { xp: 1_200_000, claimed_levels: {
+          level_6: true,
+          level_7_special: true,
+          level_8_special: true,
+          level_9_special: true,
+        } },
+      } } }),
+    }));
+
+    expect(model?.slayers[0]).toMatchObject({
+      name: "Revenant", level: 9, maxed: true, progress: 100,
+      figure: "1.2M XP", figureDetail: "1,200,000 XP",
+    });
+  });
+
+  it("uses the next threshold for a special reward below the Slayer cap", () => {
+    const model = buildProfileViewModel(input({
+      apiDetails: readProfileApiDetails({ slayer: { slayer_bosses: {
+        zombie: { xp: 450_000, claimed_levels: { level_6: true, level_8_special: true } },
+        vampire: { xp: 2_500, claimed_levels: { level_5_special: true } },
+      } } }),
+    }));
+
+    expect(model?.slayers[0]).toMatchObject({
+      level: 8, maxed: false, progress: 45,
+      figure: "450K / 1M XP", figureDetail: "450,000 / 1,000,000 XP",
+    });
+    expect(model?.slayers[1]).toMatchObject({
+      level: 5, maxed: true, progress: 100, figure: "2.5K XP",
     });
   });
 

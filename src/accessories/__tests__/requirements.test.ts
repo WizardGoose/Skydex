@@ -101,6 +101,50 @@ describe("readSlayerLevels", () => {
     expect(levels).toStrictEqual({ zombie: 2 });
   });
 
+  it.each(["zombie", "spider", "wolf", "enderman", "blaze", "vampire"])(
+    "reads special claimed rewards for %s without counting duplicate keys",
+    (boss) => {
+      expect(readSlayerLevels(member({
+        [boss]: { claimed_levels: {
+          level_4: true,
+          level_5: true,
+          level_5_special: true,
+        } },
+      }))).toStrictEqual({ [boss]: 5 });
+    },
+  );
+
+  it.each([7, 8, 9])("reads special level %i beyond the ordinary level 6 reward", (level) => {
+    expect(readSlayerLevels(member({
+      zombie: { xp: 1_200_000, claimed_levels: {
+        level_6: true,
+        [`level_${level}_special`]: true,
+      } },
+    }))).toStrictEqual({ zombie: level });
+  });
+
+  it("requires an actual claim and a valid reward key even when XP is above the cap", () => {
+    expect(readSlayerLevels(member({
+      zombie: { xp: 1_200_000, claimed_levels: {
+        level_6: true,
+        level_7_special: false,
+        level_8_special: "true",
+        level_9_special: 1,
+        level_10_extra: true,
+        level_11_special_extra: true,
+        unrelated_12: true,
+        "13": true,
+      } },
+    }))).toStrictEqual({ zombie: 6 });
+  });
+
+  it("uses special rewards when checking Slayer recipe and accessory requirements", () => {
+    const progress = readProgress(member({
+      zombie: { claimed_levels: { level_6: true, level_7_special: true } },
+    }));
+    expect(checkRequirement(slayerReq("zombie", 7), progress)).toMatchObject({ state: "met", have: "7" });
+  });
+
   it("reports a boss with an empty claimed_levels as level zero", () => {
     // Real shape: a live profile's blaze entry is `{ claimed_levels: {} }`.
     expect(readSlayerLevels(member({ blaze: { claimed_levels: {} } }))).toStrictEqual({ blaze: 0 });
