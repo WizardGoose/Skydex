@@ -179,8 +179,11 @@ export const mutationIngredientsFor = (
   }));
 };
 
-export const useTargetCatalogue = (mutationIds: string[] = []) => {
-  const { items, loading: recipesLoading } = useRecipes();
+export const useTargetCatalogue = (
+  mutationIds: string[] = [],
+  { enabled = true }: { enabled?: boolean } = {},
+) => {
+  const { items, loading: recipesLoading } = useRecipes(enabled);
   const [nonCrafted, setNonCrafted] = useState<CatalogueTarget[]>([]);
   const [wikiTiers, setWikiTiers] = useState<WikiTierCache>(() => readTierCache());
   const [loading, setLoading] = useState(true);
@@ -192,8 +195,9 @@ export const useTargetCatalogue = (mutationIds: string[] = []) => {
   );
 
   useEffect(() => {
+    if (!enabled) return;
     requestItemResource();
-  }, []);
+  }, [enabled]);
 
   const mutationSet = useMemo(() => new Set(mutationIds), [mutationIds]);
 
@@ -233,7 +237,7 @@ export const useTargetCatalogue = (mutationIds: string[] = []) => {
 
   // ---- the handful that are not crafted on a grid -----------------------
   useEffect(() => {
-    if (!mutationSet.size) return;
+    if (!enabled || !mutationSet.size) return;
     const controller = new AbortController();
 
     try {
@@ -309,7 +313,7 @@ export const useTargetCatalogue = (mutationIds: string[] = []) => {
       });
 
     return () => controller.abort();
-  }, [items, mutationSet]);
+  }, [enabled, items, mutationSet]);
 
   const targets = useMemo(
     () => {
@@ -334,7 +338,7 @@ export const useTargetCatalogue = (mutationIds: string[] = []) => {
   );
 
   useEffect(() => {
-    if (!targets.length) return;
+    if (!enabled || !targets.length) return;
     const fresh = tierCacheFresh(wikiTiers);
     const ask = targets
       .filter((target) => !target.rarity)
@@ -363,7 +367,7 @@ export const useTargetCatalogue = (mutationIds: string[] = []) => {
       });
 
     return () => controller.abort();
-  }, [targets, wikiTiers]);
+  }, [enabled, targets, wikiTiers]);
 
   /*
    * `items` is handed back rather than kept private because it is the only

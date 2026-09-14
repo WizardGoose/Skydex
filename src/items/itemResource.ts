@@ -1,6 +1,10 @@
 import { hashFromSkinValue } from "../accessories/headHashes";
 import { headUrl } from "../island/heads";
 import { prettify } from "../island/format";
+import { fetchItemResourceItems } from "./itemResourceFetch";
+import type { ResourceItem } from "./itemResourceFetch";
+
+export type { ResourceItem } from "./itemResourceFetch";
 
 /**
  * Hypixel's own item resource, reduced to the two things an icon needs.
@@ -52,20 +56,6 @@ import { prettify } from "../island/format";
  * talks to, and the head render is fetched by the visitor's browser exactly as
  * the wiki images are.
  */
-
-/** The resource, as far as this module cares. */
-export interface ResourceItem {
-  id?: string;
-  name?: string;
-  /** Rarity tier, e.g. "EPIC". Hypixel states it for nearly every item. */
-  tier?: string;
-  /** Hypixel item category. */
-  category?: string;
-  /** Present on skull items. `signature` also rides along and is not used. */
-  skin?: { value?: string } | null;
-  /** Exact model id used by Hypixel's official SkyBlock resource pack. */
-  item_model?: string;
-}
 
 /** What is worth remembering about one item. Every field is optional. */
 export interface ResourceEntry {
@@ -123,8 +113,6 @@ const STALE_RESOURCE_KEYS = [
 
 /** Same freshness as the item index. Names and textures change when the game does. */
 export const RESOURCE_TTL = 24 * 60 * 60 * 1000;
-
-const RESOURCE_URL = "https://api.hypixel.net/v2/resources/skyblock/items";
 
 /**
  * Strip the colour codes Hypixel leaves in 22 of the names.
@@ -299,11 +287,10 @@ export const requestItemResource = (): void => {
   if (inFlight || fresh()) return;
   inFlight = true;
 
-  fetch(RESOURCE_URL)
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`items resource responded ${r.status}`))))
-    .then((body: { items?: ResourceItem[] }) => {
+  fetchItemResourceItems()
+    .then((items) => {
       inFlight = false;
-      adoptResourceItems(body.items ?? []);
+      adoptResourceItems(items);
     })
     .catch(() => {
       inFlight = false;

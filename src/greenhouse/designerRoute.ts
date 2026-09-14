@@ -1,4 +1,4 @@
-import { extractLayoutCode } from "./utilities/designEncoding";
+import { extractLayoutCode } from "./utilities/layoutCode";
 import { parseGreenhouseHash } from "./route";
 
 /** Returns the Designer payload from either the canonical fragment or a legacy query. */

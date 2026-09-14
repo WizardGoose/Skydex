@@ -89,7 +89,8 @@ export const LandingPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const legacyProfileTarget = legacyProfileRedirectTarget(location);
-  const { index, loading } = useSiteIndex();
+  const [alert, setAlert] = useState(false);
+  const { index, loading } = useSiteIndex({ wanted: alert });
   const coverage = useMemo(() => summarizeSearchCoverage(index), [index]);
   const resume = useResumeCard();
   const coverageTotal = coverage.items + coverage.greenhouse + coverage.shards;
@@ -99,7 +100,6 @@ export const LandingPage: React.FC = () => {
     { label: "Shards", value: coverage.shards, to: "/shards", tone: "shards", Icon: Gem },
   ];
 
-  const [alert, setAlert] = useState(false);
   const [thinking, setThinking] = useState(false);
   const searchRef = useRef<HTMLDivElement | null>(null);
 

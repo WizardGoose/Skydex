@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { headUrl } from "../island/heads";
+import { fetchItemResourceItems } from "../items/itemResourceFetch";
 
 /**
  * Player-head texture hashes for accessories, read from Hypixel's own resource.
@@ -53,8 +54,6 @@ import { headUrl } from "../island/heads";
  * Nothing is bundled. The hash comes from an API we already talk to and the
  * render comes from MCHeads over the network, exactly as the wiki images do.
  */
-
-const RESOURCE = "https://api.hypixel.net/v2/resources/skyblock/items";
 
 /**
  * The one key this module owns. Holds derived texture hashes, nothing the user
@@ -192,11 +191,10 @@ const ensure = () => {
   if (inFlight || fresh()) return;
   inFlight = true;
 
-  fetch(RESOURCE)
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`items resource responded ${r.status}`))))
-    .then((body: { items?: SkinnedItem[] }) => {
+  fetchItemResourceItems()
+    .then((items) => {
       inFlight = false;
-      const built = buildHeadIndex(body.items ?? []);
+      const built = buildHeadIndex(items as SkinnedItem[]);
       // An empty result is a bad response, not a game with no skulls. Keeping
       // what we already had means a malformed payload cannot blank the page.
       if (Object.keys(built).length === 0) return;

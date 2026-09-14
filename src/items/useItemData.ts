@@ -216,6 +216,8 @@ const subscribeRecipes = (fn: () => void) => {
   };
 };
 
+const noopSubscribe = () => () => {};
+
 // Keep other tabs in step: whichever tab refreshed the index, every tab reads
 // the newer copy instead of spending a second fetch on the same bytes. Only
 // this key, and only ever a re-read.
@@ -236,7 +238,8 @@ if (typeof window !== "undefined") {
  */
 export const recipesStore = { subscribe: subscribeRecipes, getSnapshot: getRecipes };
 
-export const useRecipes = (): RecipesState => useSyncExternalStore(subscribeRecipes, getRecipes, getRecipes);
+export const useRecipes = (enabled = true): RecipesState =>
+  useSyncExternalStore(enabled ? subscribeRecipes : noopSubscribe, getRecipes, getRecipes);
 
 export interface BazaarPrice {
   /** What you pay to buy it now. */
