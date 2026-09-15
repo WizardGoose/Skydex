@@ -98,6 +98,7 @@ import {
   normalisePlotInteractionMode,
   rankGoalChoices,
   selectPlanField,
+  targetFieldId,
   unmetFiniteMutationGoals,
   type PlotInteractionMode,
 } from "./workspaceModel";
@@ -590,6 +591,27 @@ export const GreenhouseWorkspace: React.FC<GreenhouseWorkspaceProps> = ({
     () => new Map(mutations.map((mutation) => [mutation.id, mutation])),
     [mutations],
   );
+  const dataset = useMemo(
+    () => ({
+      crops: Object.fromEntries(crops.map((crop) => [crop.id, crop])) as Record<string, CropDefinition>,
+      mutations: Object.fromEntries(mutations.map((mutation) => [mutation.id, mutation])) as Record<string, MutationDefinition>,
+    }),
+    [crops, mutations],
+  );
+  const bridgeIndex = useMemo(
+    () => withMutationIds(itemIndex, mutations),
+    [itemIndex, mutations],
+  );
+  /**
+   * Point the plot at the freshly chosen target's field. Without this steer
+   * `state.view.mutation` keeps naming the previous field, which wins whenever
+   * it still belongs to the plan - so selecting a different mutation could
+   * leave the plot showing the old one.
+   */
+  const showFieldForTarget = useCallback((id: string, kind: PlannerTarget["kind"]) => {
+    const fieldId = targetFieldId(kind, id, catalogueById.get(id)?.ingredients ?? [], dataset);
+    if (fieldId) setView({ mutation: fieldId, cycle: null });
+  }, [catalogueById, dataset, setView]);
 
   useEffect(() => {
     if (!linkedTarget) {
@@ -605,6 +627,7 @@ export const GreenhouseWorkspace: React.FC<GreenhouseWorkspaceProps> = ({
     const alreadySaved = state.targets.some((target) => target.id === linkedTarget);
     if (alreadySaved) {
       handledLinkedTargetRef.current = linkedTarget;
+      showFieldForTarget(linkedTarget, mutationById.has(linkedTarget) ? "mutation" : "item");
       return;
     }
 
@@ -617,6 +640,7 @@ export const GreenhouseWorkspace: React.FC<GreenhouseWorkspaceProps> = ({
     if (addition) {
       handledLinkedTargetRef.current = linkedTarget;
       addTarget(addition.id, addition.kind);
+      showFieldForTarget(addition.id, addition.kind);
       return;
     }
 
@@ -631,20 +655,10 @@ export const GreenhouseWorkspace: React.FC<GreenhouseWorkspaceProps> = ({
     dataLoading,
     linkedTarget,
     mutationById,
+    showFieldForTarget,
     state.targets,
   ]);
 
-  const dataset = useMemo(
-    () => ({
-      crops: Object.fromEntries(crops.map((crop) => [crop.id, crop])) as Record<string, CropDefinition>,
-      mutations: Object.fromEntries(mutations.map((mutation) => [mutation.id, mutation])) as Record<string, MutationDefinition>,
-    }),
-    [crops, mutations],
-  );
-  const bridgeIndex = useMemo(
-    () => withMutationIds(itemIndex, mutations),
-    [itemIndex, mutations],
-  );
   const owned = useOwned({ items: bridgeIndex, manual: state.inventory });
   const personalVaultCounts = useMemo(
     () => countProfileContainer(profileInventory.parsed?.personal_vault),
@@ -1392,6 +1406,7 @@ export const GreenhouseWorkspace: React.FC<GreenhouseWorkspaceProps> = ({
 
   const addGoal = (choice: SearchChoice) => {
     addTarget(choice.id, choice.kind);
+    showFieldForTarget(choice.id, choice.kind);
     pushRecent({
       key: goalChoiceKey(choice),
       name: choice.name,
@@ -1739,11 +1754,19 @@ export const GreenhouseWorkspace: React.FC<GreenhouseWorkspaceProps> = ({
               const targetMutation = target.kind === "mutation" ? mutationById.get(target.id) : undefined;
               const targetItem = target.kind === "item" ? catalogueById.get(target.id) : undefined;
               const targetRarity = targetMutation?.rarity ?? targetItem?.rarity;
+              const targetField = targetFieldId(target.kind, target.id, targetItem?.ingredients ?? [], dataset);
               return (
                 <article
                   key={`${target.kind}:${target.id}`}
-                  className={`greenhouse-target-row${String(target.qty).length > 6 ? " has-wide-quantity" : ""}`}
+                  className={`greenhouse-target-row${String(target.qty).length > 6 ? " has-wide-quantity" : ""}${targetField !== null && activePlanField?.node.id === targetField ? " is-selected" : ""}`}
                   style={rarityStyle(targetRarity)}
+                  onClickCapture={(event) => {
+                    /* Capture, not bubble: the identity tooltip swallows the
+                       click on the way down, so a plain onClick never sees the
+                       name/icon press that should switch the field. */
+                    if ((event.target as HTMLElement).closest(".greenhouse-target-controls, .greenhouse-row-remove")) return;
+                    showFieldForTarget(target.id, target.kind);
+                  }}
                 >
                   <GreenhouseIdentityTrigger
                     id={target.id}

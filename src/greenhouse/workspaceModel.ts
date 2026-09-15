@@ -1,4 +1,5 @@
 import type { PlannerTarget } from "./planner/usePlannerState";
+import { depthOf, type Dataset } from "./planner/solverPlan";
 
 export interface GoalChoiceSummary {
   id: string;
@@ -61,6 +62,34 @@ export const normalisePlotInteractionMode = (value: unknown): PlotInteractionMod
 
 export const goalChoiceKey = (choice: Pick<GoalChoiceSummary, "id" | "kind">): string =>
   choice.kind === "mutation" ? `greenhouse:${choice.id}` : `greenhouse:target:${choice.id}`;
+
+/**
+ * The field a freshly chosen target should open on.
+ *
+ * For a mutation that is its own growing field. For an item target the plan's
+ * fields are the mutations its recipe consumes, so the deepest of them - the
+ * last growing step before the craft - is the one that answers "show me this
+ * target". Without this steer the plot keeps whatever `view.mutation` already
+ * named, which left a newly selected target looking ignored whenever the
+ * previously shown field still belonged to the plan.
+ */
+export const targetFieldId = (
+  kind: PlannerTarget["kind"],
+  id: string,
+  ingredients: readonly { mutation: string | null; qty: number }[],
+  data: Dataset,
+): string | null => {
+  if (kind === "mutation") return id;
+  const mutations = ingredients.flatMap((ingredient) =>
+    ingredient.mutation ? [{ id: ingredient.mutation, qty: ingredient.qty }] : []);
+  if (mutations.length === 0) return null;
+  const memo = new Map<string, number>();
+  mutations.sort((a, b) =>
+    depthOf(b.id, data, memo) - depthOf(a.id, data, memo)
+    || b.qty - a.qty
+    || a.id.localeCompare(b.id));
+  return mutations[0].id;
+};
 
 const normalise = (value: string): string =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();

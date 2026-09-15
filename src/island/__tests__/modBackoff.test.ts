@@ -166,3 +166,36 @@ describe("the SSE to polling handover is one way", () => {
     expect(transport(true, streamFailed)).toBe("stream");
   });
 });
+
+/**
+ * The offline loop going to sleep.
+ *
+ * Every refused probe prints an `ERR_CONNECTION_REFUSED` console line the page
+ * cannot silence - the browser owns those lines, not the request options - so
+ * once the backoff has walked its ramp the loop stops scheduling entirely and
+ * only a wake, the tab regaining focus or becoming visible, probes again.
+ * Pinned here is the arithmetic: the ramp is the whole schedule, so an absent
+ * mod costs a handful of console lines per session rather than one line every
+ * five minutes forever.
+ */
+describe("the offline loop sleeps instead of printing forever", () => {
+  const OFFLINE_MAX_MS = 300_000;
+  const OFFLINE_DORMANT_STREAK = 5;
+
+  /** The scheduled delays across `misses` consecutive refusals. */
+  const delays = (misses: number) => {
+    const out: number[] = [];
+    let streak = 0;
+    for (let i = 0; i < misses; i += 1) {
+      const delay = Math.min(OFFLINE_MS * 2 ** streak, OFFLINE_MAX_MS);
+      streak += 1;
+      if (streak < OFFLINE_DORMANT_STREAK) out.push(delay);
+      else break;
+    }
+    return out;
+  };
+
+  it("walks the backoff, then schedules nothing", () => {
+    expect(delays(8)).toEqual([30_000, 60_000, 120_000, 240_000]);
+  });
+});

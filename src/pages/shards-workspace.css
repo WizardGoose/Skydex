@@ -19,7 +19,7 @@
   max-height: none;
   margin-top: 0;
   border-top: 1px solid var(--profile-border);
-  padding: .45rem 1rem 1rem;
+  padding: .45rem 0 1rem;
   overflow-y: auto;
 }
 .shards-workspace-grid > .shards-route-planner { container: fusion-planner / inline-size; border-top: 0; border-left: 1px solid var(--profile-border); }
@@ -61,14 +61,9 @@
 .shards-route-planner > .shards-plan-metrics .profile-metric:nth-child(-n + 3) { border-bottom: 1px solid var(--profile-border); }
 .shards-route-planner > .shards-plan-metrics .profile-metric:is(:nth-child(1), :nth-child(2), :nth-child(4)) { border-right: 1px solid var(--profile-border); }
 .shards-route-planner > .shards-plan-metrics .profile-metric-label { font-size: 11px; letter-spacing: .025em; }
-.shards-workspace-grid .shards-target-row { grid-template-columns: minmax(0, 1fr); gap: 0; padding: .35rem 0; }
-.shards-workspace-grid .shards-target-controls { justify-self: end; gap: .3rem; margin-top: -.3rem; }
-.shards-workspace-grid .shards-target-identity strong { white-space: normal; overflow-wrap: normal; line-height: 1.35; }
-.shards-workspace-grid .shards-target-remove { position: static; transform: none; margin-left: .3rem; }
-@container shard-target-list (min-width: 26rem) {
-  .shards-workspace-grid .shards-target-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .55rem; min-height: 3.35rem; }
-  .shards-workspace-grid .shards-target-controls { margin-top: 0; }
-}
+/* Rows run to the rail's edges so their separators connect with the zone
+   frame, like the Greenhouse target list; the inset lives on each row. */
+.shards-workspace-grid .shards-target-row { padding-left: 1rem; }
 .shards-requirement-counts .shards-count--progress .shards-count-label { color: #78c5dd; }
 .shards-requirement-counts .shards-count--storage .shards-count-label { color: #8bcedf; }
 .shards-requirement-counts .shards-count--materials .shards-count-label { color: #e0c579; }

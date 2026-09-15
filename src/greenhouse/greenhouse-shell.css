@@ -343,12 +343,18 @@
   align-items: center;
   gap: 0.55rem;
   min-height: 3.35rem;
-  padding: 0.42rem 1.55rem 0.42rem 0;
+  padding: 0.42rem 1.55rem 0.42rem 1rem;
   border-bottom: 1px solid rgb(255 255 255 / 0.09);
 }
 
 .greenhouse-target-row.has-wide-quantity {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* Clicking a target switches the shown field, the same pick the plan field
+   rows make. The bar matches .greenhouse-plan-field.is-selected. */
+.greenhouse-target-row.is-selected {
+  box-shadow: inset 2px 0 var(--profile-accent);
 }
 
 .greenhouse-target-identity {
@@ -497,6 +503,12 @@
 
 .greenhouse-empty-copy {
   margin: 1rem 0 0;
+}
+
+/* With rows running edge-to-edge the list no longer pads its children; the
+   empty copy keeps the same left inset the rows used to provide. */
+.utility-workbench .greenhouse-target-list > .greenhouse-empty-copy {
+  margin-inline: 1rem;
 }
 
 .greenhouse-empty-line {
@@ -3389,7 +3401,9 @@
 .utility-workbench .utility-target-search { flex: none; }
 .utility-workbench .greenhouse-goal-search-results { display: flex; flex: 1; min-height: 0; }
 .utility-workbench .greenhouse-goal-icon-grid { width: 100%; max-height: none; min-height: 0; align-content: start; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
-.utility-workbench .greenhouse-target-list { display: block; max-height: none; margin-top: 0; padding: .45rem 1rem 1rem; }
+/* Rows run to the rail's edges so their separators connect with the zone
+   frame; the inset lives on each row instead of the list. */
+.utility-workbench .greenhouse-target-list { display: block; max-height: none; margin-top: 0; padding: .45rem 0 1rem; }
 .utility-workbench > .greenhouse-plot { padding: 1rem; overflow: clip; }
 .utility-workbench .greenhouse-plot > .greenhouse-zone-heading,
 .utility-workbench .greenhouse-plot > .greenhouse-plot-tools { flex: none; }

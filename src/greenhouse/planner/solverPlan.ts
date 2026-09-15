@@ -116,7 +116,7 @@ export const hasUnresolvedPlanFields = (plan: SolverPlan): boolean =>
     cycle.produce.some((node) => node.need > 0 && node.plots === undefined)
   );
 
-interface Dataset {
+export interface Dataset {
   crops: Record<string, CropDefinition>;
   mutations: Record<string, MutationDefinition>;
 }

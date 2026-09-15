@@ -57,12 +57,15 @@ const ORIGIN = "http://127.0.0.1:27916";
 
 const LIVE_MS = 5_000;
 const OFFLINE_MS = 30_000;
-/* Refused connections cannot be silenced from script: every probe against a
-   closed port writes its own console line. So an absent mod backs off, 30s
-   doubling to this ceiling, and the tab regaining focus probes immediately -
-   which is both quieter over an idle evening and FASTER at noticing the mod
-   the moment the player alt-tabs back from starting it. */
+/* Refused connections cannot be silenced from script: the browser prints its
+   own console line for every probe against a closed port, and no fetch option
+   hides it. So an absent mod backs off, 30s doubling to this ceiling - and
+   after a handful of misses it stops asking entirely. The tab regaining focus
+   or becoming visible probes again, which is both quieter over an idle
+   evening and FASTER at noticing the mod the moment the player alt-tabs back
+   from starting it. */
 const OFFLINE_MAX_MS = 300_000;
+const OFFLINE_DORMANT_STREAK = 5;
 let offlineStreak = 0;
 
 /**
@@ -294,6 +297,8 @@ let streamFailed = false;
  * connection, or write state nobody is watching.
  */
 let generation = 0;
+/** True between `start` and `stop`: a wake below only fires while transporting. */
+let transportOn = false;
 
 /**
  * Accept a snapshot from either transport. One gate, one assembly step.
@@ -339,14 +344,31 @@ const getJson = async (path: string): Promise<unknown> => {
   }
 };
 
-/* The focus recheck that makes the backoff safe: coming back to the tab is
-   exactly the moment the mod is most likely to have just been started. */
+/** Asleep: transport running but the offline loop gave up scheduling. */
+const transportDormant = () =>
+  transportOn && timer === null && stream === null && offlineStreak >= OFFLINE_DORMANT_STREAK;
+
+/* One probe in a moment. A refusal keeps the streak, so a failed wake drops
+   straight back to sleep rather than restarting the ramp from scratch. */
+const probeSoon = () => {
+  if (timer !== null) clearTimeout(timer);
+  timer = setTimeout(() => void tick(generation), 250);
+};
+
+/* The wakes that make dormancy safe: coming back to the tab is exactly the
+   moment the mod is most likely to have just been started. While the player
+   stays on the page an absent mod earns no further requests at all - the next
+   blur-and-return is what checks it. */
 if (typeof window !== "undefined") {
-  window.addEventListener("focus", () => {
-    if (timer === null || offlineStreak === 0) return;
-    clearTimeout(timer);
-    offlineStreak = 0;
-    timer = setTimeout(() => void tick(generation), 250);
+  const wake = () => {
+    if (!transportOn || stream !== null) return;
+    if (timer !== null && offlineStreak === 0) return;
+    if (timer === null && !transportDormant()) return;
+    probeSoon();
+  };
+  window.addEventListener("focus", wake);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") wake();
   });
 }
 
@@ -382,8 +404,13 @@ const tick = async (mine: number) => {
       modVersion = null;
       publish();
     }
-    schedule(Math.min(OFFLINE_MS * 2 ** offlineStreak, OFFLINE_MAX_MS), mine);
+    const delay = Math.min(OFFLINE_MS * 2 ** offlineStreak, OFFLINE_MAX_MS);
     offlineStreak += 1;
+    /* After a handful of misses the loop sleeps instead of printing one
+       refused line every five minutes forever. Focus, visibility and use all
+       wake it; a failed wake keeps the streak and drops straight back. */
+    if (offlineStreak < OFFLINE_DORMANT_STREAK) schedule(delay, mine);
+    else timer = null;
     return;
   }
 
@@ -465,6 +492,7 @@ const openStream = (mine: number) => {
 const start = () => {
   if (typeof window === "undefined") return;
   if (!isCompanionLinked()) return;
+  transportOn = true;
   if (timer !== null || stream !== null) return;
   // Stream first. Only one transport ever runs, and polling is what we fall
   // back to rather than what we start with.
@@ -473,6 +501,7 @@ const start = () => {
 };
 
 const stop = () => {
+  transportOn = false;
   generation++;
   if (timer !== null) {
     clearTimeout(timer);

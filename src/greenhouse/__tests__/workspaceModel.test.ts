@@ -8,8 +8,10 @@ import {
   normalisePlotInteractionMode,
   rankGoalChoices,
   selectPlanField,
+  targetFieldId,
   unmetFiniteMutationGoals,
 } from "../workspaceModel";
+import type { MutationDefinition } from "../types/greenhouse";
 
 describe("greenhouse workspace goal shelf", () => {
   const choices = [
@@ -146,5 +148,43 @@ describe("active greenhouse field", () => {
     expect(normalisePlotInteractionMode("hybrid")).toBe("hybrid");
     expect(normalisePlotInteractionMode("manual")).toBe("locked");
     expect(normalisePlotInteractionMode(null)).toBe("locked");
+  });
+});
+
+describe("the field a new target opens on", () => {
+  const mutation = (id: string, requires: string[] = []): MutationDefinition => ({
+    id,
+    name: id,
+    size: 1,
+    ground: "farmland",
+    requirements: requires.map((crop) => ({ crop, count: 1 })),
+    rarity: "common",
+    growth_stages: 1,
+    positive_buffs: [],
+    negative_buffs: [],
+    drops: {},
+  });
+  const data = {
+    crops: {},
+    mutations: {
+      blastberry: mutation("blastberry"),
+      startlevina: mutation("startlevina", ["blastberry"]),
+    },
+  };
+
+  it("shows a mutation target's own field", () => {
+    expect(targetFieldId("mutation", "startlevina", [], data)).toBe("startlevina");
+  });
+
+  it("shows an item target's deepest mutation ingredient", () => {
+    expect(targetFieldId("item", "target", [
+      { mutation: "blastberry", qty: 8 },
+      { mutation: "startlevina", qty: 2 },
+    ], data)).toBe("startlevina");
+  });
+
+  it("declines a steer when an item consumes no mutation", () => {
+    expect(targetFieldId("item", "bare", [{ mutation: null, qty: 4 }], data)).toBeNull();
+    expect(targetFieldId("item", "bare", [], data)).toBeNull();
   });
 });
