@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { fetchSkyblockItems } from "../items/itemsResourceFetch";
 import { headUrl } from "../island/heads";
 
 /**
@@ -54,7 +55,7 @@ import { headUrl } from "../island/heads";
  * render comes from MCHeads over the network, exactly as the wiki images do.
  */
 
-const RESOURCE = "https://api.hypixel.net/v2/resources/skyblock/items";
+
 
 /**
  * The one key this module owns. Holds derived texture hashes, nothing the user
@@ -192,11 +193,9 @@ const ensure = () => {
   if (inFlight || fresh()) return;
   inFlight = true;
 
-  fetch(RESOURCE)
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`items resource responded ${r.status}`))))
-    .then((body: { items?: SkinnedItem[] }) => {
-      inFlight = false;
-      const built = buildHeadIndex(body.items ?? []);
+  fetchSkyblockItems()
+    .then((items) => {
+      const built = buildHeadIndex(items as SkinnedItem[]);
       // An empty result is a bad response, not a game with no skulls. Keeping
       // what we already had means a malformed payload cannot blank the page.
       if (Object.keys(built).length === 0) return;
@@ -206,9 +205,11 @@ const ensure = () => {
       notify();
     })
     .catch(() => {
-      inFlight = false;
       // No head rung for this session. Every affected tile falls back to the
       // initials it showed before, which is not an error worth a banner.
+    })
+    .finally(() => {
+      inFlight = false;
     });
 };
 

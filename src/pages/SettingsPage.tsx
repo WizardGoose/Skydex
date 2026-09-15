@@ -26,6 +26,7 @@ import {
 } from "../inventory/managementStore";
 import { mergeShardInventory } from "../inventory/shardsStore";
 import { useApiAccess } from "../island/apiKey";
+import { nextProgressiveCount, SHARD_GRID_BATCH } from "../performance/progressiveGrid";
 import { requestSkillDefs, skillProgress, useSkillDefs } from "../island/skills";
 import { useParsedProfile } from "../networth/useNetworth";
 import { CharacterStage } from "../profile-view/CharacterStage";
@@ -1050,6 +1051,24 @@ export const SettingsPage: React.FC = () => {
     return shards.filter((shard) => hasDirectAcquisition(shard.key, defaultRates[shard.key]) && (!normalized || shard.name.toLowerCase().includes(normalized) || shard.key.toLowerCase().includes(normalized) || acquisitionSummary(shard.key).toLowerCase().includes(normalized)));
   }, [defaultRates, rateQuery, shards]);
 
+  /*
+   * Both catalogue lists mount in batches instead of all ~189 rows in one
+   * commit. The counters only ever grow: a narrowed filter simply shows every
+   * match, and a cleared one resumes the chain rather than remounting rows.
+   */
+  const [collectionMounted, setCollectionMounted] = useState(SHARD_GRID_BATCH);
+  const [rateMounted, setRateMounted] = useState(SHARD_GRID_BATCH);
+  useEffect(() => {
+    if (collectionMounted >= filteredProgress.length) return;
+    const timer = window.setTimeout(() => setCollectionMounted((current) => nextProgressiveCount(current, filteredProgress.length)), 0);
+    return () => window.clearTimeout(timer);
+  }, [collectionMounted, filteredProgress.length]);
+  useEffect(() => {
+    if (rateMounted >= directRateShards.length) return;
+    const timer = window.setTimeout(() => setRateMounted((current) => nextProgressiveCount(current, directRateShards.length)), 0);
+    return () => window.clearTimeout(timer);
+  }, [rateMounted, directRateShards.length]);
+
   const updateCount = useCallback((kind: "fused" | "loose", shardKey: string, raw: string, cap: number) => {
     const target = kind === "fused" ? ownedAttributes : inventory;
     const next = new Map(target);
@@ -1209,7 +1228,7 @@ export const SettingsPage: React.FC = () => {
                     </div>
                 </>
               ) : (
-                <div className="shards-rate-overview"><label className="shards-search"><Search aria-hidden /><span className="sr-only">Search direct rates</span><input value={rateQuery} onChange={(event) => setRateQuery(event.target.value)} placeholder="Search huntable shards" className={INPUT} /></label><div className="shards-rate-overview-list">{directRateShards.map((shard) => <ShardTooltip key={shard.key} shard={shard} progress={progressByKey.get(shard.key)} interactive><button type="button" onClick={() => chooseGoalByKey(shard.key)} className={`${FOCUS} w-full`}><img src={`${import.meta.env.BASE_URL}shardIcons/${shard.key}.png`} alt="" width={28} height={28} loading="lazy" /><span><strong className={getRarityColor(shard.rarity)}>{shard.name}</strong><small><ShardAcquisitionText shardKey={shard.key} text={acquisitionSummary(shard.key)} /></small></span><em>{ironman && effectiveRates[shard.key] > 0 ? "~" : ""}{rateLabel(effectiveRates[shard.key], ironman)}</em></button></ShardTooltip>)}</div></div>
+                <div className="shards-rate-overview"><label className="shards-search"><Search aria-hidden /><span className="sr-only">Search direct rates</span><input value={rateQuery} onChange={(event) => setRateQuery(event.target.value)} placeholder="Search huntable shards" className={INPUT} /></label><div className="shards-rate-overview-list">{directRateShards.slice(0, rateMounted).map((shard) => <ShardTooltip key={shard.key} shard={shard} progress={progressByKey.get(shard.key)} interactive><button type="button" onClick={() => chooseGoalByKey(shard.key)} className={`${FOCUS} w-full`}><img src={`${import.meta.env.BASE_URL}shardIcons/${shard.key}.png`} alt="" width={28} height={28} loading="lazy" /><span><strong className={getRarityColor(shard.rarity)}>{shard.name}</strong><small><ShardAcquisitionText shardKey={shard.key} text={acquisitionSummary(shard.key)} /></small></span><em>{ironman && effectiveRates[shard.key] > 0 ? "~" : ""}{rateLabel(effectiveRates[shard.key], ironman)}</em></button></ShardTooltip>)}</div></div>
               )}
               </div>
               </div>
@@ -1240,7 +1259,7 @@ export const SettingsPage: React.FC = () => {
                         <div className="shards-loading" role="status"><span className="shards-spinner" aria-hidden />Loading shard progress</div>
                       ) : filteredProgress.length === 0 ? (
                         <div className="shards-empty"><strong>No shards match</strong><span>Change the status, search, or filters.</span></div>
-                      ) : filteredProgress.map((entry) => {
+                      ) : filteredProgress.slice(0, collectionMounted).map((entry) => {
                         const selected = goal?.shardKey === entry.shard.key;
                         const planned = goals.some((candidate) => candidate.shardKey === entry.shard.key);
                         const progressPercent = entry.fused === null ? 0 : Math.min(100, (entry.fused / entry.cap) * 100);

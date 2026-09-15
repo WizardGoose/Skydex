@@ -19,12 +19,3 @@ export function nextDesignerLayoutCode(
   const next = layoutCodeFromDesignerLocation(hash, search);
   return next && next !== lastProcessedCode ? next : null;
 }
-
-/** The app destination behind a crawler-visible, stateless share path. */
-export function sharedDesignerLocation(layoutCode: string) {
-  return {
-    pathname: "/greenhouse",
-    search: `?layout=${encodeURIComponent(layoutCode)}`,
-    hash: "#designer",
-  };
-}

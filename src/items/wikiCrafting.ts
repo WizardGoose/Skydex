@@ -23,6 +23,7 @@
 
 import type { Item, ItemIndex, CollectionUnlock, ItemRequirement, RecipeIngredient } from "./useItemData";
 import { adoptResourceItems } from "./itemResource";
+import { fetchSkyblockItems } from "./itemsResourceFetch";
 import { fetchCraftingBucket } from "./wikiCraftingBucket";
 
 const WIKI = "https://hypixelskyblock.minecraft.wiki";
@@ -921,8 +922,8 @@ export const fetchCraftingData = async (signal?: AbortSignal): Promise<CraftingS
         error: cause instanceof Error ? cause : new Error("The crafting module could not be read."),
       })),
     collectionModule(signal).catch(() => ""),
-    fetch("https://api.hypixel.net/v2/resources/skyblock/items", { signal })
-      .then((r) => (r.ok ? r.json() : { items: [] }))
+    fetchSkyblockItems(signal)
+      .then((items) => ({ items }))
       .catch(() => ({ items: [] as unknown[] })),
   ]);
 

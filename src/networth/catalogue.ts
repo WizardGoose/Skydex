@@ -1,4 +1,5 @@
 import { makeGate } from "../island/gate";
+import { fetchSkyblockItems } from "../items/itemsResourceFetch";
 import type { Catalogue, CatalogueEntry } from "./types";
 
 /**
@@ -20,7 +21,7 @@ import type { Catalogue, CatalogueEntry } from "./types";
  * for twelve hours where prices run for twenty minutes.
  */
 
-const ITEMS_URL = "https://api.hypixel.net/v2/resources/skyblock/items";
+
 
 /** A NEW key. See the note on `PRICES_KEY`; nothing existing is touched. */
 export const CATALOGUE_KEY = "skydex.networth.items.v3";
@@ -132,9 +133,8 @@ const fetchCatalogue = async (): Promise<CatalogueSnapshot | null> => {
   const controller = new AbortController();
   const deadline = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const response = await fetch(ITEMS_URL, { signal: controller.signal });
-    if (!response.ok) return null;
-    const catalogue = trimCatalogue(await response.json());
+    const items = await fetchSkyblockItems(controller.signal);
+    const catalogue = trimCatalogue({ items });
     if (!catalogue) return null;
     const fresh: CatalogueSnapshot = { catalogue, fetchedAt: Date.now() };
     writeCachedCatalogue(fresh);

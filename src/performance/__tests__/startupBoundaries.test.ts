@@ -21,6 +21,13 @@ describe("startup performance boundaries", () => {
     expect(app).toContain("./hooks/usePageTitle");
   });
 
+  it("keeps the greenhouse workspace behind its lazy route boundary", () => {
+    const app = read("../../App.tsx");
+    expect(app).toContain('lazy(() => import("./greenhouse/GreenhouseHashRoute")');
+    expect(app).not.toMatch(/import \{ GreenhouseHashRoute \}/);
+    expect(app).not.toMatch(/from ["']\.\/greenhouse\/designerRoute["']/);
+  });
+
   it("keeps route loading states tall enough to clamp a restored scroll position", () => {
     const app = read("../../App.tsx");
     expect(app).toContain("min-h-[calc(100dvh-var(--sd-chrome-h))]");

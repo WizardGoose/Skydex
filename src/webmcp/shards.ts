@@ -1,3 +1,4 @@
+import { DataService } from "../services/dataService";
 import type { ShardWithKey } from "../types/types";
 import {
   processOutputRecipes,
@@ -16,28 +17,19 @@ import {
 
 const DIRECTIONS = ["both", "made_from", "used_in"] as const;
 
-let fusionDataPromise: Promise<FusionData> | null = null;
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const loadFusionData = (): Promise<FusionData> => {
-  if (fusionDataPromise) return fusionDataPromise;
-  fusionDataPromise = fetch(`${import.meta.env.BASE_URL}fusion-data.json`)
-    .then(async (response) => {
-      if (!response.ok) throw new Error(`Fusion data responded ${response.status}.`);
-      const value: unknown = await response.json();
+/* DataService owns the fetch and parse; this boundary keeps the shape check. */
+const loadFusionData = (): Promise<FusionData> =>
+  DataService.getInstance()
+    .loadFusionData()
+    .then((value) => {
       if (!isRecord(value) || !isRecord(value.shards) || !isRecord(value.recipes)) {
         throw new Error("Fusion data has an unexpected shape.");
       }
       return value as unknown as FusionData;
-    })
-    .catch((error) => {
-      fusionDataPromise = null;
-      throw error;
     });
-  return fusionDataPromise;
-};
 
 export const resolveShardKey = (data: FusionData, query: string): string => {
   const folded = normalizeLookup(query);

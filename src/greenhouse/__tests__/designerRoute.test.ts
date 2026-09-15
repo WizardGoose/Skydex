@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   layoutCodeFromDesignerLocation,
   nextDesignerLayoutCode,
-  sharedDesignerLocation,
 } from "../designerRoute";
+import { sharedDesignerLocation } from "../route";
 
 describe("Designer fragment layout input", () => {
   it("rejects an empty canonical layout slot", () => {

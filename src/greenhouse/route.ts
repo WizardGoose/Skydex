@@ -52,3 +52,18 @@ export function legacyGreenhouseHref(
   }
   return null;
 }
+
+/*
+ * Lives here rather than in designerRoute because App.tsx needs it on the
+ * entry path: designerRoute also exports the layout decoders, which pull in
+ * designEncoding and pako. Keeping this pure location builder beside the
+ * other dependency-free href helpers keeps that compression stack out of the
+ * startup bundle.
+ */
+export function sharedDesignerLocation(layoutCode: string) {
+  return {
+    pathname: "/greenhouse",
+    search: `?layout=${encodeURIComponent(layoutCode)}`,
+    hash: "#designer",
+  };
+}

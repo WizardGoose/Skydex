@@ -1,4 +1,5 @@
 import { hashFromSkinValue } from "../accessories/headHashes";
+import { fetchSkyblockItems } from "./itemsResourceFetch";
 import { headUrl } from "../island/heads";
 import { prettify } from "../island/format";
 
@@ -124,7 +125,7 @@ const STALE_RESOURCE_KEYS = [
 /** Same freshness as the item index. Names and textures change when the game does. */
 export const RESOURCE_TTL = 24 * 60 * 60 * 1000;
 
-const RESOURCE_URL = "https://api.hypixel.net/v2/resources/skyblock/items";
+
 
 /**
  * Strip the colour codes Hypixel leaves in 22 of the names.
@@ -299,16 +300,16 @@ export const requestItemResource = (): void => {
   if (inFlight || fresh()) return;
   inFlight = true;
 
-  fetch(RESOURCE_URL)
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`items resource responded ${r.status}`))))
-    .then((body: { items?: ResourceItem[] }) => {
-      inFlight = false;
-      adoptResourceItems(body.items ?? []);
+  fetchSkyblockItems()
+    .then((items) => {
+      adoptResourceItems(items as ResourceItem[]);
     })
     .catch(() => {
-      inFlight = false;
       // No resource rungs this session. Every affected tile falls back to the
       // wiki chain it had before, which is not an error worth a banner.
+    })
+    .finally(() => {
+      inFlight = false;
     });
 };
 

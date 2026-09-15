@@ -6,11 +6,9 @@ import { RecipeStateProvider } from "./context/RecipeStateContext";
 import { usePageTitle } from "./hooks/usePageTitle";
 import { ToastProvider } from "./components/ui/Toast";
 import { NotFoundRoute, RouteErrorBoundary } from "./components/errors/RouteErrorBoundary";
-import { GreenhouseHashRoute } from "./greenhouse/GreenhouseHashRoute";
-import { legacyGreenhouseHref } from "./greenhouse/route";
+import { legacyGreenhouseHref, sharedDesignerLocation } from "./greenhouse/route";
 import { legacySettingsLocation } from "./components/layout/settingsRoute";
 import { preservedRedirectTarget } from "./routeRedirect";
-import { sharedDesignerLocation } from "./greenhouse/designerRoute";
 import { WebMcpBridge } from "./webmcp/WebMcpBridge";
 import { restoreStaticRoute } from "./staticRouteRestore";
 
@@ -21,6 +19,13 @@ const ProfilePage = lazy(() => import("./profile-view/ProfileView").then((module
 const ProfileViewerPage = lazy(() => import("./pages/ProfileViewerPage").then((module) => ({ default: module.ProfileViewerPage })));
 const ForgePage = lazy(() => import("./pages/ForgePage").then((module) => ({ default: module.ForgePage })));
 const GreenhouseShell = lazy(() => import("./greenhouse/GreenhouseShell").then((module) => ({ default: module.GreenhouseShell })));
+/*
+ * GreenhouseHashRoute is the index child under the already-lazy
+ * GreenhouseShell. A static import here pulled GreenhouseWorkspace and its
+ * whole island/networth/inventory graph into the startup chunk, so it is
+ * lazy too: the greenhouse machinery now downloads only on /greenhouse.
+ */
+const GreenhouseHashRoute = lazy(() => import("./greenhouse/GreenhouseHashRoute").then((module) => ({ default: module.GreenhouseHashRoute })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 /*
  * Two things are called "settings" in this codebase and only one of them is a
@@ -150,7 +155,11 @@ const router = createBrowserRouter(
           children: [
             {
               index: true,
-              element: <GreenhouseHashRoute />,
+              element: (
+                <Suspense fallback={<LoadingSpinner />}>
+                  <GreenhouseHashRoute />
+                </Suspense>
+              ),
             },
             {
               path: "designer",
